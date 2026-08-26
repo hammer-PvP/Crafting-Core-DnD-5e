@@ -269,3 +269,137 @@
   .cc-generator-fields.cc-grid.three { grid-template-columns: 1fr; }
   .cc-generator-source { grid-template-columns: 1fr; }
 }
+
+/* v0.0.5 — Generator UX Refinement */
+.crafting-core-directory-actions {
+  width: 100%;
+  flex: 1 0 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, .78fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+.crafting-core-directory-actions .crafting-core-directory-button {
+  width: auto;
+  min-width: 0;
+  flex: 1 1 auto;
+  margin: 0;
+  padding-inline: 8px;
+}
+.crafting-core-directory-generator {
+  border-color: rgba(141,233,1,.48);
+  background: linear-gradient(180deg, rgba(54,76,27,.96), rgba(31,49,17,.97));
+  color: #e8f8cf;
+}
+.crafting-core-directory-generator > i { color: #8de901; }
+
+/* Let the Recipe list use the remaining sidebar height. A scrollbar appears only
+   when the saved drafts genuinely exceed the available space. */
+.cc-recipe-list {
+  flex: 1 1 auto;
+  min-height: 90px;
+  overflow-y: auto;
+  scrollbar-gutter: auto;
+  padding-right: 0;
+  margin-right: 0;
+}
+
+/* The generator is intentionally notebook-friendly and may be smaller than the
+   full Crafting Core GM workbench. */
+.crafting-core.crafting-core-generator-app { min-width: 560px; }
+.cc-generator-shell { min-height: 0; }
+.cc-generator-header {
+  justify-content: flex-start;
+  gap: 11px;
+  padding: 9px 13px;
+}
+.cc-generator-header > i {
+  flex: 0 0 auto;
+  width: 32px;
+  font-size: 29px;
+  text-align: center;
+}
+.cc-generator-header h1 { margin: 0; font-size: 21px; line-height: 1.05; }
+.cc-generator-header p { margin: 2px 0 0; max-width: none; font-size: 11px; line-height: 1.2; }
+.cc-generator-header .cc-kicker { font-size: 8px; }
+.cc-generator-body {
+  overflow: hidden;
+  padding: 9px 10px 10px;
+  gap: 8px;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.cc-generator-body .cc-form-card { margin: 0; padding: 9px 10px; }
+.cc-generator-config { gap: 7px; }
+.cc-generator-source {
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 8px;
+  padding-bottom: 7px;
+}
+.cc-generator-fields.cc-grid.three {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.cc-generator-fields label { gap: 3px; }
+.cc-generator-source > span, .cc-generator-fields label > span { font-size: 9px; }
+.cc-generator-config input, .cc-generator-config select { min-height: 28px; }
+.cc-generator-button {
+  justify-self: end;
+  min-width: 178px;
+  min-height: 32px;
+  margin-top: 0;
+}
+.cc-generator-result {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.cc-generator-result-heading {
+  flex: 0 0 auto;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.cc-generator-result-heading h3 { margin: 0; }
+.cc-inline-action { margin: 0; }
+.cc-generated-list {
+  flex: 1 1 auto;
+  min-height: 54px;
+  overflow-y: auto;
+  margin: 3px 0 6px;
+  padding-right: 2px;
+}
+.cc-generated-row {
+  min-height: 40px;
+  grid-template-columns: 32px minmax(0,1fr) 52px;
+  gap: 8px;
+  padding: 4px 7px;
+}
+.cc-generated-row img { width: 30px; height: 30px; }
+.cc-generated-folder {
+  flex: 0 0 auto;
+  margin: 4px 0 6px;
+  padding: 6px 8px;
+}
+.cc-generator-empty {
+  flex: 1 1 auto;
+  min-height: 72px;
+}
+.cc-generator-empty > i { font-size: 28px; margin-bottom: 5px; }
+.cc-generator-result-actions {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  padding-top: 5px;
+  border-top: 1px solid var(--cc-border-soft);
+}
+.cc-generator-result-actions > button { margin: 0; min-height: 32px; }
+
+@media (max-width: 620px) {
+  .crafting-core.crafting-core-generator-app { min-width: 0; }
+  .cc-generator-fields.cc-grid.three { grid-template-columns: 1fr; }
+  .cc-generator-body { overflow-y: auto; grid-template-rows: auto auto; }
+  .cc-generator-result { min-height: 190px; }
+  .cc-generator-result-actions { flex-wrap: wrap; }
+}

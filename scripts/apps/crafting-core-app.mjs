@@ -67,7 +67,9 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     });
     root.querySelector('[data-action="open-material-generator"]')?.addEventListener("click", event => {
       event.preventDefault();
-      new MaterialGeneratorApp().render({ force: true });
+      const launcher = game.modules?.get?.(MODULE_ID)?.api?.openGenerator;
+      if (typeof launcher === "function") launcher();
+      else new MaterialGeneratorApp().render({ force: true });
     });
     root.querySelector('[data-action="open-learn-sources"]')?.addEventListener("click", async event => {
       event.preventDefault();

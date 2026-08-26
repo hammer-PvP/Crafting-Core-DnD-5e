@@ -9,7 +9,7 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
     id: "crafting-core-material-generator",
     classes: ["crafting-core", "crafting-core-generator-app", "standard-form"],
     tag: "form",
-    position: { width: 760, height: 690 },
+    position: { width: 700, height: 560 },
     window: { title: "Crafting Core — Generate Materials", resizable: true }
   };
 
@@ -72,6 +72,7 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
     root.querySelector('[name="sources"]')?.addEventListener("change", () => this.#syncState());
     root.querySelector('[data-action="generate"]')?.addEventListener("click", event => this.#generate(event));
     root.querySelector('[data-action="generate-again"]')?.addEventListener("click", event => this.#generate(event));
+    root.querySelector('[data-action="create-folder"]')?.addEventListener("click", event => this.#createFolder(event));
     root.querySelector('[data-action="open-items"]')?.addEventListener("click", event => {
       event.preventDefault();
       ui.items?.render?.(true);
@@ -88,25 +89,46 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
     if (sources) this.state.sources = Math.clamp(Math.floor(Number(sources.value) || 1), 1, 100);
   }
 
+  #request() {
+    return this.state.source === "environment"
+      ? { source: "environment", biome: this.state.biome, resource: this.state.resource, abundance: this.state.abundance }
+      : { source: "creature", nature: this.state.nature, profileId: this.state.profileId, sources: this.state.sources };
+  }
+
   async #generate(event) {
     event.preventDefault();
     this.#syncState();
     const button = event.currentTarget;
     button.disabled = true;
     try {
-      const request = this.state.source === "environment"
-        ? { source: "environment", biome: this.state.biome, resource: this.state.resource, abundance: this.state.abundance }
-        : { source: "creature", nature: this.state.nature, profileId: this.state.profileId, sources: this.state.sources };
-      this.lastResult = await MaterialGenerationService.generateAndCreate(request);
-      if (this.lastResult.items?.length) {
-        ui.notifications.info(`Generated ${this.lastResult.items.length} material type${this.lastResult.items.length === 1 ? "" : "s"} in ${this.lastResult.folder?.name}.`);
-      } else {
-        ui.notifications.info("No materials were found on this generation. No Item folder was created.");
-      }
+      // v0.0.5: generation is preview-only. Nothing is written to the Item Directory
+      // until the GM explicitly accepts the preview with Create Loot Folder.
+      this.lastResult = await MaterialGenerationService.generate(this.#request());
       this.render({ force: true });
     } catch (error) {
       console.error(`${MODULE_ID} | Material generation failed.`, error);
       ui.notifications.error(error.message ?? "Crafting Core could not generate materials.");
+      button.disabled = false;
+    }
+  }
+
+  async #createFolder(event) {
+    event.preventDefault();
+    if (!this.lastResult?.items?.length || this.lastResult.folder) return;
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      // Materialize the exact preview already shown to the GM. This does not reroll.
+      this.lastResult = await MaterialGenerationService.createWorldLoot(this.lastResult);
+      if (this.lastResult.folder) {
+        ui.notifications.info(`Created loot folder: ${this.lastResult.folder.name}.`);
+      } else {
+        ui.notifications.warn("No loot folder was created.");
+      }
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Loot folder creation failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not create the loot folder.");
       button.disabled = false;
     }
   }

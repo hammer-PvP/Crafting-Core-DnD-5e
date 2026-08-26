@@ -2,37 +2,45 @@
 
 Crafting Core is a D&D5e crafting framework for Foundry VTT 14.
 
-## v0.0.4 — Material Generation Foundation
+## v0.0.5 — Generator UX Refinement
 
-This release adds the first gameplay-facing material generation engine while keeping the v0.0.3 private library/publication model intact.
+This release keeps the validated v0.0.4 material-generation rules intact and improves the GM workflow used during live sessions.
 
-### Unified manual generator
+### Preview first, materialize second
 
-The GM can open **Generate Materials** from Crafting Core and choose one Source / Origin:
+`Generate Materials` no longer writes to the Item Directory when the GM rolls. Creature Harvest or Environment Gathering first produces an in-memory **Preview**. The GM may reroll as often as desired. Only **Create Loot Folder** materializes that exact preview as real D&D5e Items under `Crafting Core — Generated Loot`; accepting a preview does not reroll it.
 
-- **Creature Harvest** — choose Creature Type, coarse manual Profile, and number of Sources / Bodies. Each source is rolled independently, then duplicate materials are aggregated. The engine uses up to 2 Common, 1 Rare and 1 Legendary material slots per source and applies the Material Catalog's configured chance and quantity. Initial Undead profiles distinguish General, Fleshy, Skeletal and Incorporeal sources.
-- **Environment Gathering** — choose Biome, Resource category and Abundance. The available Resource list is derived from the materials actually configured for that Biome. Scarce / Normal / Rich / Abundant change yield size without changing material rarity. Any Nature/Survival check is resolved by the GM outside the module.
+This preserves GM control during play and also matches the planned future corpse workflow: the shared generation engine decides the result first, then a destination adapter chooses where the accepted Items go.
 
-Materials remain eligible even if no current Recipe consumes them. The catalog represents resources that exist in the world, not only ingredients already required by known recipes.
+### One-click session launcher
 
-### Manual output
+The Item Directory GM launcher is split into two controls:
 
-Successful generations create one timestamped subfolder under **Crafting Core — Generated Loot** in the world Item Directory. Generated entries are copies of the real Trade Good Items from **Crafting Core — Materials**, with aggregate rolled quantities. If all chance rolls fail, no empty folder is created.
+- **Crafting Core** — opens the complete GM authoring/library workbench.
+- **Generate** — opens Generate Materials directly for session use.
 
-The generator is intentionally the same engine future Token HUD / Item Piles support will call. Item Piles will change only the output destination from a world Folder to an individual corpse/pile; it will not decide the loot.
+Players do not receive these administrative launchers.
 
-### Library presentation
+### Compact generator
 
-The top-level **Crafting Core** Compendium folder now defaults to color `#8de901`. Crafting Core-created folder structures default to **Manual** sorting. A one-time migration applies those defaults to pre-v0.0.4 Crafting Core folders, then later GM presentation changes are preserved.
+The Material Generator now uses a smaller default window and a denser layout. The green d20, title, and context occupy a compact header; Source and generation parameters use a smaller configuration block; the remaining height is reserved for Preview results. When many materials are generated, only the result list scrolls so the generation/materialization controls remain reachable on smaller displays.
 
-### Existing v0.0.3 foundation retained
+### Recipe Builder sidebar polish
 
-- GM-only private `Crafting Core — Materials` and `Crafting Core — Learn Sources` packs.
-- Built-in Curated Material Catalog plus custom registered materials.
-- Recipe Builder as temporary Draft → Publish workbench.
-- Self-contained published Knowledge Sources and Character-bound learned recipe snapshots.
-- Knowledge Source rarity inherited from the crafted output and automatic rarity pricing.
-- Integrated Character Sheet Crafting tab and complete Item snapshot reproduction.
+The saved Recipe list now consumes the remaining sidebar height and only scrolls when the number of drafts actually exceeds that space, removing the unnecessary scrollbar/clipping seen with a single Recipe.
+
+## Existing generation foundation
+
+- **Creature Harvest** — Creature Type, coarse manual Profile, and independent Sources/Bodies. Each source uses up to 2 Common, 1 Rare and 1 Legendary candidate slots and then applies each Material Catalog chance/quantity.
+- **Environment Gathering** — Biome, Resource and Abundance. Biome/Resource pools are derived from Material Catalog metadata. Nature/Survival checks remain GM adjudication outside the module.
+- Materials remain eligible even when no current Recipe consumes them.
+- The same `MaterialGenerationService` is intended to power the future Token HUD / Item Piles corpse destination.
+
+## Private libraries
+
+Crafting Core maintains GM-only `Crafting Core — Materials` and `Crafting Core — Learn Sources` world Compendiums. The Materials catalog is explicitly a built-in curated fantasy material library plus GM custom entries. Published Knowledge Sources and learned Actor recipe snapshots remain self-contained.
+
+The top-level Crafting Core Compendium folder defaults to `#8de901` and Crafting Core-created structures use Manual sorting by default while preserving later GM changes.
 
 ## Compatibility
 
@@ -41,6 +49,4 @@ The top-level **Crafting Core** Compendium folder now defaults to color `#8de901
 
 ## Item Piles
 
-Crafting Core works without Item Piles. Item Piles is planned as the recommended integration for the complete corpse-harvesting experience: Crafting Core will decide and roll eligible materials, while Item Piles will only convert/use the corpse as the physical loot container and receive the generated Items.
-
-Manual Creature Harvest and Environment Gathering are implemented in v0.0.4. Token HUD / Item Piles corpse harvesting remains a future integration.
+Crafting Core works without Item Piles. Item Piles remains the planned/recommended integration for the complete corpse-harvesting experience. Crafting Core will roll the same material result already used by the manual generator; Item Piles will only provide the individual corpse/container destination.

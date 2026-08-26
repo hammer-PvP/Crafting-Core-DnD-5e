@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.5
+
+Generator UX Refinement development release.
+
+- Changed manual material generation to a preview-first workflow: `Generate Materials` now rolls/populates the result in memory and writes nothing to the Item Directory.
+- Added explicit `Create Loot Folder`, which materializes the exact current preview without rerolling.
+- `Generate Again` replaces the preview and remains non-destructive until the GM accepts a result.
+- Added a direct `Generate` launcher beside the main `Crafting Core` Item Directory launcher so the GM can reach the session-facing tool in one click.
+- Exposed `openGenerator()` on the module API for integrations/console use.
+- Compactified the Generate Materials window for notebook-sized displays: reduced header/config spacing, reduced default window size, and reserved the available height for results.
+- Made the generated-items list independently scrollable while keeping result actions visible.
+- Refined the Recipe Builder draft sidebar to consume the remaining sidebar height and show scrolling only when saved drafts actually overflow.
+- Kept all v0.0.4 generation rules unchanged: Creature Harvest profiles, 2 Common + 1 Rare + 1 Legendary candidate slots, chance/quantity behavior, Environment Biome/Resource/Abundance logic, and Material Catalog metadata remain the same.
+
 ## 0.0.4
 
 Material Generation Foundation development release.

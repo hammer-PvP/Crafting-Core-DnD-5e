@@ -202,10 +202,23 @@ export class MaterialGenerationService {
     return { ...result, folder, createdItems };
   }
 
+  /**
+   * Generate a material result without writing anything to the world.
+   * This preview-first entry point is also the shared rules engine future
+   * Token HUD / Item Piles integrations should call.
+   */
+  static async generate(request={}) {
+    return request.source === "environment"
+      ? this.generateEnvironment(request)
+      : this.generateCreature(request);
+  }
+
+  /**
+   * Backward-compatible convenience helper. New UI should prefer generate()
+   * followed by createWorldLoot() only after explicit GM confirmation.
+   */
   static async generateAndCreate(request={}) {
-    const generated = request.source === "environment"
-      ? await this.generateEnvironment(request)
-      : await this.generateCreature(request);
+    const generated = await this.generate(request);
     return this.createWorldLoot(generated);
   }
 

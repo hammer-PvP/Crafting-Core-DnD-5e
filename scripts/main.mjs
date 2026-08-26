@@ -1,5 +1,6 @@
 import { MODULE_ID, MODULE_TITLE } from "./constants.mjs";
 import { CraftingCoreApp } from "./apps/crafting-core-app.mjs";
+import { MaterialGeneratorApp } from "./apps/material-generator-app.mjs";
 import { CharacterSheetService } from "./services/character-sheet-service.mjs";
 import { CraftingService } from "./services/crafting-service.mjs";
 import { KnowledgeItemService } from "./services/knowledge-item-service.mjs";
@@ -8,6 +9,7 @@ import { MaterialCatalogService } from "./services/material-catalog-service.mjs"
 import { MaterialGenerationService } from "./services/material-generation-service.mjs";
 
 let app = null;
+let generatorApp = null;
 
 function openCraftingCore() {
   if (!game.user?.isGM) return ui.notifications.warn("Only a GM can configure Crafting Core.");
@@ -22,8 +24,22 @@ function openCraftingCore() {
   }
 }
 
+function openMaterialGenerator() {
+  if (!game.user?.isGM) return ui.notifications.warn("Only a GM can generate Crafting Core materials.");
+  try {
+    generatorApp ??= new MaterialGeneratorApp();
+    generatorApp.render({ force: true });
+    return generatorApp;
+  } catch (error) {
+    console.error(`${MODULE_TITLE} | Failed to open Material Generator.`, error);
+    ui.notifications.error("Crafting Core could not open Generate Materials. Check the console for details.");
+    return null;
+  }
+}
+
 const API = {
   open: openCraftingCore,
+  openGenerator: openMaterialGenerator,
   crafting: CraftingService,
   knowledge: KnowledgeItemService,
   get recipes() { return game.user?.isGM ? RecipeService : undefined; },
@@ -97,16 +113,34 @@ function injectItemDirectoryButton(directoryApp, element) {
   if (!header) return;
   const actions = header.querySelector(".header-actions, .action-buttons") ?? header;
 
-  root.querySelectorAll(".crafting-core-directory-button").forEach(button => button.remove());
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "crafting-core-directory-button";
-  button.dataset.tooltip = "Open Crafting Core";
-  button.innerHTML = '<i class="fa-solid fa-hammer" inert></i><span>Crafting Core</span>';
-  button.addEventListener("click", event => {
+  root.querySelectorAll(".crafting-core-directory-actions, .crafting-core-directory-button").forEach(node => node.remove());
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "crafting-core-directory-actions";
+
+  const coreButton = document.createElement("button");
+  coreButton.type = "button";
+  coreButton.className = "crafting-core-directory-button crafting-core-directory-main";
+  coreButton.dataset.tooltip = "Open Crafting Core";
+  coreButton.innerHTML = '<i class="fa-solid fa-hammer" inert></i><span>Crafting Core</span>';
+  coreButton.addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
     openCraftingCore();
   });
-  actions.append(button);
+
+  const generatorButton = document.createElement("button");
+  generatorButton.type = "button";
+  generatorButton.className = "crafting-core-directory-button crafting-core-directory-generator";
+  generatorButton.dataset.tooltip = "Generate Materials";
+  generatorButton.innerHTML = '<i class="fa-solid fa-dice-d20" inert></i><span>Generate</span>';
+  generatorButton.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    openMaterialGenerator();
+  });
+
+  wrapper.append(coreButton, generatorButton);
+  actions.append(wrapper);
 }
+

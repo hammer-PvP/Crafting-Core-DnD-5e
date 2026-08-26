@@ -201,3 +201,12 @@ The GM resolves any skill check outside Crafting Core. Materials are eligible wh
 v0.0.4 implements the world-folder sink only: one timestamped subfolder beneath `Crafting Core — Generated Loot`.
 
 Future Item Piles support must reuse `MaterialGenerationService` and replace only the output sink: selected corpse/token -> pile -> generated material Items. Item Piles must not own generation rules.
+
+## v0.0.5 Preview / Destination Boundary
+
+Manual generation is now explicitly split into two phases:
+
+1. `MaterialGenerationService.generate(request)` resolves pools, chances and quantities and returns a pure preview result without world writes.
+2. A destination materializes that accepted result. The v0.0.5 manual destination is `createWorldLoot(result)`, which creates a world Item folder. Future Token HUD / Item Piles integration should call the same `generate()` method and provide a corpse/pile destination instead of duplicating generation rules.
+
+This boundary also guarantees that `Create Loot Folder` persists the exact preview the GM saw; materialization must never reroll the request.
