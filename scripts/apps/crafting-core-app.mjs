@@ -1,0 +1,210 @@
+import { DEFAULT_KNOWLEDGE_ICON, MODULE_ID } from "../constants.mjs";
+import { KnowledgeItemService } from "../services/knowledge-item-service.mjs";
+import { RecipeService } from "../services/recipe-service.mjs";
+
+const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
+const TextEditor = foundry.applications.ux.TextEditor.implementation;
+
+export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
+  static DEFAULT_OPTIONS = {
+    id: "crafting-core-gm",
+    classes: ["crafting-core", "crafting-core-gm-app", "standard-form"],
+    tag: "form",
+    position: { width: 980, height: 760 },
+    window: { title: "Crafting Core", resizable: true }
+  };
+
+  static PARTS = {
+    main: { template: `modules/${MODULE_ID}/templates/crafting-core.hbs` }
+  };
+
+  selectedId = null;
+  draft = null;
+
+  constructor(options={}) {
+    super(options);
+    this.#newDraft();
+  }
+
+  async _prepareContext() {
+    const recipes = RecipeService.list();
+    if (this.selectedId && !recipes.some(recipe => recipe.id === this.selectedId)) this.#newDraft();
+    return {
+      recipes: recipes.map(recipe => ({ ...recipe, selected: recipe.id === this.selectedId })),
+      draft: foundry.utils.deepClone(this.draft),
+      editingExisting: Boolean(this.selectedId),
+      defaultKnowledgeIcon: DEFAULT_KNOWLEDGE_ICON
+    };
+  }
+
+  _onRender() {
+    const root = this.element;
+    root.querySelector('[data-action="new-recipe"]')?.addEventListener("click", event => {
+      event.preventDefault(); this.#newDraft(); this.render({ force: true });
+    });
+    root.querySelectorAll('[data-recipe-id]').forEach(button => button.addEventListener("click", event => {
+      event.preventDefault(); this.#loadRecipe(button.dataset.recipeId); this.render({ force: true });
+    }));
+    root.querySelector('[data-action="save-recipe"]')?.addEventListener("click", event => this.#save(event));
+    root.querySelector('[data-action="delete-recipe"]')?.addEventListener("click", event => this.#delete(event));
+    root.querySelector('[data-action="create-knowledge-item"]')?.addEventListener("click", event => this.#createKnowledgeItem(event));
+    root.querySelectorAll('[data-action="remove-ingredient"]').forEach(button => button.addEventListener("click", event => {
+      event.preventDefault();
+      this.#syncDraftFromForm();
+      this.draft.ingredients.splice(Number(button.dataset.index), 1);
+      this.render({ force: true });
+    }));
+    root.querySelector('[data-action="clear-result"]')?.addEventListener("click", event => {
+      event.preventDefault(); this.#syncDraftFromForm(); this.draft.result = null; this.render({ force: true });
+    });
+    root.querySelectorAll('[data-drop-kind]').forEach(zone => {
+      zone.addEventListener("dragover", event => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; zone.classList.add("drag-over"); });
+      zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
+      zone.addEventListener("drop", event => this.#onDrop(event, zone.dataset.dropKind));
+    });
+    root.querySelectorAll('[data-action="browse-image"]').forEach(button => button.addEventListener("click", event => this.#browseImage(event, button.dataset.target)));
+  }
+
+  #newDraft() {
+    this.selectedId = null;
+    this.draft = RecipeService.normalize({
+      id: foundry.utils.randomID(20),
+      name: "New Recipe",
+      craftingTime: 10,
+      ingredients: [],
+      result: null,
+      knowledge: { label: "Recipe", name: "", img: DEFAULT_KNOWLEDGE_ICON }
+    });
+  }
+
+  #loadRecipe(id) {
+    const recipe = RecipeService.get(id);
+    if (!recipe) return;
+    this.selectedId = recipe.id;
+    this.draft = foundry.utils.deepClone(recipe);
+  }
+
+  #syncDraftFromForm() {
+    const root = this.element;
+    if (!root || !this.draft) return;
+    this.draft.name = root.querySelector('[name="name"]')?.value ?? this.draft.name;
+    this.draft.img = root.querySelector('[name="img"]')?.value ?? this.draft.img;
+    this.draft.craftingTime = Math.max(0, Math.floor(Number(root.querySelector('[name="craftingTime"]')?.value) || 0));
+    this.draft.knowledge ??= {};
+    this.draft.knowledge.label = root.querySelector('[name="knowledgeLabel"]')?.value ?? "Recipe";
+    this.draft.knowledge.name = root.querySelector('[name="knowledgeName"]')?.value ?? "";
+    this.draft.knowledge.img = root.querySelector('[name="knowledgeImg"]')?.value ?? DEFAULT_KNOWLEDGE_ICON;
+    root.querySelectorAll('[data-ingredient-quantity]').forEach(input => {
+      const index = Number(input.dataset.ingredientQuantity);
+      if (this.draft.ingredients[index]) this.draft.ingredients[index].quantity = Math.max(1, Math.floor(Number(input.value) || 1));
+    });
+    const resultQty = root.querySelector('[name="resultQuantity"]');
+    if (this.draft.result && resultQty) this.draft.result.quantity = Math.max(1, Math.floor(Number(resultQty.value) || 1));
+  }
+
+  async #onDrop(event, kind) {
+    event.preventDefault();
+    event.currentTarget.classList.remove("drag-over");
+    this.#syncDraftFromForm();
+    try {
+      const data = TextEditor.getDragEventData(event);
+      if (data?.type !== "Item") {
+        ui.notifications.warn("Drop a D&D5e Item here.");
+        return;
+      }
+      const item = await Item.implementation.fromDropData(data);
+      if (!(item instanceof Item)) {
+        ui.notifications.warn("Crafting Core could not resolve that Item.");
+        return;
+      }
+      const ref = RecipeService.itemReference(item, 1);
+      if (kind === "result") this.draft.result = ref;
+      else {
+        const existing = this.draft.ingredients.find(row => row.uuid === ref.uuid
+          || (row.sourceUuid && ref.sourceUuid && row.sourceUuid === ref.sourceUuid)
+          || (row.identifier && ref.identifier && row.identifier === ref.identifier && row.type === ref.type));
+        if (existing) existing.quantity += 1;
+        else this.draft.ingredients.push(ref);
+      }
+      if (!this.draft.img || this.draft.img === "icons/svg/item-bag.svg") this.draft.img = this.draft.result?.img ?? this.draft.img;
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Item drop failed.`, error);
+      ui.notifications.error("Crafting Core could not read the dropped Item.");
+    }
+  }
+
+  async #browseImage(event, targetName) {
+    event.preventDefault();
+    this.#syncDraftFromForm();
+    const current = this.element.querySelector(`[name="${targetName}"]`)?.value || "";
+    const FilePicker = foundry.applications?.apps?.FilePicker?.implementation
+      ?? foundry.applications?.apps?.FilePicker
+      ?? globalThis.FilePicker;
+    if (!FilePicker) return ui.notifications.error("Foundry File Picker is unavailable.");
+    const picker = new FilePicker({
+      type: "image",
+      current,
+      callback: path => {
+        if (targetName === "img") this.draft.img = path;
+        if (targetName === "knowledgeImg") this.draft.knowledge.img = path;
+        this.render({ force: true });
+      }
+    });
+    await picker.render({ force: true });
+  }
+
+  async #save(event) {
+    event.preventDefault();
+    this.#syncDraftFromForm();
+    if (!this.draft.name?.trim()) return ui.notifications.warn("Give the recipe a name.");
+    if (!this.draft.result?.uuid) return ui.notifications.warn("Drop a result Item into the recipe first.");
+    if (!this.draft.ingredients.length) return ui.notifications.warn("Add at least one required Item.");
+    try {
+      const saved = await RecipeService.save(this.draft);
+      this.selectedId = saved.id;
+      this.draft = foundry.utils.deepClone(saved);
+      ui.notifications.info(`Saved recipe: ${saved.name}.`);
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Save recipe failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not save this recipe.");
+    }
+  }
+
+  async #delete(event) {
+    event.preventDefault();
+    if (!this.selectedId) return;
+    const recipe = RecipeService.get(this.selectedId);
+    const confirmed = await foundry.applications.api.DialogV2.confirm({
+      window: { title: "Delete Recipe" },
+      content: `<p>Delete <strong>${foundry.utils.escapeHTML(recipe?.name ?? "this recipe")}</strong>?</p>`,
+      yes: { label: "Delete", icon: "fa-solid fa-trash" },
+      no: { label: "Cancel" }
+    });
+    if (!confirmed) return;
+    await RecipeService.delete(this.selectedId);
+    this.#newDraft();
+    this.render({ force: true });
+  }
+
+  async #createKnowledgeItem(event) {
+    event.preventDefault();
+    if (!this.selectedId) {
+      ui.notifications.warn("Save the recipe before creating its Recipe/Blueprint Item.");
+      return;
+    }
+    try {
+      this.#syncDraftFromForm();
+      const saved = await RecipeService.save(this.draft);
+      this.selectedId = saved.id;
+      this.draft = foundry.utils.deepClone(saved);
+      const item = await KnowledgeItemService.createForRecipe(this.selectedId);
+      ui.notifications.info(`Created ${item.name} in the Item Directory.`);
+      item.sheet?.render?.({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Knowledge Item creation failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not create the Recipe/Blueprint Item.");
+    }
+  }
+}

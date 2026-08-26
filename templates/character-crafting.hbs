@@ -1,0 +1,44 @@
+<section class="tab {{tab.cssClass}} crafting-core-tab" data-tab="{{tab.id}}" data-group="{{tab.group}}">
+  <div class="cc-sheet-panel">
+    {{#if craftingCore.busy}}
+      <div class="cc-sheet-job">
+        <div class="cc-sheet-product"><i class="fa-solid fa-hammer"></i></div>
+        <div class="cc-progress-track" aria-label="Crafting progress"><span data-crafting-progress style="width: {{craftingCore.job.progress}}%"></span></div>
+      </div>
+    {{else if craftingCore.hasRecipes}}
+      <header class="cc-sheet-header">
+        <label><span>Recipe</span>
+          <select data-action="select-recipe">
+            {{#each craftingCore.recipes}}<option value="{{id}}" {{#if selected}}selected{{/if}}>{{name}}</option>{{/each}}
+          </select>
+        </label>
+      </header>
+
+      {{#with craftingCore.selectedRecipe}}
+      <article class="cc-sheet-recipe">
+        <div class="cc-sheet-result">
+          <img src="{{result.img}}" alt="">
+          <div><strong>{{name}}</strong><small>{{result.name}}{{#if result.quantity}} ×{{result.quantity}}{{/if}}</small></div>
+        </div>
+        <div class="cc-sheet-ingredients">
+          {{#each ingredientRows}}
+          <div class="cc-sheet-ingredient {{#unless sufficient}}missing{{/unless}}">
+            <img src="{{img}}" alt="">
+            <span>{{name}}</span>
+            <strong>{{available}} / {{quantity}}</strong>
+            <i class="fa-solid {{#if sufficient}}fa-check{{else}}fa-xmark{{/if}}"></i>
+          </div>
+          {{/each}}
+        </div>
+        <button type="button" class="cc-sheet-craft" data-action="craft" data-recipe-id="{{id}}" {{#unless canCraft}}disabled{{/unless}}><i class="fa-solid fa-hammer"></i> Craft</button>
+      </article>
+      {{/with}}
+    {{else}}
+      <div class="cc-sheet-empty">
+        <i class="fa-solid fa-scroll"></i>
+        <strong>No recipes learned</strong>
+        <p>This character has not learned any Crafting Core recipes yet.</p>
+      </div>
+    {{/if}}
+  </div>
+</section>

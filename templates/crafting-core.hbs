@@ -1,0 +1,97 @@
+<section class="cc-shell">
+  <aside class="cc-sidebar">
+    <header class="cc-app-header">
+      <i class="fa-solid fa-hammer"></i>
+      <div>
+        <span class="cc-kicker">GM Tool</span>
+        <h1>Crafting Core</h1>
+        <p>Recipes & character knowledge</p>
+      </div>
+    </header>
+
+    <button type="button" class="cc-new-recipe" data-action="new-recipe"><i class="fa-solid fa-plus"></i> New Recipe</button>
+
+    <nav class="cc-recipe-list">
+      {{#each recipes}}
+      <button type="button" class="cc-recipe-nav {{#if selected}}active{{/if}}" data-recipe-id="{{id}}">
+        <img src="{{img}}" alt="">
+        <span><strong>{{name}}</strong><small>{{craftingTime}} sec</small></span>
+      </button>
+      {{else}}
+      <div class="cc-empty-sidebar"><i class="fa-solid fa-scroll"></i><span>No saved recipes yet.</span></div>
+      {{/each}}
+    </nav>
+  </aside>
+
+  <main class="cc-main">
+    <div class="cc-content">
+      <header class="cc-section-header">
+        <div>
+          <span class="cc-kicker">Recipe Builder</span>
+          <h2>{{draft.name}}</h2>
+          <p>Any D&D5e Item can be a required material or the final result.</p>
+        </div>
+        <img class="cc-recipe-image" src="{{draft.img}}" alt="">
+      </header>
+
+      <section class="cc-form-card">
+        <h3>Recipe</h3>
+        <div class="cc-grid two">
+          <label><span>Name</span><input type="text" name="name" value="{{draft.name}}"></label>
+          <label><span>Crafting Time (seconds)</span><input type="number" min="0" step="1" name="craftingTime" value="{{draft.craftingTime}}"></label>
+        </div>
+        <label class="cc-file-field"><span>Recipe Image</span><span><input type="text" name="img" value="{{draft.img}}"><button type="button" data-action="browse-image" data-target="img"><i class="fa-solid fa-folder-open"></i></button></span></label>
+      </section>
+
+      <section class="cc-form-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Requirements</span><h3>Items Consumed</h3></div><small>Drop Items from the World, a Compendium, or an Actor.</small></div>
+        <div class="cc-drop-zone" data-drop-kind="ingredient"><i class="fa-solid fa-arrow-down-to-line"></i><strong>Drop required Items here</strong></div>
+        <div class="cc-item-rows">
+          {{#each draft.ingredients}}
+          <div class="cc-item-row">
+            <img src="{{img}}" alt="">
+            <div class="cc-item-name"><strong>{{name}}</strong><small>{{type}}</small></div>
+            <label><span>Qty</span><input type="number" min="1" step="1" value="{{quantity}}" data-ingredient-quantity="{{@index}}"></label>
+            <button type="button" class="cc-icon-button danger" data-action="remove-ingredient" data-index="{{@index}}" aria-label="Remove"><i class="fa-solid fa-trash"></i></button>
+          </div>
+          {{else}}
+          <div class="cc-empty-row">No required Items yet.</div>
+          {{/each}}
+        </div>
+      </section>
+
+      <section class="cc-form-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Output</span><h3>Crafted Item</h3></div><small>Exactly one Item definition; output quantity may be greater than one.</small></div>
+        {{#if draft.result}}
+        <div class="cc-result-card">
+          <img src="{{draft.result.img}}" alt="">
+          <div><strong>{{draft.result.name}}</strong><small>{{draft.result.type}}</small></div>
+          <label><span>Qty</span><input type="number" min="1" step="1" name="resultQuantity" value="{{draft.result.quantity}}"></label>
+          <button type="button" class="cc-icon-button danger" data-action="clear-result"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        {{else}}
+        <div class="cc-drop-zone result" data-drop-kind="result"><i class="fa-solid fa-box-open"></i><strong>Drop the final Item here</strong></div>
+        {{/if}}
+      </section>
+
+      <section class="cc-form-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Character Knowledge</span><h3>Recipe / Blueprint Item</h3></div><small>Creates a one-use Consumable with a native Utility Activity: Learn Recipe.</small></div>
+        <div class="cc-grid two">
+          <label><span>Label</span><select name="knowledgeLabel"><option value="Recipe" {{#if (eq draft.knowledge.label "Recipe")}}selected{{/if}}>Recipe</option><option value="Blueprint" {{#if (eq draft.knowledge.label "Blueprint")}}selected{{/if}}>Blueprint</option><option value="Formula" {{#if (eq draft.knowledge.label "Formula")}}selected{{/if}}>Formula</option><option value="Manual" {{#if (eq draft.knowledge.label "Manual")}}selected{{/if}}>Manual</option></select></label>
+          <label><span>Custom Item Name (optional)</span><input type="text" name="knowledgeName" value="{{draft.knowledge.name}}" placeholder="Recipe — {{draft.name}}"></label>
+        </div>
+        <label class="cc-file-field"><span>Knowledge Item Image</span><span><input type="text" name="knowledgeImg" value="{{draft.knowledge.img}}"><button type="button" data-action="browse-image" data-target="knowledgeImg"><i class="fa-solid fa-folder-open"></i></button></span></label>
+        {{#if editingExisting}}
+        <button type="button" class="cc-secondary-action" data-action="create-knowledge-item"><i class="fa-solid fa-scroll"></i> Create Recipe / Blueprint Item</button>
+        {{else}}
+        <p class="cc-note"><i class="fa-solid fa-circle-info"></i> Save the recipe before creating its knowledge Item.</p>
+        {{/if}}
+      </section>
+    </div>
+
+    <footer class="cc-footer">
+      {{#if editingExisting}}<button type="button" class="cc-danger-action" data-action="delete-recipe"><i class="fa-solid fa-trash"></i> Delete Recipe</button>{{else}}<span></span>{{/if}}
+      <button type="button" class="cc-primary-action" data-action="save-recipe"><i class="fa-solid fa-floppy-disk"></i> Save Recipe</button>
+    </footer>
+  </main>
+</section>
