@@ -5,6 +5,7 @@ import {
   SETTINGS
 } from "../constants.mjs";
 import { DEFAULT_MATERIALS, MATERIAL_CATALOG_VERSION } from "../data/material-catalog.mjs";
+import { CompendiumService } from "./compendium-service.mjs";
 
 export class MaterialCatalogService {
   static PACK_NAME = "crafting-core-materials";
@@ -24,6 +25,13 @@ export class MaterialCatalogService {
       config: false,
       type: Object,
       default: foundry.utils.deepClone(this.DEFAULT_ECONOMY)
+    });
+    game.settings.register(MODULE_ID, SETTINGS.MATERIAL_OVERRIDES, {
+      name: "Crafting Core Material Overrides",
+      scope: "world",
+      config: false,
+      type: Object,
+      default: {}
     });
   }
 
@@ -52,60 +60,145 @@ export class MaterialCatalogService {
     return current;
   }
 
-  static definitions() {
-    const economy = this.economy();
-    return DEFAULT_MATERIALS.map(material => ({
-      ...foundry.utils.deepClone(material),
-      chance: material.chance ?? economy[material.rarity]?.chance ?? 0,
-      price: economy[material.rarity]?.price ?? 0,
-      denomination: economy[material.rarity]?.denomination ?? "gp",
-      img: DEFAULT_MATERIAL_ICON,
-      managed: true
-    }));
+  static overrides() {
+    const stored = game.settings.get(MODULE_ID, SETTINGS.MATERIAL_OVERRIDES);
+    return stored && typeof stored === "object" && !Array.isArray(stored) ? foundry.utils.deepClone(stored) : {};
   }
 
-  static groupedDefinitions() {
-    const familyLabels = {
-      creature: "Creature Harvest",
-      gathering: "Gathering Materials",
-      profession: "Profession / Trade"
-    };
-    const groups = new Map();
-    for (const material of this.definitions()) {
-      if (!groups.has(material.family)) groups.set(material.family, []);
-      groups.get(material.family).push(material);
+  static definitions() {
+    const economy = this.economy();
+    const overrides = this.overrides();
+    return DEFAULT_MATERIALS.map(base => {
+      const override = overrides[base.id] ?? {};
+      const rarity = String(override.rarity ?? base.rarity ?? "common");
+      const material = {
+        ...foundry.utils.deepClone(base),
+        ...foundry.utils.deepClone(override),
+        id: base.id,
+        rarity,
+        chance: override.chance ?? base.chance ?? economy[rarity]?.chance ?? 0,
+        price: override.price ?? economy[rarity]?.price ?? 0,
+        denomination: override.denomination ?? economy[rarity]?.denomination ?? "gp",
+        img: override.img ?? DEFAULT_MATERIAL_ICON,
+        managed: true,
+        source: "builtin"
+      };
+      material.category = String(override.category ?? base.category ?? this.categoryFor(material));
+      return this.#normalizeMaterial(material);
+    });
+  }
+
+  static async allEntries() {
+    const builtIns = this.definitions();
+    const pack = this.pack();
+    if (!pack) return builtIns;
+    const docs = await pack.getDocuments();
+    const byId = new Map(docs
+      .filter(item => item.getFlag(MODULE_ID, FLAGS.MATERIAL))
+      .map(item => [String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? ""), item]));
+
+    const entries = builtIns.map(material => {
+      const item = byId.get(material.id);
+      return item ? { ...material, name: item.name, img: item.img || material.img, packUuid: item.uuid } : material;
+    });
+
+    for (const item of docs) {
+      if (!item.getFlag(MODULE_ID, FLAGS.MATERIAL) || item.getFlag(MODULE_ID, FLAGS.MATERIAL_MANAGED)) continue;
+      entries.push(this.#entryFromItem(item));
     }
-    return [...groups.entries()].map(([family, materials]) => ({
-      family,
-      label: familyLabels[family] ?? family,
-      count: materials.length,
-      materials: materials.sort((a, b) => a.name.localeCompare(b.name, game.i18n.lang))
-    }));
+    return entries.sort((a, b) => String(a.name).localeCompare(String(b.name), game.i18n.lang));
+  }
+
+  static async getEntry(id) {
+    return (await this.allEntries()).find(entry => entry.id === String(id)) ?? null;
+  }
+
+  static groupedEntries(entries) {
+    const groups = new Map();
+    for (const material of entries) {
+      const key = `${material.family}:${material.category}`;
+      if (!groups.has(key)) groups.set(key, {
+        key,
+        family: material.family,
+        category: material.category,
+        label: `${this.familyLabel(material.family)} — ${this.categoryLabel(material.family, material.category)}`,
+        materials: []
+      });
+      groups.get(key).materials.push(material);
+    }
+    return [...groups.values()]
+      .map(group => ({
+        ...group,
+        count: group.materials.length,
+        materials: group.materials.sort((a, b) => String(a.name).localeCompare(String(b.name), game.i18n.lang))
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, game.i18n.lang));
+  }
+
+  static familyLabel(family) {
+    return ({ creature: "Creature Harvest", gathering: "Gathering", profession: "Profession & Trade" })[family] ?? family;
+  }
+
+  static categoryLabel(family, category) {
+    if (family === "creature") return this.#title(category);
+    return ({
+      flora: "Flora",
+      roots: "Roots",
+      fungi: "Fungi",
+      wood: "Wood & Resin",
+      mineral: "Mineral",
+      food: "Food & Cooking",
+      metalworking: "Metalworking",
+      leatherworking: "Leatherworking",
+      alchemy: "Alchemy",
+      general: "General Materials"
+    })[category] ?? this.#title(category);
+  }
+
+  static categoryFor(material) {
+    const family = String(material.family ?? "profession");
+    const tags = new Set((material.tags ?? []).map(tag => String(tag).toLowerCase()));
+    const nature = String(material.nature ?? "").toLowerCase();
+    if (family === "creature") return nature || "other";
+    if (family === "gathering") {
+      if (nature === "mineral") return "mineral";
+      if (tags.has("root")) return "roots";
+      if (tags.has("fungus") || tags.has("mushroom") || tags.has("spore")) return "fungi";
+      if (tags.has("resin") || tags.has("wood") || tags.has("bark") || tags.has("sap")) return "wood";
+      return "flora";
+    }
+    if (tags.has("food") || tags.has("grain") || tags.has("spice") || tags.has("preservative") || tags.has("oil")) return "food";
+    if (tags.has("leather")) return "leatherworking";
+    if (tags.has("alchemy")) return "alchemy";
+    if (tags.has("metal") || tags.has("smithing") || tags.has("fuel")) return "metalworking";
+    return "general";
   }
 
   static pack() {
-    return game.packs.get(this.PACK_ID)
-      ?? game.packs.find(pack => pack.metadata?.packageType === "world" && pack.metadata?.name === this.PACK_NAME)
-      ?? game.packs.find(pack => pack.collection === this.PACK_ID)
-      ?? null;
+    return CompendiumService.findWorldPack(this.PACK_NAME);
   }
 
   static async ensurePack() {
-    if (!game.user.isGM) throw new Error("Only a GM can create the Crafting Core materials Compendium.");
-    const existing = this.pack();
-    if (existing) return existing;
+    const pack = await CompendiumService.ensureWorldItemPack({ name: this.PACK_NAME, label: this.PACK_LABEL });
+    await CompendiumService.ensurePackFolders(pack, this.#folderDefinitions());
+    return pack;
+  }
 
-    const CompendiumCollection = foundry.documents?.collections?.CompendiumCollection ?? globalThis.CompendiumCollection;
-    if (!CompendiumCollection?.createCompendium) throw new Error("Foundry's Compendium creation API is unavailable.");
-
-    return CompendiumCollection.createCompendium({
-      name: this.PACK_NAME,
-      label: this.PACK_LABEL,
-      type: "Item",
-      system: "dnd5e",
-      package: "world",
-      private: true
-    });
+  static #folderDefinitions() {
+    const defs = [
+      { key: "creature", name: "Creature Harvest" },
+      { key: "gathering", name: "Gathering" },
+      { key: "profession", name: "Profession & Trade" }
+    ];
+    const creatureTypes = [...new Set(DEFAULT_MATERIALS.filter(m => m.family === "creature").map(m => m.nature))].sort();
+    for (const nature of creatureTypes) defs.push({ key: `creature:${nature}`, name: this.#title(nature), parent: "creature" });
+    for (const [key, name] of [["flora","Flora"],["roots","Roots"],["fungi","Fungi"],["wood","Wood & Resin"],["mineral","Mineral"]]) {
+      defs.push({ key: `gathering:${key}`, name, parent: "gathering" });
+    }
+    for (const [key, name] of [["food","Food & Cooking"],["metalworking","Metalworking"],["leatherworking","Leatherworking"],["alchemy","Alchemy"],["general","General Materials"]]) {
+      defs.push({ key: `profession:${key}`, name, parent: "profession" });
+    }
+    return defs;
   }
 
   static async sync() {
@@ -115,6 +208,7 @@ export class MaterialCatalogService {
     if (wasLocked) await pack.configure({ locked: false });
 
     try {
+      const folders = await CompendiumService.ensurePackFolders(pack, this.#folderDefinitions());
       const existing = await pack.getDocuments();
       const byMaterialId = new Map(existing
         .map(item => [String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? ""), item])
@@ -123,16 +217,18 @@ export class MaterialCatalogService {
       const creates = [];
       const updates = [];
       for (const material of this.definitions()) {
+        const folder = folders.get(`${material.family}:${material.category}`) ?? folders.get(material.family) ?? null;
         const item = byMaterialId.get(material.id);
         if (!item) {
-          creates.push(this.#itemData(material));
+          creates.push(this.#itemData(material, folder?.id ?? null));
           continue;
         }
 
-        // Keep GM-facing presentation edits (name, image, description, weight) intact.
-        // Synchronization only refreshes catalog metadata plus rarity/default value.
+        // Preserve manual GM-facing presentation edits made directly in the pack (name, image,
+        // description and weight). Catalog-editor overrides are already merged into material metadata.
         updates.push({
           _id: item.id,
+          folder: folder?.id ?? null,
           "system.rarity": material.rarity,
           "system.price.value": material.price,
           "system.price.denomination": material.denomination,
@@ -140,6 +236,7 @@ export class MaterialCatalogService {
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_ID}`]: material.id,
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_FAMILY}`]: material.family,
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_NATURE}`]: material.nature,
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_CATEGORY}`]: material.category,
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_RARITY}`]: material.rarity,
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_CHANCE}`]: material.chance,
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_QUANTITY}`]: material.quantity,
@@ -154,7 +251,7 @@ export class MaterialCatalogService {
       const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
       const created = creates.length ? await ItemClass.createDocuments(creates, { pack: pack.collection }) : [];
       const updated = updates.length ? await ItemClass.updateDocuments(updates, { pack: pack.collection }) : [];
-      await pack.getIndex({ fields: ["name", "img", "type", "system.rarity", `flags.${MODULE_ID}.${FLAGS.MATERIAL_ID}`] });
+      await pack.getIndex({ fields: ["name", "img", "type", "folder", "system.rarity", `flags.${MODULE_ID}.${FLAGS.MATERIAL_ID}`] });
       Hooks.callAll(`${MODULE_ID}.materialsChanged`);
       return { pack, created: created.length, updated: updated.length, total: this.definitions().length };
     } finally {
@@ -162,7 +259,7 @@ export class MaterialCatalogService {
     }
   }
 
-  static async registerItem(item, { family="profession", nature="trade", rarity="common" }={}) {
+  static async registerItem(item, { family="profession", nature="trade", rarity="common", category="general" }={}) {
     if (!game.user.isGM) throw new Error("Only a GM can register Crafting Core materials.");
     if (!(item instanceof Item)) throw new Error("Drop a D&D5e Item to register it as a material.");
     const pack = await this.ensurePack();
@@ -170,6 +267,7 @@ export class MaterialCatalogService {
     if (wasLocked) await pack.configure({ locked: false });
 
     try {
+      const folders = await CompendiumService.ensurePackFolders(pack, this.#folderDefinitions());
       const economy = this.economy();
       if (item.pack === pack.collection && item.getFlag(MODULE_ID, FLAGS.MATERIAL)) return item;
       const existingDocs = await pack.getDocuments();
@@ -182,10 +280,13 @@ export class MaterialCatalogService {
       const sourceDescription = foundry.utils.deepClone(item.system?.description ?? { value: "", chat: "" });
       const sourceWeight = foundry.utils.deepClone(item.system?.weight ?? { value: 0, units: "lb" });
       const sourcePrice = foundry.utils.deepClone(item.system?.price ?? { value: economy[rarity]?.price ?? 0, denomination: "gp" });
+      const normalized = this.#normalizeMaterial({ id: materialId, family, nature, rarity, category, tags: [], requires: [], biomes: [], chance: economy[rarity]?.chance ?? 0, quantity: "1" });
+      const folder = folders.get(`${normalized.family}:${normalized.category}`) ?? folders.get(normalized.family) ?? null;
       const data = {
         name: item.name,
         type: "loot",
         img: item.img || DEFAULT_MATERIAL_ICON,
+        folder: folder?.id ?? null,
         system: {
           description: sourceDescription,
           quantity: 1,
@@ -207,11 +308,12 @@ export class MaterialCatalogService {
         [FLAGS.SOURCE_UUID]: String(item.uuid),
         [FLAGS.MATERIAL]: true,
         [FLAGS.MATERIAL_ID]: materialId,
-        [FLAGS.MATERIAL_FAMILY]: family,
-        [FLAGS.MATERIAL_NATURE]: nature,
-        [FLAGS.MATERIAL_RARITY]: rarity,
-        [FLAGS.MATERIAL_CHANCE]: economy[rarity]?.chance ?? 0,
-        [FLAGS.MATERIAL_QUANTITY]: "1",
+        [FLAGS.MATERIAL_FAMILY]: normalized.family,
+        [FLAGS.MATERIAL_NATURE]: normalized.nature,
+        [FLAGS.MATERIAL_CATEGORY]: normalized.category,
+        [FLAGS.MATERIAL_RARITY]: normalized.rarity,
+        [FLAGS.MATERIAL_CHANCE]: normalized.chance,
+        [FLAGS.MATERIAL_QUANTITY]: normalized.quantity,
         [FLAGS.MATERIAL_TAGS]: [],
         [FLAGS.MATERIAL_REQUIRES]: [],
         [FLAGS.MATERIAL_BIOMES]: [],
@@ -228,9 +330,109 @@ export class MaterialCatalogService {
     }
   }
 
+  static async saveEntry(id, changes={}) {
+    if (!game.user.isGM) throw new Error("Only a GM can edit Crafting Core materials.");
+    const entry = await this.getEntry(id);
+    if (!entry) throw new Error("Crafting material could not be resolved.");
+    const normalized = this.#normalizeMaterial({ ...entry, ...foundry.utils.deepClone(changes), id: entry.id });
+
+    if (entry.managed) {
+      const overrides = this.overrides();
+      overrides[entry.id] = {
+        name: normalized.name,
+        img: normalized.img,
+        family: normalized.family,
+        nature: normalized.nature,
+        category: normalized.category,
+        rarity: normalized.rarity,
+        chance: normalized.chance,
+        quantity: normalized.quantity,
+        tags: normalized.tags,
+        requires: normalized.requires,
+        biomes: normalized.biomes,
+        price: normalized.price,
+        denomination: normalized.denomination
+      };
+      await game.settings.set(MODULE_ID, SETTINGS.MATERIAL_OVERRIDES, overrides);
+      await this.sync();
+      // Apply presentation fields that sync intentionally preserves.
+      const pack = this.pack();
+      const docs = await pack.getDocuments();
+      const item = docs.find(doc => String(doc.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? "") === entry.id);
+      if (item) {
+        const wasLocked = Boolean(pack.locked);
+        if (wasLocked) await pack.configure({ locked: false });
+        try { await item.update({ name: normalized.name, img: normalized.img }); }
+        finally { if (wasLocked) await pack.configure({ locked: true }); }
+      }
+    } else {
+      const pack = this.pack();
+      if (!pack) throw new Error("Materials Compendium is not available.");
+      const docs = await pack.getDocuments();
+      const item = docs.find(doc => String(doc.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? "") === entry.id);
+      if (!item) throw new Error("Custom material Item is missing from the Materials Compendium.");
+      const wasLocked = Boolean(pack.locked);
+      if (wasLocked) await pack.configure({ locked: false });
+      try {
+        const folders = await CompendiumService.ensurePackFolders(pack, this.#folderDefinitions());
+        const folder = folders.get(`${normalized.family}:${normalized.category}`) ?? folders.get(normalized.family) ?? null;
+        await item.update({
+          name: normalized.name,
+          img: normalized.img,
+          folder: folder?.id ?? null,
+          "system.rarity": normalized.rarity,
+          "system.price.value": normalized.price,
+          "system.price.denomination": normalized.denomination,
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_FAMILY}`]: normalized.family,
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_NATURE}`]: normalized.nature,
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_CATEGORY}`]: normalized.category,
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_RARITY}`]: normalized.rarity,
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_CHANCE}`]: normalized.chance,
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_QUANTITY}`]: normalized.quantity,
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_TAGS}`]: normalized.tags,
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_REQUIRES}`]: normalized.requires,
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_BIOMES}`]: normalized.biomes
+        });
+      } finally {
+        if (wasLocked) await pack.configure({ locked: true });
+      }
+    }
+    Hooks.callAll(`${MODULE_ID}.materialsChanged`, id);
+    return this.getEntry(id);
+  }
+
+  static async resetEntry(id) {
+    if (!game.user.isGM) throw new Error("Only a GM can reset Crafting Core materials.");
+    const base = DEFAULT_MATERIALS.find(material => material.id === String(id));
+    if (!base) throw new Error("Only built-in curated materials can be reset.");
+    const overrides = this.overrides();
+    delete overrides[id];
+    await game.settings.set(MODULE_ID, SETTINGS.MATERIAL_OVERRIDES, overrides);
+    await this.sync();
+
+    // Sync deliberately preserves presentation edits made directly in the Compendium. A deliberate
+    // "Reset Curated Default" action is different: it restores the curated name and default icon too.
+    const pack = this.pack();
+    if (pack) {
+      const material = this.definitions().find(entry => entry.id === String(id));
+      const docs = await pack.getDocuments();
+      const item = docs.find(doc => String(doc.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? "") === String(id));
+      if (item && material) {
+        const wasLocked = Boolean(pack.locked);
+        if (wasLocked) await pack.configure({ locked: false });
+        try {
+          await item.update({ name: material.name, img: material.img || DEFAULT_MATERIAL_ICON });
+        } finally {
+          if (wasLocked) await pack.configure({ locked: true });
+        }
+      }
+    }
+    return this.getEntry(id);
+  }
+
   static async packSummary() {
     const pack = this.pack();
-    if (!pack) return { exists: false, collection: this.PACK_ID, count: 0, managed: 0, custom: 0 };
+    if (!pack) return { exists: false, collection: this.PACK_ID, count: 0, managed: 0, custom: 0, private: true };
     const docs = await pack.getDocuments();
     let managed = 0;
     let custom = 0;
@@ -239,7 +441,7 @@ export class MaterialCatalogService {
       if (item.getFlag(MODULE_ID, FLAGS.MATERIAL_MANAGED)) managed += 1;
       else custom += 1;
     }
-    return { exists: true, collection: pack.collection, count: docs.length, managed, custom, title: pack.title };
+    return { exists: true, collection: pack.collection, count: docs.length, managed, custom, title: pack.title, private: pack.metadata?.private !== false };
   }
 
   static openPack() {
@@ -249,14 +451,41 @@ export class MaterialCatalogService {
     return true;
   }
 
-  static #itemData(material) {
+  static #entryFromItem(item) {
+    const family = String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_FAMILY) ?? "profession");
+    const nature = String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_NATURE) ?? "trade");
+    const entry = {
+      id: String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? item.id),
+      name: item.name,
+      img: item.img || DEFAULT_MATERIAL_ICON,
+      family,
+      nature,
+      category: String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_CATEGORY) ?? ""),
+      rarity: String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_RARITY) ?? item.system?.rarity ?? "common"),
+      chance: Number(item.getFlag(MODULE_ID, FLAGS.MATERIAL_CHANCE) ?? 0),
+      quantity: String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_QUANTITY) ?? "1"),
+      tags: item.getFlag(MODULE_ID, FLAGS.MATERIAL_TAGS) ?? [],
+      requires: item.getFlag(MODULE_ID, FLAGS.MATERIAL_REQUIRES) ?? [],
+      biomes: item.getFlag(MODULE_ID, FLAGS.MATERIAL_BIOMES) ?? [],
+      price: Number(item.system?.price?.value ?? 0),
+      denomination: String(item.system?.price?.denomination ?? "gp"),
+      managed: false,
+      source: "custom",
+      packUuid: item.uuid
+    };
+    if (!entry.category) entry.category = this.categoryFor(entry);
+    return this.#normalizeMaterial(entry);
+  }
+
+  static #itemData(material, folderId=null) {
     return {
       name: material.name,
       type: "loot",
       img: material.img || DEFAULT_MATERIAL_ICON,
+      folder: folderId,
       system: {
         description: {
-          value: `<p>A crafting material managed by <strong>Crafting Core</strong>.</p>`,
+          value: `<p>A crafting material from the <strong>Crafting Core Built-in Curated Catalog</strong>.</p>`,
           chat: ""
         },
         quantity: 1,
@@ -269,7 +498,7 @@ export class MaterialCatalogService {
         properties: [],
         type: { value: "trade", subtype: "" },
         identifier: `cc-${material.id}`,
-        source: { custom: "Crafting Core", book: "", page: "", license: "", rules: "2024", revision: 1 }
+        source: { custom: "Crafting Core — Built-in Curated Catalog", book: "", page: "", license: "", rules: "2024", revision: 1 }
       },
       flags: {
         [MODULE_ID]: {
@@ -277,6 +506,7 @@ export class MaterialCatalogService {
           [FLAGS.MATERIAL_ID]: material.id,
           [FLAGS.MATERIAL_FAMILY]: material.family,
           [FLAGS.MATERIAL_NATURE]: material.nature,
+          [FLAGS.MATERIAL_CATEGORY]: material.category,
           [FLAGS.MATERIAL_RARITY]: material.rarity,
           [FLAGS.MATERIAL_CHANCE]: material.chance,
           [FLAGS.MATERIAL_QUANTITY]: material.quantity,
@@ -286,7 +516,42 @@ export class MaterialCatalogService {
           [FLAGS.MATERIAL_MANAGED]: true,
           [FLAGS.MATERIAL_CATALOG_VERSION]: MATERIAL_CATALOG_VERSION
         }
-      }
+      },
+      ownership: { default: 0 }
     };
+  }
+
+  static #normalizeMaterial(material) {
+    const family = ["creature", "gathering", "profession"].includes(String(material.family)) ? String(material.family) : "profession";
+    const rarity = ["common", "rare", "legendary"].includes(String(material.rarity)) ? String(material.rarity) : "common";
+    const normalized = {
+      ...material,
+      id: String(material.id),
+      name: String(material.name || "Material").trim() || "Material",
+      img: String(material.img || DEFAULT_MATERIAL_ICON),
+      family,
+      nature: String(material.nature || (family === "profession" ? "trade" : "other")).trim().toLowerCase(),
+      rarity,
+      chance: Math.clamp(Number(material.chance) || 0, 0, 100),
+      quantity: String(material.quantity || "1").trim() || "1",
+      tags: this.#array(material.tags),
+      requires: this.#array(material.requires),
+      biomes: this.#array(material.biomes),
+      price: Math.max(0, Number(material.price) || 0),
+      denomination: String(material.denomination || "gp")
+    };
+    normalized.category = String(material.category || this.categoryFor(normalized)).trim().toLowerCase() || this.categoryFor(normalized);
+    return normalized;
+  }
+
+  static #array(value) {
+    if (Array.isArray(value)) return [...new Set(value.map(v => String(v).trim().toLowerCase()).filter(Boolean))];
+    return [...new Set(String(value ?? "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean))];
+  }
+
+  static #title(value) {
+    return String(value ?? "")
+      .replace(/[-_]+/g, " ")
+      .replace(/\b\w/g, c => c.toUpperCase());
   }
 }

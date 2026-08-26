@@ -1,15 +1,15 @@
 <section class="cc-material-shell">
   <header class="cc-material-header">
     <div>
-      <span class="cc-kicker">GM Tool</span>
+      <span class="cc-kicker">GM Tool · Private Library</span>
       <h1>Material Catalog</h1>
-      <p>Manage the Trade Goods used by Crafting Core generation systems.</p>
+      <p><strong>Built-in Curated Catalog:</strong> these materials are authored by Crafting Core and are not imported from your PHB, DMG, Monster Manual, Tasha, or SRD Compendiums.</p>
     </div>
     <div class="cc-material-status {{#if summary.exists}}ready{{/if}}">
-      <i class="fa-solid {{#if summary.exists}}fa-circle-check{{else}}fa-circle-exclamation{{/if}}"></i>
+      <i class="fa-solid {{#if summary.exists}}fa-lock{{else}}fa-circle-exclamation{{/if}}"></i>
       <div>
-        <strong>{{#if summary.exists}}Materials Compendium ready{{else}}Materials Compendium not created{{/if}}</strong>
-        <small>{{summary.count}} Items · {{summary.managed}} managed · {{summary.custom}} custom</small>
+        <strong>{{#if summary.exists}}GM-only Materials Compendium ready{{else}}Materials Compendium not created{{/if}}</strong>
+        <small>{{summary.count}} Items · {{summary.managed}} curated · {{summary.custom}} custom</small>
       </div>
     </div>
   </header>
@@ -17,9 +17,9 @@
   <div class="cc-material-layout">
     <aside class="cc-material-tools">
       <section class="cc-form-card">
-        <span class="cc-kicker">Compendium</span>
+        <span class="cc-kicker">Private Compendium</span>
         <h3>Crafting Core — Materials</h3>
-        <p class="cc-note">Create or synchronize the world Compendium. Existing GM presentation edits such as names, images, descriptions, and weight are preserved.</p>
+        <p class="cc-note">Stored under the <strong>Crafting Core</strong> Compendium folder. The pack is private and inaccessible to players.</p>
         <button type="button" class="cc-primary-action cc-wide" data-action="sync-materials"><i class="fa-solid fa-arrows-rotate"></i> Create / Sync Materials</button>
         <button type="button" class="cc-secondary-action cc-wide" data-action="open-materials"><i class="fa-solid fa-book-open"></i> Open Compendium</button>
       </section>
@@ -27,7 +27,7 @@
       <section class="cc-form-card">
         <span class="cc-kicker">Rarity Defaults</span>
         <h3>Value & Drop Chance</h3>
-        <p class="cc-note">These are catalog defaults. Future Harvest Profiles can override individual chances.</p>
+        <p class="cc-note">Defaults for curated materials. Individual material edits override these values.</p>
         <div class="cc-economy-grid">
           <div class="cc-economy-head"><span>Rarity</span><span>GP</span><span>Chance</span></div>
           <div><strong>Common</strong><input type="number" min="0" step="1" name="economy.common.price" value="{{economy.common.price}}"><span><input type="number" min="0" max="100" step="0.1" name="economy.common.chance" value="{{economy.common.chance}}">%</span></div>
@@ -42,22 +42,29 @@
         <h3>Register Existing Item</h3>
         <div class="cc-drop-zone cc-material-drop" data-drop-kind="custom-material">
           <i class="fa-solid fa-arrow-down-to-line"></i>
-          <div><strong>Drop any D&D5e Item here</strong><small>It is copied into the Materials Compendium as Loot → Trade Good.</small></div>
+          <div><strong>Drop any D&D5e Item here</strong><small>It is copied into the private Materials Compendium as Loot → Trade Good and can then participate in future generation systems.</small></div>
         </div>
       </section>
     </aside>
 
     <main class="cc-material-catalog">
       <div class="cc-catalog-summary">
-        <div><span class="cc-kicker">Built-in Catalog</span><h2>{{catalogCount}} Materials</h2></div>
-        <p>Creature Harvest, environmental Gathering, and Profession / Trade materials share one managed source.</p>
+        <div><span class="cc-kicker">Built-in + Custom Catalog</span><h2>{{shownCount}} / {{catalogCount}} Materials</h2></div>
+        <p>Creature Harvest, Gathering, and Profession / Trade materials are organized into folders and can be edited individually.</p>
+      </div>
+
+      <div class="cc-material-filters">
+        <input type="search" name="filter.search" value="{{filters.search}}" placeholder="Search materials...">
+        <select name="filter.family">{{#each familyOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select>
+        <select name="filter.nature"><option value="all">All Natures</option>{{#each natureOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select>
+        <select name="filter.rarity">{{#each rarityOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select>
       </div>
 
       {{#each groups}}
       <details class="cc-material-group" open>
         <summary><span>{{label}}</span><small>{{count}} materials</small></summary>
         <div class="cc-material-table">
-          <div class="cc-material-table-head"><span>Material</span><span>Nature</span><span>Rarity</span><span>Chance</span><span>Qty</span></div>
+          <div class="cc-material-table-head"><span>Material</span><span>Nature</span><span>Rarity</span><span>Chance</span><span>Qty</span><span></span></div>
           {{#each materials}}
           <div class="cc-material-table-row">
             <span class="cc-material-name"><img src="{{img}}" alt=""><strong>{{name}}</strong></span>
@@ -65,10 +72,13 @@
             <span class="cc-rarity {{rarity}}">{{rarity}}</span>
             <span>{{chance}}%</span>
             <span>{{quantity}}</span>
+            <button type="button" class="cc-icon-button" data-action="edit-material" data-material-id="{{id}}" aria-label="Edit {{name}}"><i class="fa-solid fa-pen"></i></button>
           </div>
           {{/each}}
         </div>
       </details>
+      {{else}}
+      <div class="cc-empty-row">No materials match the current filters.</div>
       {{/each}}
     </main>
   </div>

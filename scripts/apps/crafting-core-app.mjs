@@ -1,4 +1,10 @@
-import { DEFAULT_KNOWLEDGE_ICON, FILE_PICKER_ROOT, KNOWLEDGE_ICONS, MODULE_ID } from "../constants.mjs";
+import {
+  DEFAULT_KNOWLEDGE_ICON,
+  FILE_PICKER_ROOT,
+  KNOWLEDGE_ICONS,
+  KNOWLEDGE_PRICE_BY_RARITY,
+  MODULE_ID
+} from "../constants.mjs";
 import { KnowledgeItemService } from "../services/knowledge-item-service.mjs";
 import { RecipeService } from "../services/recipe-service.mjs";
 import { MaterialCatalogApp } from "./material-catalog-app.mjs";
@@ -11,7 +17,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     id: "crafting-core-gm",
     classes: ["crafting-core", "crafting-core-gm-app", "standard-form"],
     tag: "form",
-    position: { width: 980, height: 760 },
+    position: { width: 1020, height: 780 },
     window: { title: "Crafting Core", resizable: true }
   };
 
@@ -30,12 +36,22 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
   async _prepareContext() {
     const recipes = RecipeService.list();
     if (this.selectedId && !recipes.some(recipe => recipe.id === this.selectedId)) this.#newDraft();
+    const rarity = String(this.draft?.result?.snapshot?.system?.rarity ?? "");
+    const rarityLabel = rarity ? (CONFIG.DND5E?.itemRarity?.[rarity] ?? rarity) : "No rarity";
     return {
-      recipes: recipes.map(recipe => ({ ...recipe, selected: recipe.id === this.selectedId })),
+      recipes: recipes.map(recipe => ({
+        ...recipe,
+        selected: recipe.id === this.selectedId,
+        published: Boolean(recipe.publication?.uuid),
+        sourceType: recipe.publication?.sourceType ?? recipe.knowledge?.label ?? "Recipe"
+      })),
       draft: foundry.utils.deepClone(this.draft),
       editingExisting: Boolean(this.selectedId),
+      published: Boolean(this.draft?.publication?.uuid),
       defaultKnowledgeIcon: DEFAULT_KNOWLEDGE_ICON,
-      knowledgeIcons: KNOWLEDGE_ICONS
+      knowledgeIcons: KNOWLEDGE_ICONS,
+      outputRarity: rarityLabel,
+      knowledgePrice: Number(KNOWLEDGE_PRICE_BY_RARITY[rarity] ?? 0)
     };
   }
 
@@ -48,12 +64,17 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       event.preventDefault();
       new MaterialCatalogApp().render({ force: true });
     });
+    root.querySelector('[data-action="open-learn-sources"]')?.addEventListener("click", async event => {
+      event.preventDefault();
+      const pack = KnowledgeItemService.pack() ?? await KnowledgeItemService.ensurePack();
+      pack.render?.(true);
+    });
     root.querySelectorAll('[data-recipe-id]').forEach(button => button.addEventListener("click", event => {
       event.preventDefault(); this.#loadRecipe(button.dataset.recipeId); this.render({ force: true });
     }));
     root.querySelector('[data-action="save-recipe"]')?.addEventListener("click", event => this.#save(event));
     root.querySelector('[data-action="delete-recipe"]')?.addEventListener("click", event => this.#delete(event));
-    root.querySelector('[data-action="create-knowledge-item"]')?.addEventListener("click", event => this.#createKnowledgeItem(event));
+    root.querySelector('[data-action="publish-recipe"]')?.addEventListener("click", event => this.#publish(event));
     root.querySelectorAll('[data-action="remove-ingredient"]').forEach(button => button.addEventListener("click", event => {
       event.preventDefault();
       this.#syncDraftFromForm();
@@ -150,14 +171,13 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
   async #browseImage(event, targetName) {
     event.preventDefault();
     this.#syncDraftFromForm();
-    const current = FILE_PICKER_ROOT;
     const FilePicker = foundry.applications?.apps?.FilePicker?.implementation
       ?? foundry.applications?.apps?.FilePicker
       ?? globalThis.FilePicker;
     if (!FilePicker) return ui.notifications.error("Foundry File Picker is unavailable.");
     const picker = new FilePicker({
       type: "image",
-      current,
+      current: FILE_PICKER_ROOT,
       callback: path => {
         if (targetName === "img") this.draft.img = path;
         if (targetName === "knowledgeImg") this.draft.knowledge.img = path;
@@ -167,21 +187,43 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     await picker.render({ force: true });
   }
 
+  #validateDraft() {
+    if (!this.draft.name?.trim()) throw new Error("Give the recipe a name.");
+    if (!this.draft.result?.uuid) throw new Error("Drop a result Item into the recipe first.");
+    if (!this.draft.ingredients.length) throw new Error("Add at least one required Item.");
+  }
+
   async #save(event) {
     event.preventDefault();
     this.#syncDraftFromForm();
-    if (!this.draft.name?.trim()) return ui.notifications.warn("Give the recipe a name.");
-    if (!this.draft.result?.uuid) return ui.notifications.warn("Drop a result Item into the recipe first.");
-    if (!this.draft.ingredients.length) return ui.notifications.warn("Add at least one required Item.");
     try {
+      this.#validateDraft();
       const saved = await RecipeService.save(this.draft);
       this.selectedId = saved.id;
       this.draft = foundry.utils.deepClone(saved);
-      ui.notifications.info(`Saved recipe: ${saved.name}.`);
+      ui.notifications.info(`Saved draft: ${saved.name}.`);
       this.render({ force: true });
     } catch (error) {
       console.error(`${MODULE_ID} | Save recipe failed.`, error);
-      ui.notifications.error(error.message ?? "Crafting Core could not save this recipe.");
+      ui.notifications.error(error.message ?? "Crafting Core could not save this draft.");
+    }
+  }
+
+  async #publish(event) {
+    event.preventDefault();
+    this.#syncDraftFromForm();
+    try {
+      this.#validateDraft();
+      const saved = await RecipeService.save(this.draft);
+      this.selectedId = saved.id;
+      this.draft = foundry.utils.deepClone(saved);
+      const { item, recipe } = await KnowledgeItemService.publishRecipe(saved.id);
+      this.draft = foundry.utils.deepClone(recipe);
+      ui.notifications.info(`Published ${item.name} to the private Crafting Core — Learn Sources Compendium.`);
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Publish recipe failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not publish this Knowledge Source.");
     }
   }
 
@@ -189,35 +231,19 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     event.preventDefault();
     if (!this.selectedId) return;
     const recipe = RecipeService.get(this.selectedId);
+    const published = Boolean(recipe?.publication?.uuid);
+    const content = published
+      ? `<p>Delete the Recipe Builder draft <strong>${foundry.utils.escapeHTML(recipe?.name ?? "this recipe")}</strong>?</p><p>The published Knowledge Source and any Characters who already learned it remain fully functional.</p>`
+      : `<p><strong>${foundry.utils.escapeHTML(recipe?.name ?? "This draft")}</strong> has not been published to the Crafting Core library.</p><p>Deleting it now permanently destroys this draft.</p>`;
     const confirmed = await foundry.applications.api.DialogV2.confirm({
-      window: { title: "Delete Recipe" },
-      content: `<p>Delete <strong>${foundry.utils.escapeHTML(recipe?.name ?? "this recipe")}</strong>?</p>`,
-      yes: { label: "Delete", icon: "fa-solid fa-trash" },
+      window: { title: published ? "Delete Published Draft" : "Delete Unpublished Draft" },
+      content,
+      yes: { label: "Delete Draft", icon: "fa-solid fa-trash" },
       no: { label: "Cancel" }
     });
     if (!confirmed) return;
     await RecipeService.delete(this.selectedId);
     this.#newDraft();
     this.render({ force: true });
-  }
-
-  async #createKnowledgeItem(event) {
-    event.preventDefault();
-    if (!this.selectedId) {
-      ui.notifications.warn("Save the recipe before creating its Recipe/Blueprint Item.");
-      return;
-    }
-    try {
-      this.#syncDraftFromForm();
-      const saved = await RecipeService.save(this.draft);
-      this.selectedId = saved.id;
-      this.draft = foundry.utils.deepClone(saved);
-      const item = await KnowledgeItemService.createForRecipe(this.selectedId);
-      ui.notifications.info(`Created ${item.name} in the Item Directory.`);
-      item.sheet?.render?.({ force: true });
-    } catch (error) {
-      console.error(`${MODULE_ID} | Knowledge Item creation failed.`, error);
-      ui.notifications.error(error.message ?? "Crafting Core could not create the Recipe/Blueprint Item.");
-    }
   }
 }

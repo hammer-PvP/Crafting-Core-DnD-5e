@@ -22,19 +22,32 @@ Hooks.once("init", () => {
       app.render({ force: true });
       return app;
     },
-    recipes: RecipeService,
     crafting: CraftingService,
     knowledge: KnowledgeItemService,
-    materials: MaterialCatalogService
+    ...(game.user.isGM ? {
+      recipes: RecipeService,
+      materials: MaterialCatalogService
+    } : {})
   };
 
   console.info(`${MODULE_TITLE} | Initialized.`);
 });
 
-Hooks.once("ready", () => {
+Hooks.once("ready", async () => {
   CraftingService.ready();
   const module = game.modules.get(MODULE_ID);
   if (module) module.api = game.craftingCore;
+
+  // One GM upgrades v0.0.1/v0.0.2 Character knowledge to self-contained recipe snapshots.
+  const activeGM = game.users?.activeGM ?? game.users?.contents?.find(user => user.active && user.isGM);
+  if (game.user?.isGM && (!activeGM || activeGM.id === game.user.id)) {
+    try {
+      const migrated = await KnowledgeItemService.migrateLegacyKnowledge();
+      if (migrated.actors || migrated.items) console.info(`${MODULE_TITLE} | Migrated legacy knowledge:`, migrated);
+    } catch (error) {
+      console.error(`${MODULE_TITLE} | Legacy knowledge migration failed.`, error);
+    }
+  }
 });
 
 Hooks.on("renderApplicationV2", (directoryApp, element) => {

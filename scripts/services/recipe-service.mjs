@@ -12,6 +12,7 @@ export class RecipeService {
   }
 
   static all() {
+    if (!game.user?.isGM) return {};
     const stored = game.settings.get(MODULE_ID, SETTINGS.RECIPES);
     if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
     return foundry.utils.deepClone(stored);
@@ -86,9 +87,23 @@ export class RecipeService {
             : recipe.knowledge.img)
         };
       })(),
+      publication: recipe.publication && typeof recipe.publication === "object" ? {
+        uuid: String(recipe.publication.uuid || ""),
+        pack: String(recipe.publication.pack || ""),
+        sourceType: String(recipe.publication.sourceType || recipe.knowledge?.label || "Recipe"),
+        publishedAt: Number(recipe.publication.publishedAt) || 0,
+        updatedAt: Number(recipe.publication.updatedAt) || 0
+      } : null,
       createdAt: Number(recipe.createdAt) || Date.now(),
       updatedAt: Date.now()
     };
+  }
+
+  static snapshot(recipe) {
+    const normalized = this.normalize(foundry.utils.deepClone(recipe ?? {}));
+    // Publication is authoring metadata, not part of the learned crafting definition.
+    normalized.publication = null;
+    return normalized;
   }
 
   static canonicalUuid(item) {

@@ -5,21 +5,22 @@
       <div>
         <span class="cc-kicker">GM Tool</span>
         <h1>Crafting Core</h1>
-        <p>Recipes & character knowledge</p>
+        <p>Author, test, then publish</p>
       </div>
     </header>
 
-    <button type="button" class="cc-new-recipe" data-action="new-recipe"><i class="fa-solid fa-plus"></i> New Recipe</button>
+    <button type="button" class="cc-new-recipe" data-action="new-recipe"><i class="fa-solid fa-plus"></i> New Recipe Draft</button>
     <button type="button" class="cc-materials-launch" data-action="open-material-catalog"><i class="fa-solid fa-boxes-stacked"></i> Material Catalog</button>
+    <button type="button" class="cc-materials-launch" data-action="open-learn-sources"><i class="fa-solid fa-book"></i> Learn Sources Library</button>
 
     <nav class="cc-recipe-list">
       {{#each recipes}}
       <button type="button" class="cc-recipe-nav {{#if selected}}active{{/if}}" data-recipe-id="{{id}}">
         <img src="{{img}}" alt="">
-        <span><strong>{{name}}</strong><small>{{craftingTime}} sec</small></span>
+        <span><strong>{{name}}</strong><small>{{#if published}}Published · {{sourceType}}{{else}}Draft{{/if}} · {{craftingTime}} sec</small></span>
       </button>
       {{else}}
-      <div class="cc-empty-sidebar"><i class="fa-solid fa-scroll"></i><span>No saved recipes yet.</span></div>
+      <div class="cc-empty-sidebar"><i class="fa-solid fa-scroll"></i><span>No Recipe Builder drafts.</span></div>
       {{/each}}
     </nav>
   </aside>
@@ -28,12 +29,16 @@
     <div class="cc-content">
       <header class="cc-section-header">
         <div>
-          <span class="cc-kicker">Recipe Builder</span>
+          <span class="cc-kicker">Recipe Builder · {{#if published}}Published Draft{{else}}Draft{{/if}}</span>
           <h2>{{draft.name}}</h2>
-          <p>Any D&D5e Item can be a required material or the final result.</p>
+          <p>The Builder is a GM workbench. Publish the finished Knowledge Source to the private Compendium, then this draft may be deleted safely.</p>
         </div>
         <img class="cc-recipe-image" src="{{draft.img}}" alt="">
       </header>
+
+      {{#if published}}
+      <div class="cc-publication-banner"><i class="fa-solid fa-circle-check"></i><div><strong>Published to Learn Sources</strong><small>The published Item contains a full recipe snapshot. Deleting this Builder draft will not break it or Characters who learned it.</small></div></div>
+      {{/if}}
 
       <section class="cc-form-card">
         <h3>Recipe</h3>
@@ -45,7 +50,7 @@
       </section>
 
       <section class="cc-form-card">
-        <div class="cc-card-heading"><div><span class="cc-kicker">Requirements</span><h3>Items Consumed</h3></div><small>Drop Items from the World, a Compendium, or an Actor.</small></div>
+        <div class="cc-card-heading"><div><span class="cc-kicker">Requirements</span><h3>Items Consumed</h3></div><small>Any D&D5e Item can be an input. Materials from Crafting Core — Materials are only the organized automatic source.</small></div>
         <div class="cc-drop-zone" data-drop-kind="ingredient"><i class="fa-solid fa-arrow-down-to-line"></i><strong>Drop required Items here</strong></div>
         <div class="cc-item-rows">
           {{#each draft.ingredients}}
@@ -62,7 +67,7 @@
       </section>
 
       <section class="cc-form-card">
-        <div class="cc-card-heading"><div><span class="cc-kicker">Output</span><h3>Crafted Item</h3></div><small>Exactly one Item definition; output quantity may be greater than one.</small></div>
+        <div class="cc-card-heading"><div><span class="cc-kicker">Output</span><h3>Crafted Item</h3></div><small>The complete Item snapshot is reproduced when a Character crafts it, including Item Creator Activities, Effects and flags.</small></div>
         {{#if draft.result}}
         <div class="cc-result-card">
           <img src="{{draft.result.img}}" alt="">
@@ -76,23 +81,28 @@
       </section>
 
       <section class="cc-form-card">
-        <div class="cc-card-heading"><div><span class="cc-kicker">Character Knowledge</span><h3>Recipe / Blueprint Item</h3></div><small>Creates a one-use Consumable with a native Utility Activity: Learn Recipe.</small></div>
+        <div class="cc-card-heading"><div><span class="cc-kicker">Published Knowledge Source</span><h3>Recipe / Formula / Blueprint / Manual</h3></div><small>GM-only library source. Players see it only after the GM distributes a copy through an Actor, loot, chest, vendor or Supplier.</small></div>
         <div class="cc-grid two">
-          <label><span>Label</span><select name="knowledgeLabel"><option value="Recipe" {{#if (eq draft.knowledge.label "Recipe")}}selected{{/if}}>Recipe</option><option value="Blueprint" {{#if (eq draft.knowledge.label "Blueprint")}}selected{{/if}}>Blueprint</option><option value="Formula" {{#if (eq draft.knowledge.label "Formula")}}selected{{/if}}>Formula</option><option value="Manual" {{#if (eq draft.knowledge.label "Manual")}}selected{{/if}}>Manual</option></select></label>
+          <label><span>Source Type</span><select name="knowledgeLabel"><option value="Recipe" {{#if (eq draft.knowledge.label "Recipe")}}selected{{/if}}>Recipe</option><option value="Blueprint" {{#if (eq draft.knowledge.label "Blueprint")}}selected{{/if}}>Blueprint</option><option value="Formula" {{#if (eq draft.knowledge.label "Formula")}}selected{{/if}}>Formula</option><option value="Manual" {{#if (eq draft.knowledge.label "Manual")}}selected{{/if}}>Manual</option></select></label>
           <label><span>Custom Item Name (optional)</span><input type="text" name="knowledgeName" value="{{draft.knowledge.name}}" placeholder="Recipe — {{draft.name}}"></label>
         </div>
-        <label class="cc-file-field"><span>Knowledge Item Image</span><span><input type="text" name="knowledgeImg" value="{{draft.knowledge.img}}"><button type="button" data-action="browse-image" data-target="knowledgeImg"><i class="fa-solid fa-folder-open"></i></button></span></label>
+        <label class="cc-file-field"><span>Knowledge Source Image</span><span><input type="text" name="knowledgeImg" value="{{draft.knowledge.img}}"><button type="button" data-action="browse-image" data-target="knowledgeImg"><i class="fa-solid fa-folder-open"></i></button></span></label>
+        <div class="cc-knowledge-economy">
+          <span><strong>Rarity</strong>{{outputRarity}}</span>
+          <span><strong>Knowledge Price</strong>{{knowledgePrice}} gp</span>
+          <small>Rarity always comes from the crafted output. Price follows the D&D5e 5.3.3 magic crafting cost progression; Legendary = 100,000 gp.</small>
+        </div>
         {{#if editingExisting}}
-        <button type="button" class="cc-secondary-action" data-action="create-knowledge-item"><i class="fa-solid fa-scroll"></i> Create Recipe / Blueprint Item</button>
+        <button type="button" class="cc-primary-action cc-wide" data-action="publish-recipe"><i class="fa-solid fa-upload"></i> {{#if published}}Update Published Source{{else}}Publish to Private Compendium{{/if}}</button>
         {{else}}
-        <p class="cc-note"><i class="fa-solid fa-circle-info"></i> Save the recipe before creating its knowledge Item.</p>
+        <p class="cc-note"><i class="fa-solid fa-circle-info"></i> Save the draft before publishing its Knowledge Source.</p>
         {{/if}}
       </section>
     </div>
 
     <footer class="cc-footer">
-      {{#if editingExisting}}<button type="button" class="cc-danger-action" data-action="delete-recipe"><i class="fa-solid fa-trash"></i> Delete Recipe</button>{{else}}<span></span>{{/if}}
-      <button type="button" class="cc-primary-action" data-action="save-recipe"><i class="fa-solid fa-floppy-disk"></i> Save Recipe</button>
+      {{#if editingExisting}}<button type="button" class="cc-danger-action" data-action="delete-recipe"><i class="fa-solid fa-trash"></i> Delete Builder Draft</button>{{else}}<span></span>{{/if}}
+      <button type="button" class="cc-primary-action" data-action="save-recipe"><i class="fa-solid fa-floppy-disk"></i> Save Draft</button>
     </footer>
   </main>
 </section>

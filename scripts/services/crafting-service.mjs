@@ -142,9 +142,8 @@ export class CraftingService {
       throw new Error("The requesting user does not own this Character.");
     }
 
-    const recipe = RecipeService.get(String(request.recipeId ?? ""));
-    if (!recipe) throw new Error("That recipe no longer exists.");
-    if (!KnowledgeItemService.knows(actor, recipe.id)) throw new Error(`${actor.name} has not learned this recipe.`);
+    const recipe = KnowledgeItemService.recipeForActor(actor, String(request.recipeId ?? ""));
+    if (!recipe) throw new Error(`${actor.name} has not learned this recipe.`);
     if (!recipe.result?.uuid && !recipe.result?.snapshot) throw new Error("The recipe has no result Item configured.");
     let resultData = recipe.result?.snapshot ? foundry.utils.deepClone(recipe.result.snapshot) : null;
     let resultSource = null;
@@ -221,7 +220,7 @@ export class CraftingService {
 
     // Claim finalization before creating the result. A second GM/client cannot finalize the same job.
     await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, { ...current, status: "finalizing" });
-    const recipe = RecipeService.get(current.recipeId);
+    const recipe = KnowledgeItemService.recipeForActor(actor, current.recipeId);
     const quantity = Math.max(1, Number(current.resultQuantity) || 1);
     let resultData = current.resultData ? foundry.utils.deepClone(current.resultData) : null;
     let sourceUuid = String(current.resultUuid || "");

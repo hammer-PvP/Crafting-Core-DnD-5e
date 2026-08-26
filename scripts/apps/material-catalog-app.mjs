@@ -1,5 +1,6 @@
 import { MODULE_ID } from "../constants.mjs";
 import { MaterialCatalogService } from "../services/material-catalog-service.mjs";
+import { MaterialEditorApp } from "./material-editor-app.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const TextEditor = foundry.applications.ux.TextEditor.implementation;
@@ -9,7 +10,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     id: "crafting-core-materials",
     classes: ["crafting-core", "crafting-core-materials-app", "standard-form"],
     tag: "form",
-    position: { width: 980, height: 760 },
+    position: { width: 1080, height: 780 },
     window: { title: "Crafting Core — Materials", resizable: true }
   };
 
@@ -17,13 +18,28 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     main: { template: `modules/${MODULE_ID}/templates/material-catalog.hbs` }
   };
 
+  filters = { search: "", family: "all", nature: "all", rarity: "all" };
+
   async _prepareContext() {
     const summary = await MaterialCatalogService.packSummary();
+    const entries = await MaterialCatalogService.allEntries();
+    const filtered = entries.filter(entry => this.#matches(entry));
+    const natures = [...new Set(entries.map(entry => entry.nature).filter(Boolean))].sort((a,b) => a.localeCompare(b, game.i18n.lang));
     return {
       summary,
-      groups: MaterialCatalogService.groupedDefinitions(),
+      groups: MaterialCatalogService.groupedEntries(filtered),
       economy: MaterialCatalogService.economy(),
-      catalogCount: MaterialCatalogService.definitions().length
+      catalogCount: entries.length,
+      shownCount: filtered.length,
+      filters: this.filters,
+      natureOptions: natures.map(value => ({ value, label: value.replace(/[-_]+/g," ").replace(/\b\w/g,c=>c.toUpperCase()), selected: this.filters.nature === value })),
+      familyOptions: [
+        { value: "all", label: "All Families", selected: this.filters.family === "all" },
+        { value: "creature", label: "Creature Harvest", selected: this.filters.family === "creature" },
+        { value: "gathering", label: "Gathering", selected: this.filters.family === "gathering" },
+        { value: "profession", label: "Profession & Trade", selected: this.filters.family === "profession" }
+      ],
+      rarityOptions: ["all","common","rare","legendary"].map(value => ({ value, label: value === "all" ? "All Rarities" : value[0].toUpperCase()+value.slice(1), selected: this.filters.rarity === value }))
     };
   }
 
@@ -35,6 +51,23 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       if (!MaterialCatalogService.openPack()) ui.notifications.warn("Create / Sync the Materials Compendium first.");
     });
     root.querySelector('[data-action="save-economy"]')?.addEventListener("click", event => this.#saveEconomy(event));
+    root.querySelectorAll('[data-action="edit-material"]').forEach(button => button.addEventListener("click", event => {
+      event.preventDefault();
+      new MaterialEditorApp(button.dataset.materialId).render({ force: true });
+    }));
+
+    for (const selector of ['[name="filter.family"]','[name="filter.nature"]','[name="filter.rarity"]']) {
+      root.querySelector(selector)?.addEventListener("change", event => {
+        const key = event.currentTarget.name.split(".")[1];
+        this.filters[key] = event.currentTarget.value;
+        this.render({ force: true });
+      });
+    }
+    root.querySelector('[name="filter.search"]')?.addEventListener("input", event => {
+      this.filters.search = event.currentTarget.value;
+      clearTimeout(this._ccSearchTimer);
+      this._ccSearchTimer = setTimeout(() => this.render({ force: true }), 180);
+    });
 
     const dropZone = root.querySelector('[data-drop-kind="custom-material"]');
     if (dropZone) {
@@ -46,6 +79,23 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
       dropZone.addEventListener("drop", event => this.#registerDrop(event, dropZone));
     }
+
+    this._ccMaterialSavedHook ??= Hooks.on(`${MODULE_ID}.materialEditorSaved`, () => this.render({ force: true }));
+  }
+
+  async close(options={}) {
+    if (this._ccMaterialSavedHook) Hooks.off(`${MODULE_ID}.materialEditorSaved`, this._ccMaterialSavedHook);
+    this._ccMaterialSavedHook = null;
+    return super.close(options);
+  }
+
+  #matches(entry) {
+    if (this.filters.family !== "all" && entry.family !== this.filters.family) return false;
+    if (this.filters.nature !== "all" && entry.nature !== this.filters.nature) return false;
+    if (this.filters.rarity !== "all" && entry.rarity !== this.filters.rarity) return false;
+    const search = String(this.filters.search || "").trim().toLowerCase();
+    if (!search) return true;
+    return [entry.name, entry.id, entry.nature, entry.category, ...(entry.tags ?? [])].join(" ").toLowerCase().includes(search);
   }
 
   async #sync(event) {
@@ -77,7 +127,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     }
     await MaterialCatalogService.saveEconomy(economy);
     if (notify) {
-      ui.notifications.info("Material rarity defaults saved. Sync the Compendium to apply price/chance metadata.");
+      ui.notifications.info("Material rarity defaults saved. Sync the Compendium to apply them to unchanged curated materials.");
       this.render({ force: true });
     }
   }

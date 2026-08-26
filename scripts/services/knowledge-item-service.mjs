@@ -1,23 +1,135 @@
-import { FLAGS, MODULE_ID, DEFAULT_KNOWLEDGE_ICON, KNOWLEDGE_ICONS } from "../constants.mjs";
+import {
+  DEFAULT_KNOWLEDGE_ICON,
+  FLAGS,
+  KNOWLEDGE_ICONS,
+  KNOWLEDGE_PRICE_BY_RARITY,
+  MODULE_ID
+} from "../constants.mjs";
+import { CompendiumService } from "./compendium-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
 
 export class KnowledgeItemService {
+  static PACK_NAME = "crafting-core-learn-sources";
+  static PACK_LABEL = "Crafting Core — Learn Sources";
+  static PACK_ID = `world.${this.PACK_NAME}`;
+
+  static SOURCE_FOLDERS = Object.freeze([
+    { key: "Recipe", name: "Recipe" },
+    { key: "Formula", name: "Formula" },
+    { key: "Blueprint", name: "Blueprint" },
+    { key: "Manual", name: "Manual" }
+  ]);
+
+  static pack() {
+    return CompendiumService.findWorldPack(this.PACK_NAME);
+  }
+
+  static async ensurePack() {
+    const pack = await CompendiumService.ensureWorldItemPack({ name: this.PACK_NAME, label: this.PACK_LABEL });
+    await CompendiumService.ensurePackFolders(pack, this.SOURCE_FOLDERS);
+    return pack;
+  }
+
+  static async publishRecipe(recipeId) {
+    if (!game.user.isGM) throw new Error("Only a GM can publish Crafting Core knowledge sources.");
+    let recipe = RecipeService.get(recipeId);
+    if (!recipe) throw new Error("The selected Crafting Core draft no longer exists.");
+    if (!recipe.result?.uuid && !recipe.result?.snapshot) throw new Error("The recipe has no result Item configured.");
+
+    // Refresh a missing legacy output snapshot before publication so the source is autonomous.
+    if (!recipe.result?.snapshot && recipe.result?.uuid) {
+      const source = await fromUuid(recipe.result.uuid);
+      if (!(source instanceof Item)) throw new Error(`Result Item not found: ${recipe.result.uuid}`);
+      recipe.result.snapshot = source.toObject();
+      recipe = await RecipeService.save(recipe);
+    }
+
+    const pack = await this.ensurePack();
+    const wasLocked = Boolean(pack.locked);
+    if (wasLocked) await pack.configure({ locked: false });
+
+    try {
+      const folders = await CompendiumService.ensurePackFolders(pack, this.SOURCE_FOLDERS);
+      const label = this.#sourceType(recipe);
+      const folder = folders.get(label) ?? null;
+      const data = this.#knowledgeItemData(recipe, { folderId: folder?.id ?? null, published: true });
+
+      let item = null;
+      if (recipe.publication?.uuid) {
+        try {
+          const existing = await fromUuid(recipe.publication.uuid);
+          if (existing instanceof Item && existing.pack === pack.collection) item = existing;
+        } catch (_) { /* missing publication is recreated below */ }
+      }
+      if (!item) {
+        const docs = await pack.getDocuments();
+        item = docs.find(doc => String(doc.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "") === recipe.id
+          && Boolean(doc.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED))) ?? null;
+      }
+
+      if (item) {
+        const update = foundry.utils.deepClone(data);
+        update._id = item.id;
+        const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+        [item] = await ItemClass.updateDocuments([update], { pack: pack.collection });
+      } else {
+        const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+        [item] = await ItemClass.createDocuments([data], { pack: pack.collection });
+      }
+      if (!item) throw new Error("D&D5e did not create the published Knowledge Source.");
+
+      recipe.publication = {
+        uuid: item.uuid,
+        pack: pack.collection,
+        sourceType: label,
+        publishedAt: Number(recipe.publication?.publishedAt) || Date.now(),
+        updatedAt: Date.now()
+      };
+      recipe = await RecipeService.save(recipe);
+      await this.refreshLearnedRecipe(recipe);
+      Hooks.callAll(`${MODULE_ID}.knowledgePublished`, recipe.id, item.uuid);
+      return { item, recipe, pack };
+    } finally {
+      if (wasLocked) await pack.configure({ locked: true });
+    }
+  }
+
+  /** Legacy/testing helper. New permanent sources should be published to the private Compendium. */
   static async createForRecipe(recipeId) {
     if (!game.user.isGM) throw new Error("Only a GM can create Recipe/Blueprint Items.");
     const recipe = RecipeService.get(recipeId);
     if (!recipe) throw new Error("The selected Crafting Core recipe no longer exists.");
+    const data = this.#knowledgeItemData(recipe, { published: false });
+    const item = await Item.create(data, { renderSheet: false });
+    if (!item) throw new Error("D&D5e did not create the Recipe/Blueprint Item.");
+    return item;
+  }
 
+  static #sourceType(recipe) {
+    const label = String(recipe?.knowledge?.label || "Recipe");
+    return Object.hasOwn(KNOWLEDGE_ICONS, label) ? label : "Recipe";
+  }
+
+  static #resultRarity(recipe) {
+    return String(recipe?.result?.snapshot?.system?.rarity ?? "");
+  }
+
+  static #knowledgeItemData(recipe, { folderId=null, published=false }={}) {
     const activityId = foundry.utils.randomID(16);
-    const label = recipe.knowledge?.label || "Recipe";
+    const label = this.#sourceType(recipe);
     const itemName = recipe.knowledge?.name || `${label} — ${recipe.name}`;
     const img = (!recipe.knowledge?.img || recipe.knowledge.img === "icons/svg/book.svg")
       ? (KNOWLEDGE_ICONS[label] || DEFAULT_KNOWLEDGE_ICON)
       : recipe.knowledge.img;
+    const rarity = this.#resultRarity(recipe);
+    const price = Number(KNOWLEDGE_PRICE_BY_RARITY[rarity] ?? 0);
+    const snapshot = RecipeService.snapshot(recipe);
 
     const data = {
       name: itemName,
       type: "consumable",
       img,
+      folder: folderId,
       system: {
         description: {
           value: `<p>This ${foundry.utils.escapeHTML(label.toLowerCase())} teaches <strong>${foundry.utils.escapeHTML(recipe.name)}</strong>.</p>`,
@@ -25,8 +137,8 @@ export class KnowledgeItemService {
         },
         quantity: 1,
         weight: { value: 0, units: "lb" },
-        price: { value: 0, denomination: "gp" },
-        rarity: "",
+        price: { value: price, denomination: "gp" },
+        rarity,
         identified: true,
         unidentified: { description: "" },
         container: null,
@@ -61,14 +173,16 @@ export class KnowledgeItemService {
       },
       flags: {
         [MODULE_ID]: {
-          [FLAGS.KNOWLEDGE_RECIPE_ID]: recipe.id
+          [FLAGS.KNOWLEDGE_RECIPE_ID]: recipe.id,
+          [FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT]: snapshot,
+          [FLAGS.KNOWLEDGE_SOURCE_TYPE]: label,
+          [FLAGS.KNOWLEDGE_PUBLISHED]: Boolean(published),
+          [FLAGS.KNOWLEDGE_PUBLISHED_AT]: published ? Date.now() : 0
         }
-      }
+      },
+      ownership: { default: 0 }
     };
-
-    const item = await Item.create(data, { renderSheet: false });
-    if (!item) throw new Error("D&D5e did not create the Recipe/Blueprint Item.");
-    return item;
+    return data;
   }
 
   static isKnowledgeActivity(activity) {
@@ -82,40 +196,149 @@ export class KnowledgeItemService {
       ?? "");
   }
 
-  static knownRecipeIds(actor) {
+  static recipeSnapshotFromActivity(activity) {
+    const snapshot = activity?.flags?.[MODULE_ID]?.[FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT]
+      ?? activity?.item?.getFlag?.(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT);
+    if (snapshot && typeof snapshot === "object") return RecipeService.snapshot(snapshot);
+    const legacy = RecipeService.get(this.recipeIdFromActivity(activity));
+    return legacy ? RecipeService.snapshot(legacy) : null;
+  }
+
+  static learnedStore(actor) {
+    const value = actor?.getFlag?.(MODULE_ID, FLAGS.LEARNED_RECIPES);
+    return value && typeof value === "object" && !Array.isArray(value) ? foundry.utils.deepClone(value) : {};
+  }
+
+  static legacyKnownRecipeIds(actor) {
     const value = actor?.getFlag?.(MODULE_ID, FLAGS.KNOWN_RECIPES);
     return Array.isArray(value) ? [...new Set(value.map(String).filter(Boolean))] : [];
   }
 
-  static knows(actor, recipeId) {
-    return this.knownRecipeIds(actor).includes(String(recipeId));
+  static knownRecipeIds(actor) {
+    return [...new Set([...Object.keys(this.learnedStore(actor)), ...this.legacyKnownRecipeIds(actor)])];
   }
 
-  static async learn(actor, recipeId) {
+  static knownRecipes(actor) {
+    const learned = this.learnedStore(actor);
+    const byId = new Map();
+    for (const [id, entry] of Object.entries(learned)) {
+      const recipe = entry?.recipe && typeof entry.recipe === "object" ? RecipeService.snapshot(entry.recipe) : null;
+      if (recipe) byId.set(String(id), recipe);
+    }
+    // Backward compatibility for Characters from v0.0.1/v0.0.2 that have not migrated yet.
+    for (const id of this.legacyKnownRecipeIds(actor)) {
+      if (byId.has(id)) continue;
+      const recipe = RecipeService.get(id);
+      if (recipe) byId.set(id, RecipeService.snapshot(recipe));
+    }
+    return [...byId.values()];
+  }
+
+  static recipeForActor(actor, recipeId) {
+    const id = String(recipeId);
+    return this.knownRecipes(actor).find(recipe => recipe.id === id) ?? null;
+  }
+
+  static knows(actor, recipeId) {
+    return Boolean(this.recipeForActor(actor, recipeId));
+  }
+
+  static async learn(actor, recipe, { sourceName="", sourceType="Recipe" }={}) {
     if (!actor || actor.type !== "character") throw new Error("Recipes can only be learned by a Character Actor.");
-    const recipe = RecipeService.get(recipeId);
-    if (!recipe) throw new Error("This Recipe no longer exists in Crafting Core.");
-    const known = this.knownRecipeIds(actor);
-    if (known.includes(recipe.id)) return false;
-    known.push(recipe.id);
-    await actor.setFlag(MODULE_ID, FLAGS.KNOWN_RECIPES, known);
+    if (!recipe?.id) throw new Error("This Knowledge Source does not contain a valid Crafting Core recipe.");
+    const snapshot = RecipeService.snapshot(recipe);
+    const store = this.learnedStore(actor);
+    if (store[snapshot.id]?.recipe) return false;
+    store[snapshot.id] = {
+      recipe: snapshot,
+      learnedAt: Date.now(),
+      sourceName: String(sourceName || ""),
+      sourceType: String(sourceType || "Recipe")
+    };
+    await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
     return true;
+  }
+
+  static async refreshLearnedRecipe(recipe) {
+    if (!game.user?.isGM || !recipe?.id) return 0;
+    const snapshot = RecipeService.snapshot(recipe);
+    let changed = 0;
+    for (const actor of game.actors?.contents?.filter(a => a.type === "character") ?? []) {
+      const store = this.learnedStore(actor);
+      if (!store[recipe.id]?.recipe) continue;
+      store[recipe.id] = { ...store[recipe.id], recipe: snapshot, revisedAt: Date.now() };
+      await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
+      actor.sheet?.render?.({ force: true });
+      changed += 1;
+    }
+    return changed;
+  }
+
+  static async migrateLegacyKnowledge() {
+    if (!game.user?.isGM) return { actors: 0, items: 0 };
+    let actorCount = 0;
+    let itemCount = 0;
+
+    for (const actor of game.actors?.contents ?? []) {
+      if (actor.type === "character") {
+        const store = this.learnedStore(actor);
+        let changed = false;
+        for (const id of this.legacyKnownRecipeIds(actor)) {
+          if (store[id]?.recipe) continue;
+          const recipe = RecipeService.get(id);
+          if (!recipe) continue;
+          store[id] = { recipe: RecipeService.snapshot(recipe), learnedAt: 0, sourceName: "Legacy Crafting Core", sourceType: "Recipe" };
+          changed = true;
+        }
+        if (changed) {
+          await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
+          actorCount += 1;
+        }
+      }
+
+      const updates = [];
+      for (const item of actor.items) {
+        const id = String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "");
+        if (!id || item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT)) continue;
+        const recipe = RecipeService.get(id);
+        if (!recipe) continue;
+        updates.push({ _id: item.id, [`flags.${MODULE_ID}.${FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT}`]: RecipeService.snapshot(recipe) });
+      }
+      if (updates.length) {
+        await actor.updateEmbeddedDocuments("Item", updates);
+        itemCount += updates.length;
+      }
+    }
+
+    const worldUpdates = [];
+    for (const item of game.items?.contents ?? []) {
+      const id = String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "");
+      if (!id || item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT)) continue;
+      const recipe = RecipeService.get(id);
+      if (!recipe) continue;
+      worldUpdates.push({ _id: item.id, [`flags.${MODULE_ID}.${FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT}`]: RecipeService.snapshot(recipe) });
+    }
+    if (worldUpdates.length) {
+      await Item.implementation.updateDocuments(worldUpdates);
+      itemCount += worldUpdates.length;
+    }
+    return { actors: actorCount, items: itemCount };
   }
 
   static installHooks() {
     Hooks.on("dnd5e.preUseActivity", (activity, _usageConfig, _dialogConfig, messageConfig) => {
       if (!this.isKnowledgeActivity(activity)) return;
       const actor = activity.actor;
-      const recipeId = this.recipeIdFromActivity(activity);
+      const recipe = this.recipeSnapshotFromActivity(activity);
       if (!actor || actor.type !== "character") {
         ui.notifications.warn("Only a Character can learn a Crafting Core recipe.");
         return false;
       }
-      if (!RecipeService.get(recipeId)) {
-        ui.notifications.error("This Recipe/Blueprint points to a Crafting Core recipe that no longer exists.");
+      if (!recipe) {
+        ui.notifications.error("This Recipe/Blueprint is no longer available and contains no stored recipe definition.");
         return false;
       }
-      if (this.knows(actor, recipeId)) {
+      if (this.knows(actor, recipe.id)) {
         ui.notifications.info(`${actor.name} already knows this recipe.`);
         return false;
       }
@@ -126,12 +349,16 @@ export class KnowledgeItemService {
     Hooks.on("dnd5e.postUseActivity", async (activity) => {
       if (!this.isKnowledgeActivity(activity)) return;
       const actor = activity.actor;
-      const recipeId = this.recipeIdFromActivity(activity);
+      const recipe = this.recipeSnapshotFromActivity(activity);
       try {
-        const learned = await this.learn(actor, recipeId);
+        if (!recipe) throw new Error("This Knowledge Source does not contain an available recipe.");
+        const item = activity.item;
+        const learned = await this.learn(actor, recipe, {
+          sourceName: item?.name ?? "",
+          sourceType: item?.getFlag?.(MODULE_ID, FLAGS.KNOWLEDGE_SOURCE_TYPE) ?? recipe.knowledge?.label ?? "Recipe"
+        });
         if (learned) {
-          const recipe = RecipeService.get(recipeId);
-          ui.notifications.info(`${actor.name} learned ${recipe?.name ?? "a new recipe"}.`);
+          ui.notifications.info(`${actor.name} learned ${recipe.name}.`);
           actor.sheet?.render?.({ force: true });
         }
       } catch (error) {

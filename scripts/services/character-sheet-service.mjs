@@ -1,7 +1,6 @@
 import { MODULE_ID } from "../constants.mjs";
 import { CraftingService } from "./crafting-service.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
-import { RecipeService } from "./recipe-service.mjs";
 
 export class CharacterSheetService {
   static #selection = new Map();
@@ -54,8 +53,7 @@ export class CharacterSheetService {
   }
 
   static #prepareContext(actor, sheet) {
-    const knownIds = KnowledgeItemService.knownRecipeIds(actor);
-    const recipes = knownIds.map(id => RecipeService.get(id)).filter(Boolean);
+    const recipes = KnowledgeItemService.knownRecipes(actor);
     const preparedRecipes = recipes.map(recipe => CraftingService.prepareRecipeForActor(actor, recipe));
     let selected = this.#selection.get(sheet.id ?? actor.id);
     if (!preparedRecipes.some(recipe => recipe.id === selected)) selected = preparedRecipes[0]?.id ?? null;

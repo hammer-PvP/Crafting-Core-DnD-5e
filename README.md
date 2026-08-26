@@ -2,28 +2,67 @@
 
 Crafting Core is a D&D5e crafting framework for Foundry VTT 14.
 
-## v0.0.2 — Material Foundation
+## v0.0.3 — Library & Publication Foundation
 
-- Keeps the live-validated v0.0.1 crafting cycle intact.
-- Adds a managed world Compendium: **Crafting Core — Materials**.
-- Adds a built-in material catalog covering Creature Harvest, environmental Gathering, and Profession / Trade materials.
-- Materialized catalog entries are native D&D5e `loot` Items with `system.type.value = "trade"`.
-- Materials use the Core Data bag icon `icons/containers/bags/coinpouch-simple-leather-silver-brown.webp` by default.
-- Synchronization preserves GM presentation edits such as item names, icons, descriptions, and weight.
-- GMs can register any existing D&D5e Item into the Materials Compendium; the registered copy becomes a Trade Good and receives Crafting Core generation metadata.
-- Common / Rare / Legendary default value and generation chance are configurable in the Material Catalog UI.
-- Recipe, Formula, Manual, and Blueprint knowledge Items now use the agreed Core Data default icons.
-- Icon browsing opens from Foundry Core Data `icons/`.
-- The Character Crafting recipe dropdown now shows how many times the Actor can currently craft each known recipe.
-- Recipe output stores a frozen Item snapshot so complex Items (including Item Creator outputs) can be reproduced even if the original source is later unavailable.
-- Recipe Builder sidebar selection/scroll alignment received a visual polish pass.
+This release keeps the live-validated crafting cycle intact and turns the GM authoring data into safe, organized world libraries.
 
-## Knowledge Item default icons
+### Recipe lifecycle
+
+The Recipe Builder is now a temporary GM workbench:
+
+1. Create and adjust a Recipe draft.
+2. Test the crafting result.
+3. Publish the finished Recipe/Formula/Blueprint/Manual to the private **Crafting Core — Learn Sources** Compendium.
+4. The published Knowledge Source contains a complete frozen recipe definition.
+5. The Builder draft may then be deleted without breaking the published source or Characters who learned it. If a retained published draft is revised and republished, Characters who already know that recipe receive the revised snapshot automatically.
+
+When a Character uses `Learn Recipe`, the complete learned definition is persisted on that Character Actor. Learned knowledge no longer depends on the Recipe Builder or on the physical Knowledge Source continuing to exist.
+
+v0.0.1/v0.0.2 Character knowledge is migrated to the self-contained format by the active GM when possible.
+
+### Private GM libraries
+
+Crafting Core creates a top-level **Crafting Core** folder in the Compendium Directory and keeps its managed packs GM-only:
+
+- **Crafting Core — Materials**
+- **Crafting Core — Learn Sources**
+
+PLAYER, TRUSTED and ASSISTANT roles receive no Compendium ownership. The libraries are not intended to expose future materials, recipes or crafting possibilities to players. Players only see Items the GM deliberately distributes through an Actor, loot, chest, vendor, Supplier, or another gameplay flow.
+
+### Materials library
+
+The 119 default materials are explicitly labeled as the **Built-in Curated Catalog**. They are authored by Crafting Core; they are not imported from the GM's PHB, DMG, Monster Manual, Tasha, or SRD Compendiums.
+
+The Materials pack is automatically organized into folders:
+
+- Creature Harvest → creature type
+- Gathering → Flora / Roots / Fungi / Wood & Resin / Mineral
+- Profession & Trade → Food & Cooking / Metalworking / Leatherworking / Alchemy / General Materials
+
+The Material Catalog now provides search, family/nature/rarity filters, and individual material editing. Built-in overrides persist across synchronization and can be reset to curated defaults. Custom D&D5e Items can still be registered into the library as Loot → Trade Goods.
+
+### Knowledge Source rarity and price
+
+Recipe, Formula, Blueprint and Manual rarity always inherits the crafted output Item's rarity. Crafting Core does not provide a separate rarity override for the source.
+
+Knowledge Source price follows the D&D5e 5.3.3 2024 magic crafting cost progression:
+
+- Common: 50 gp
+- Uncommon: 200 gp
+- Rare: 2,000 gp
+- Very Rare: 20,000 gp
+- Legendary: 100,000 gp
+
+This lets Supplier or other Compendium-driven vendor tools treat crafting knowledge as normal rarity-priced merchandise without Crafting Core-specific vendor logic.
+
+### Knowledge Item default icons
 
 - Recipe: `icons/sundries/documents/document-gold.webp`
 - Formula: `icons/sundries/scrolls/scroll-bound-leather-tan.webp`
 - Manual: `icons/sundries/books/book-tooled-silver-blue.webp`
 - Blueprint: `icons/commodities/tech/blueprint.webp`
+
+Icon browsing begins at Foundry Core Data `icons/`.
 
 ## Compatibility
 
@@ -32,4 +71,6 @@ Crafting Core is a D&D5e crafting framework for Foundry VTT 14.
 
 ## Item Piles
 
-Crafting Core works without Item Piles. The planned full harvesting experience is designed to be better with Item Piles installed: Crafting Core will decide and roll eligible materials, while Item Piles will only provide the physical corpse/container looting experience. v0.0.2 lays the material-data foundation for that integration; automatic corpse harvesting is not enabled yet.
+Crafting Core works without Item Piles. Item Piles is planned as the recommended integration for the complete corpse-harvesting experience: Crafting Core will decide and roll eligible materials, while Item Piles will only convert/use the corpse as the physical loot container and receive the generated Items.
+
+Harvest generation is not implemented in v0.0.3; this release makes the material and knowledge libraries stable enough for that next phase.
