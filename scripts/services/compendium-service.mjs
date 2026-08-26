@@ -6,14 +6,35 @@ import { MODULE_ID } from "../constants.mjs";
  */
 export class CompendiumService {
   static ROOT_FOLDER_NAME = "Crafting Core";
+  static ROOT_FOLDER_COLOR = "#8de901";
+  static DEFAULT_SORTING = "m";
+  static DEFAULTS_FLAG = "libraryDefaultsApplied";
 
   static async ensureRootFolder() {
     if (!game.user.isGM) throw new Error("Only a GM can configure Crafting Core Compendiums.");
     let folder = game.folders?.find(f => f.type === "Compendium" && f.name === this.ROOT_FOLDER_NAME && !f.folder) ?? null;
-    if (folder) return folder;
+    if (folder) {
+      // One-time migration from the pre-v0.0.4 default black/alphabetic folder. The flag means
+      // later GM color/sort changes are respected and are not continually overwritten.
+      if (!folder.getFlag(MODULE_ID, this.DEFAULTS_FLAG)) {
+        await folder.update({
+          color: this.ROOT_FOLDER_COLOR,
+          sorting: this.DEFAULT_SORTING,
+          [`flags.${MODULE_ID}.${this.DEFAULTS_FLAG}`]: true
+        });
+      }
+      return folder;
+    }
     const FolderClass = globalThis.Folder?.implementation ?? globalThis.Folder;
     if (!FolderClass?.create) throw new Error("Foundry's Folder creation API is unavailable.");
-    folder = await FolderClass.create({ name: this.ROOT_FOLDER_NAME, type: "Compendium", folder: null });
+    folder = await FolderClass.create({
+      name: this.ROOT_FOLDER_NAME,
+      type: "Compendium",
+      folder: null,
+      color: this.ROOT_FOLDER_COLOR,
+      sorting: this.DEFAULT_SORTING,
+      flags: { [MODULE_ID]: { [this.DEFAULTS_FLAG]: true } }
+    });
     return folder;
   }
 
@@ -93,13 +114,21 @@ export class CompendiumService {
         const found = existing().find(folder => folder.name === def.name
           && String(folder.folder?.id ?? folder.folder ?? "") === String(parent?.id ?? ""));
         if (found) {
+          if (!found.getFlag(MODULE_ID, this.DEFAULTS_FLAG)) {
+            await found.update({
+              sorting: this.DEFAULT_SORTING,
+              [`flags.${MODULE_ID}.${this.DEFAULTS_FLAG}`]: true
+            });
+          }
           result.set(def.key, found);
           continue;
         }
         const [created] = await FolderClass.createDocuments([{
           name: def.name,
           type: pack.documentName ?? "Item",
-          folder: parent?.id ?? null
+          folder: parent?.id ?? null,
+          sorting: this.DEFAULT_SORTING,
+          flags: { [MODULE_ID]: { [this.DEFAULTS_FLAG]: true } }
         }], { pack: pack.collection });
         if (created) result.set(def.key, created);
       }

@@ -1,0 +1,55 @@
+<section class="cc-generator-shell">
+  <header class="cc-generator-header">
+    <div>
+      <span class="cc-kicker">GM Tool · Manual Generation</span>
+      <h1>Generate Materials</h1>
+      <p>One generator for creature harvests and environment gathering. Rolls are silent; generated Items are collected into one world Item folder.</p>
+    </div>
+    <i class="fa-solid fa-dice-d20"></i>
+  </header>
+
+  <div class="cc-generator-body">
+    <section class="cc-form-card cc-generator-config">
+      <label class="cc-generator-source"><span>Source / Origin</span><select name="source"><option value="creature" {{#if isCreature}}selected{{/if}}>Creature Harvest</option><option value="environment" {{#if isEnvironment}}selected{{/if}}>Environment Gathering</option></select></label>
+
+      {{#if isCreature}}
+      <div class="cc-grid three cc-generator-fields">
+        <label><span>Creature Type</span><select name="nature">{{#each creatureOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
+        <label><span>Profile</span><select name="profileId">{{#each profileOptions}}<option value="{{id}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
+        <label><span>Sources / Bodies</span><input type="number" name="sources" min="1" max="100" step="1" value="{{state.sources}}"></label>
+      </div>
+      <p class="cc-note"><i class="fa-solid fa-circle-info"></i> Each source is rolled independently. Creature Harvest selects up to 2 Common, 1 Rare and 1 Legendary material slot per source, then applies each material's configured chance and quantity.</p>
+      {{/if}}
+
+      {{#if isEnvironment}}
+      <div class="cc-grid three cc-generator-fields">
+        <label><span>Biome</span><select name="biome">{{#each biomeOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
+        <label><span>Resource</span><select name="resource">{{#each resourceOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
+        <label><span>Abundance</span><select name="abundance">{{#each abundanceOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
+      </div>
+      <p class="cc-note"><i class="fa-solid fa-circle-info"></i> The GM resolves any Nature/Survival check outside Crafting Core. Biome + Resource chooses the eligible pool; Abundance changes how many different materials and how much can be found.</p>
+      {{/if}}
+
+      <button type="button" class="cc-primary-action cc-generator-button" data-action="generate"><i class="fa-solid fa-dice"></i> Generate Materials</button>
+    </section>
+
+    <section class="cc-form-card cc-generator-result">
+      <div class="cc-card-heading"><div><span class="cc-kicker">Last Generation</span><h3>Result</h3></div>{{#if lastResult.created}}<button type="button" class="cc-secondary-action" data-action="open-items"><i class="fa-solid fa-folder-tree"></i> Item Directory</button>{{/if}}</div>
+      {{#if lastResult}}
+        {{#if lastResult.empty}}
+        <div class="cc-generator-empty"><i class="fa-solid fa-wind"></i><strong>Nothing was found.</strong><small>The chance rolls produced no materials. No Folder was created.</small></div>
+        {{else}}
+        <div class="cc-generated-list">
+          {{#each lastResult.items}}
+          <div class="cc-generated-row"><img src="{{img}}" alt=""><span><strong>{{name}}</strong><small class="cc-rarity {{rarity}}">{{rarity}}</small></span><b>×{{quantity}}</b></div>
+          {{/each}}
+        </div>
+        <div class="cc-generated-folder"><i class="fa-solid fa-folder"></i><span><small>Created Folder</small><strong>{{lastResult.folderLabel}}</strong></span></div>
+        {{/if}}
+        <button type="button" class="cc-secondary-action cc-wide" data-action="generate-again"><i class="fa-solid fa-rotate"></i> Generate Again</button>
+      {{else}}
+      <div class="cc-generator-empty"><i class="fa-solid fa-box-open"></i><strong>No generation yet.</strong><small>Choose an origin and generate a material result.</small></div>
+      {{/if}}
+    </section>
+  </div>
+</section>

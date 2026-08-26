@@ -1,6 +1,27 @@
 # Changelog
 
+## 0.0.4
+
+Material Generation Foundation development release.
+
+- Added one GM-only `Generate Materials` tool with dynamic Source / Origin modes.
+- Added manual `Creature Harvest` generation by Creature Type, optional coarse Profile, and number of independent Sources / Bodies.
+- Creature Harvest selects up to 2 Common, 1 Rare and 1 Legendary material slots per source, then applies each material's configured drop chance and quantity formula.
+- Added initial Undead manual profiles: General, Fleshy, Skeletal and Incorporeal.
+- Added `Environment Gathering` generation by Biome, Resource category and Abundance.
+- Biome and Resource choices are derived from Material Catalog metadata, not hard-coded encounter tables.
+- Added Scarce / Normal / Rich / Abundant yield controls without changing material rarity.
+- Materials do not need to be used by an existing Recipe to participate in generation.
+- Added silent chance/quantity rolls and aggregation of duplicate material results.
+- Added `Crafting Core — Generated Loot` world Item folder output with one timestamped subfolder per successful manual generation.
+- Generated Items are cloned from the private Materials Compendium and preserve native D&D5e Trade Good data and Crafting Core metadata.
+- Empty rolls create no empty folder.
+- Added one-time Compendium library presentation migration: root `Crafting Core` folder defaults to `#8de901`, and Crafting Core-created folder structures default to Manual sorting while preserving later GM changes.
+- Exposed the reusable material-generation service through the module API for future Token HUD / Item Piles output integration.
+
 ## 0.0.3
+
+- Hotfix: GM launcher no longer depends on `game.craftingCore` being initialized; API exposure now happens before optional init steps and init failures are isolated for diagnostics.
 
 Library & Publication Foundation development release.
 

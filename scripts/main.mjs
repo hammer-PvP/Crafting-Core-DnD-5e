@@ -5,38 +5,63 @@ import { CraftingService } from "./services/crafting-service.mjs";
 import { KnowledgeItemService } from "./services/knowledge-item-service.mjs";
 import { RecipeService } from "./services/recipe-service.mjs";
 import { MaterialCatalogService } from "./services/material-catalog-service.mjs";
+import { MaterialGenerationService } from "./services/material-generation-service.mjs";
 
 let app = null;
 
-Hooks.once("init", () => {
-  RecipeService.registerSettings();
-  MaterialCatalogService.registerSettings();
-  CharacterSheetService.patchDnd5eSheet();
-  CharacterSheetService.installHooks();
-  KnowledgeItemService.installHooks();
+function openCraftingCore() {
+  if (!game.user?.isGM) return ui.notifications.warn("Only a GM can configure Crafting Core.");
+  try {
+    app ??= new CraftingCoreApp();
+    app.render({ force: true });
+    return app;
+  } catch (error) {
+    console.error(`${MODULE_TITLE} | Failed to open GM application.`, error);
+    ui.notifications.error("Crafting Core could not open. Check the console for details.");
+    return null;
+  }
+}
 
-  game.craftingCore = {
-    open: () => {
-      if (!game.user.isGM) return ui.notifications.warn("Only a GM can configure Crafting Core.");
-      app ??= new CraftingCoreApp();
-      app.render({ force: true });
-      return app;
-    },
-    crafting: CraftingService,
-    knowledge: KnowledgeItemService,
-    ...(game.user.isGM ? {
-      recipes: RecipeService,
-      materials: MaterialCatalogService
-    } : {})
-  };
+const API = {
+  open: openCraftingCore,
+  crafting: CraftingService,
+  knowledge: KnowledgeItemService,
+  get recipes() { return game.user?.isGM ? RecipeService : undefined; },
+  get materials() { return game.user?.isGM ? MaterialCatalogService : undefined; },
+  get generation() { return game.user?.isGM ? MaterialGenerationService : undefined; }
+};
+
+function exposeApi() {
+  // The UI launcher must not depend on this convenience namespace, but keep it for
+  // backward compatibility and console/module integrations.
+  try { game.craftingCore = API; }
+  catch (error) { console.warn(`${MODULE_TITLE} | Could not expose game.craftingCore.`, error); }
+  const module = game.modules?.get?.(MODULE_ID);
+  if (module) module.api = API;
+}
+
+function runInitStep(label, fn) {
+  try { fn(); }
+  catch (error) { console.error(`${MODULE_TITLE} | Init step failed: ${label}.`, error); }
+}
+
+Hooks.once("init", () => {
+  // Expose the launcher first. A later optional integration failure must never make
+  // the Crafting Core button unusable.
+  exposeApi();
+  runInitStep("recipe settings", () => RecipeService.registerSettings());
+  runInitStep("material settings", () => MaterialCatalogService.registerSettings());
+  runInitStep("D&D5e Character Sheet patch", () => CharacterSheetService.patchDnd5eSheet());
+  runInitStep("Character Sheet hooks", () => CharacterSheetService.installHooks());
+  runInitStep("Knowledge Item hooks", () => KnowledgeItemService.installHooks());
 
   console.info(`${MODULE_TITLE} | Initialized.`);
 });
 
 Hooks.once("ready", async () => {
-  CraftingService.ready();
-  const module = game.modules.get(MODULE_ID);
-  if (module) module.api = game.craftingCore;
+  exposeApi();
+  try { CraftingService.ready(); }
+  catch (error) { console.error(`${MODULE_TITLE} | Crafting runtime failed to become ready.`, error); }
 
   // One GM upgrades v0.0.1/v0.0.2 Character knowledge to self-contained recipe snapshots.
   const activeGM = game.users?.activeGM ?? game.users?.contents?.find(user => user.active && user.isGM);
@@ -65,7 +90,7 @@ function isItemDirectoryApp(directoryApp) {
 }
 
 function injectItemDirectoryButton(directoryApp, element) {
-  if (!game.user.isGM) return;
+  if (!game.user?.isGM) return;
   const root = element instanceof HTMLElement ? element : element?.[0] ?? directoryApp?.element;
   if (!root) return;
   const header = root.querySelector(".directory-header") ?? root.querySelector("header");
@@ -81,7 +106,7 @@ function injectItemDirectoryButton(directoryApp, element) {
   button.addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
-    game.craftingCore.open();
+    openCraftingCore();
   });
   actions.append(button);
 }

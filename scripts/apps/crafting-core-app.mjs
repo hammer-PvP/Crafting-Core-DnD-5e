@@ -8,6 +8,7 @@ import {
 import { KnowledgeItemService } from "../services/knowledge-item-service.mjs";
 import { RecipeService } from "../services/recipe-service.mjs";
 import { MaterialCatalogApp } from "./material-catalog-app.mjs";
+import { MaterialGeneratorApp } from "./material-generator-app.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const TextEditor = foundry.applications.ux.TextEditor.implementation;
@@ -63,6 +64,10 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     root.querySelector('[data-action="open-material-catalog"]')?.addEventListener("click", event => {
       event.preventDefault();
       new MaterialCatalogApp().render({ force: true });
+    });
+    root.querySelector('[data-action="open-material-generator"]')?.addEventListener("click", event => {
+      event.preventDefault();
+      new MaterialGeneratorApp().render({ force: true });
     });
     root.querySelector('[data-action="open-learn-sources"]')?.addEventListener("click", async event => {
       event.preventDefault();

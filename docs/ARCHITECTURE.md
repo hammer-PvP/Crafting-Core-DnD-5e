@@ -155,18 +155,49 @@ Catalog records can carry:
 
 Built-in materials can be individually overridden from the GM Material Catalog. Overrides persist across sync and can be reset to curated defaults. Custom registered materials are edited directly in the private world pack.
 
-## Future Harvest architecture
+## Harvest roadmap
 
-Harvest is intentionally not part of v0.0.3.
+Manual Creature Harvest and Environment Gathering are implemented in v0.0.4 through the shared generation engine below. Remaining planned order:
 
-Planned order:
-
-1. Manual Harvest Generator by Nature/Profile/count with silent independent rolls and aggregated Folder output.
-2. Actor Compendium Scanner / anatomy analysis producing up to 2 Common + 1 Rare + 1 Legendary base slots per creature profile.
-3. GM pinpoint overrides for quest-specific materials/chances.
-4. Token HUD action for eligible dead Tokens.
-5. Optional Item Piles integration: Crafting Core rolls the materials, Item Piles only converts/uses the corpse as the physical loot container and receives the result.
-6. Environment Gathering by Biome + Resource Category + abundance.
-7. Region/vendor generation using the same catalog.
+1. Actor Compendium Scanner / anatomy analysis producing precise per-creature profiles from the existing curated material catalog.
+2. GM pinpoint overrides for quest-specific materials/chances.
+3. Token HUD action for eligible dead Tokens.
+4. Optional Item Piles integration: Crafting Core rolls the materials, Item Piles only converts/uses the corpse as the physical loot container and receives the result.
+5. Region/vendor generation using the same catalog.
 
 Crafting Core works without Item Piles, but Item Piles is planned as the recommended integration for the complete corpse-looting experience.
+
+## v0.0.4 Manual Material Generation
+
+`MaterialGenerationService` is the single material roll engine for manual generation and future token/corpse integration.
+
+### Creature Harvest
+
+Input: creature nature, coarse manual profile, number of sources.
+
+For every source independently:
+
+1. Resolve eligible Creature Harvest materials from the Material Catalog.
+2. Apply coarse profile anatomy filtering when configured.
+3. Randomly select up to two Common, one Rare, and one Legendary material slots.
+4. Roll each selected material's configured drop chance silently.
+5. Roll each successful material's configured quantity formula silently.
+6. Aggregate duplicate material IDs across all sources.
+
+### Environment Gathering
+
+Input: biome, resource category, abundance.
+
+1. Resolve Gathering materials whose biome metadata contains the chosen biome and whose category matches the chosen resource.
+2. Roll each eligible material's configured chance silently.
+3. Limit distinct successful material types according to abundance.
+4. Roll quantity and apply the abundance quantity factor.
+5. Aggregate the result.
+
+The GM resolves any skill check outside Crafting Core. Materials are eligible whether or not a current Recipe consumes them.
+
+### Output sinks
+
+v0.0.4 implements the world-folder sink only: one timestamped subfolder beneath `Crafting Core — Generated Loot`.
+
+Future Item Piles support must reuse `MaterialGenerationService` and replace only the output sink: selected corpse/token -> pile -> generated material Items. Item Piles must not own generation rules.

@@ -113,6 +113,34 @@ export class MaterialCatalogService {
     return (await this.allEntries()).find(entry => entry.id === String(id)) ?? null;
   }
 
+  /**
+   * Resolve all material Items in the private Materials Compendium by stable materialId.
+   * If the pack is missing (or is missing a newly-added curated record), synchronize once.
+   */
+  static async materialDocumentsById({ ensureComplete=true }={}) {
+    let pack = this.pack();
+    if (!pack) {
+      if (!ensureComplete) return new Map();
+      pack = (await this.sync()).pack;
+    }
+
+    let docs = await pack.getDocuments();
+    let map = new Map(docs
+      .filter(item => item.getFlag(MODULE_ID, FLAGS.MATERIAL))
+      .map(item => [String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? ""), item])
+      .filter(([id]) => id));
+
+    if (ensureComplete && this.definitions().some(entry => !map.has(entry.id))) {
+      pack = (await this.sync()).pack;
+      docs = await pack.getDocuments();
+      map = new Map(docs
+        .filter(item => item.getFlag(MODULE_ID, FLAGS.MATERIAL))
+        .map(item => [String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? ""), item])
+        .filter(([id]) => id));
+    }
+    return map;
+  }
+
   static groupedEntries(entries) {
     const groups = new Map();
     for (const material of entries) {
