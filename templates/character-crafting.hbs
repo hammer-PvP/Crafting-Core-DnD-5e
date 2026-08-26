@@ -9,7 +9,7 @@
       <header class="cc-sheet-header">
         <label><span>Recipe</span>
           <select data-action="select-recipe">
-            {{#each craftingCore.recipes}}<option value="{{id}}" {{#if selected}}selected{{/if}}>{{name}}</option>{{/each}}
+            {{#each craftingCore.recipes}}<option value="{{id}}" {{#if selected}}selected{{/if}}>{{craftCount}}× {{name}}</option>{{/each}}
           </select>
         </label>
       </header>

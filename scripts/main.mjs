@@ -4,11 +4,13 @@ import { CharacterSheetService } from "./services/character-sheet-service.mjs";
 import { CraftingService } from "./services/crafting-service.mjs";
 import { KnowledgeItemService } from "./services/knowledge-item-service.mjs";
 import { RecipeService } from "./services/recipe-service.mjs";
+import { MaterialCatalogService } from "./services/material-catalog-service.mjs";
 
 let app = null;
 
 Hooks.once("init", () => {
   RecipeService.registerSettings();
+  MaterialCatalogService.registerSettings();
   CharacterSheetService.patchDnd5eSheet();
   CharacterSheetService.installHooks();
   KnowledgeItemService.installHooks();
@@ -22,7 +24,8 @@ Hooks.once("init", () => {
     },
     recipes: RecipeService,
     crafting: CraftingService,
-    knowledge: KnowledgeItemService
+    knowledge: KnowledgeItemService,
+    materials: MaterialCatalogService
   };
 
   console.info(`${MODULE_TITLE} | Initialized.`);

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.2
+
+Material Foundation development release.
+
+- Added `Crafting Core — Materials` world Compendium creation and synchronization.
+- Added built-in Creature Harvest, Gathering, and Profession / Trade material catalog.
+- Added native D&D5e Loot → Trade Good material creation.
+- Added stable material IDs and future Harvest/Gathering metadata flags.
+- Added configurable Common / Rare / Legendary default GP value and drop chance.
+- Added custom Item registration into the Materials Compendium.
+- Added agreed default Core Data icons for Recipe, Formula, Manual, and Blueprint knowledge Items.
+- Changed icon File Picker starting location to Core Data `icons/`.
+- Added craft-count prefixes to the Character Sheet recipe dropdown.
+- Added frozen result snapshots to recipes so complete Item definitions are reproduced reliably.
+- Fixed Recipe Builder sidebar selection/scroll alignment.
+
 ## 0.0.1
 
 Initial development release.

@@ -1,6 +1,7 @@
-import { DEFAULT_KNOWLEDGE_ICON, MODULE_ID } from "../constants.mjs";
+import { DEFAULT_KNOWLEDGE_ICON, FILE_PICKER_ROOT, KNOWLEDGE_ICONS, MODULE_ID } from "../constants.mjs";
 import { KnowledgeItemService } from "../services/knowledge-item-service.mjs";
 import { RecipeService } from "../services/recipe-service.mjs";
+import { MaterialCatalogApp } from "./material-catalog-app.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const TextEditor = foundry.applications.ux.TextEditor.implementation;
@@ -33,7 +34,8 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       recipes: recipes.map(recipe => ({ ...recipe, selected: recipe.id === this.selectedId })),
       draft: foundry.utils.deepClone(this.draft),
       editingExisting: Boolean(this.selectedId),
-      defaultKnowledgeIcon: DEFAULT_KNOWLEDGE_ICON
+      defaultKnowledgeIcon: DEFAULT_KNOWLEDGE_ICON,
+      knowledgeIcons: KNOWLEDGE_ICONS
     };
   }
 
@@ -41,6 +43,10 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const root = this.element;
     root.querySelector('[data-action="new-recipe"]')?.addEventListener("click", event => {
       event.preventDefault(); this.#newDraft(); this.render({ force: true });
+    });
+    root.querySelector('[data-action="open-material-catalog"]')?.addEventListener("click", event => {
+      event.preventDefault();
+      new MaterialCatalogApp().render({ force: true });
     });
     root.querySelectorAll('[data-recipe-id]').forEach(button => button.addEventListener("click", event => {
       event.preventDefault(); this.#loadRecipe(button.dataset.recipeId); this.render({ force: true });
@@ -63,6 +69,13 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       zone.addEventListener("drop", event => this.#onDrop(event, zone.dataset.dropKind));
     });
     root.querySelectorAll('[data-action="browse-image"]').forEach(button => button.addEventListener("click", event => this.#browseImage(event, button.dataset.target)));
+    root.querySelector('[name="knowledgeLabel"]')?.addEventListener("change", event => {
+      this.#syncDraftFromForm();
+      const oldDefaults = new Set(["icons/svg/book.svg", DEFAULT_KNOWLEDGE_ICON, ...Object.values(KNOWLEDGE_ICONS)]);
+      const current = String(this.draft.knowledge?.img || "");
+      if (!current || oldDefaults.has(current)) this.draft.knowledge.img = KNOWLEDGE_ICONS[event.currentTarget.value] ?? DEFAULT_KNOWLEDGE_ICON;
+      this.render({ force: true });
+    });
   }
 
   #newDraft() {
@@ -73,7 +86,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       craftingTime: 10,
       ingredients: [],
       result: null,
-      knowledge: { label: "Recipe", name: "", img: DEFAULT_KNOWLEDGE_ICON }
+      knowledge: { label: "Recipe", name: "", img: KNOWLEDGE_ICONS.Recipe }
     });
   }
 
@@ -93,7 +106,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this.draft.knowledge ??= {};
     this.draft.knowledge.label = root.querySelector('[name="knowledgeLabel"]')?.value ?? "Recipe";
     this.draft.knowledge.name = root.querySelector('[name="knowledgeName"]')?.value ?? "";
-    this.draft.knowledge.img = root.querySelector('[name="knowledgeImg"]')?.value ?? DEFAULT_KNOWLEDGE_ICON;
+    this.draft.knowledge.img = root.querySelector('[name="knowledgeImg"]')?.value ?? KNOWLEDGE_ICONS[this.draft.knowledge.label] ?? DEFAULT_KNOWLEDGE_ICON;
     root.querySelectorAll('[data-ingredient-quantity]').forEach(input => {
       const index = Number(input.dataset.ingredientQuantity);
       if (this.draft.ingredients[index]) this.draft.ingredients[index].quantity = Math.max(1, Math.floor(Number(input.value) || 1));
@@ -117,7 +130,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
         ui.notifications.warn("Crafting Core could not resolve that Item.");
         return;
       }
-      const ref = RecipeService.itemReference(item, 1);
+      const ref = RecipeService.itemReference(item, 1, { snapshot: kind === "result" });
       if (kind === "result") this.draft.result = ref;
       else {
         const existing = this.draft.ingredients.find(row => row.uuid === ref.uuid
@@ -137,7 +150,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
   async #browseImage(event, targetName) {
     event.preventDefault();
     this.#syncDraftFromForm();
-    const current = this.element.querySelector(`[name="${targetName}"]`)?.value || "";
+    const current = FILE_PICKER_ROOT;
     const FilePicker = foundry.applications?.apps?.FilePicker?.implementation
       ?? foundry.applications?.apps?.FilePicker
       ?? globalThis.FilePicker;

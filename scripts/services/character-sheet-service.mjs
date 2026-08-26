@@ -56,12 +56,12 @@ export class CharacterSheetService {
   static #prepareContext(actor, sheet) {
     const knownIds = KnowledgeItemService.knownRecipeIds(actor);
     const recipes = knownIds.map(id => RecipeService.get(id)).filter(Boolean);
+    const preparedRecipes = recipes.map(recipe => CraftingService.prepareRecipeForActor(actor, recipe));
     let selected = this.#selection.get(sheet.id ?? actor.id);
-    if (!recipes.some(recipe => recipe.id === selected)) selected = recipes[0]?.id ?? null;
+    if (!preparedRecipes.some(recipe => recipe.id === selected)) selected = preparedRecipes[0]?.id ?? null;
     if (selected) this.#selection.set(sheet.id ?? actor.id, selected);
 
-    const selectedRecipe = selected ? RecipeService.get(selected) : null;
-    const prepared = selectedRecipe ? CraftingService.prepareRecipeForActor(actor, selectedRecipe) : null;
+    const prepared = selected ? preparedRecipes.find(recipe => recipe.id === selected) ?? null : null;
     const job = CraftingService.job(actor);
     const now = CraftingService.serverTime();
     const progress = job?.status === "active"
@@ -70,9 +70,9 @@ export class CharacterSheetService {
 
     return {
       craftingCore: {
-        recipes: recipes.map(recipe => ({ ...recipe, selected: recipe.id === selected })),
+        recipes: preparedRecipes.map(recipe => ({ ...recipe, selected: recipe.id === selected })),
         selectedRecipe: prepared,
-        hasRecipes: recipes.length > 0,
+        hasRecipes: preparedRecipes.length > 0,
         job: job ? { ...job, progress } : null,
         busy: Boolean(job && ["active", "finalizing"].includes(job.status))
       }

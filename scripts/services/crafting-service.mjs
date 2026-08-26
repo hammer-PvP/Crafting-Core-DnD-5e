@@ -71,10 +71,14 @@ export class CraftingService {
         matches: matches.map(item => item.id)
       };
     });
+    const craftCount = rows.length
+      ? Math.max(0, Math.min(...rows.map(row => Math.floor(row.available / Math.max(1, Number(row.quantity) || 1)))))
+      : 0;
     return {
       ...recipe,
       ingredientRows: rows,
-      canCraft: Boolean(recipe.result?.uuid) && rows.every(row => row.sufficient)
+      craftCount,
+      canCraft: Boolean(recipe.result?.uuid || recipe.result?.snapshot) && craftCount > 0
     };
   }
 
@@ -141,9 +145,14 @@ export class CraftingService {
     const recipe = RecipeService.get(String(request.recipeId ?? ""));
     if (!recipe) throw new Error("That recipe no longer exists.");
     if (!KnowledgeItemService.knows(actor, recipe.id)) throw new Error(`${actor.name} has not learned this recipe.`);
-    if (!recipe.result?.uuid) throw new Error("The recipe has no result Item configured.");
-    const resultSource = await fromUuid(recipe.result.uuid);
-    if (!(resultSource instanceof Item)) throw new Error(`Result Item not found: ${recipe.result.uuid}`);
+    if (!recipe.result?.uuid && !recipe.result?.snapshot) throw new Error("The recipe has no result Item configured.");
+    let resultData = recipe.result?.snapshot ? foundry.utils.deepClone(recipe.result.snapshot) : null;
+    let resultSource = null;
+    if (!resultData && recipe.result?.uuid) {
+      resultSource = await fromUuid(recipe.result.uuid);
+      if (!(resultSource instanceof Item)) throw new Error(`Result Item not found: ${recipe.result.uuid}`);
+      resultData = resultSource.toObject();
+    }
     if (this.job(actor)?.status === "active") throw new Error(`${actor.name} is already crafting something.`);
 
     const prepared = this.prepareRecipeForActor(actor, recipe);
@@ -158,9 +167,9 @@ export class CraftingService {
       id: foundry.utils.randomID(20),
       recipeId: recipe.id,
       recipeName: recipe.name,
-      resultUuid: recipe.result.uuid,
+      resultUuid: recipe.result.sourceUuid || recipe.result.uuid,
       resultQuantity: recipe.result.quantity,
-      resultData: resultSource.toObject(),
+      resultData,
       startedAt,
       endsAt,
       status: "active",

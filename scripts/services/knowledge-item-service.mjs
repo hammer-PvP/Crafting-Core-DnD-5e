@@ -1,4 +1,4 @@
-import { FLAGS, MODULE_ID, DEFAULT_KNOWLEDGE_ICON } from "../constants.mjs";
+import { FLAGS, MODULE_ID, DEFAULT_KNOWLEDGE_ICON, KNOWLEDGE_ICONS } from "../constants.mjs";
 import { RecipeService } from "./recipe-service.mjs";
 
 export class KnowledgeItemService {
@@ -10,7 +10,9 @@ export class KnowledgeItemService {
     const activityId = foundry.utils.randomID(16);
     const label = recipe.knowledge?.label || "Recipe";
     const itemName = recipe.knowledge?.name || `${label} — ${recipe.name}`;
-    const img = recipe.knowledge?.img || DEFAULT_KNOWLEDGE_ICON;
+    const img = (!recipe.knowledge?.img || recipe.knowledge.img === "icons/svg/book.svg")
+      ? (KNOWLEDGE_ICONS[label] || DEFAULT_KNOWLEDGE_ICON)
+      : recipe.knowledge.img;
 
     const data = {
       name: itemName,

@@ -1,4 +1,4 @@
-import { MODULE_ID, SETTINGS } from "../constants.mjs";
+import { DEFAULT_KNOWLEDGE_ICON, KNOWLEDGE_ICONS, MODULE_ID, SETTINGS } from "../constants.mjs";
 
 export class RecipeService {
   static registerSettings() {
@@ -71,13 +71,21 @@ export class RecipeService {
         img: String(recipe.result.img || "icons/svg/item-bag.svg"),
         type: String(recipe.result.type || ""),
         identifier: String(recipe.result.identifier || ""),
-        quantity: Math.max(1, Math.floor(Number(recipe.result.quantity) || 1))
+        quantity: Math.max(1, Math.floor(Number(recipe.result.quantity) || 1)),
+        snapshot: recipe.result.snapshot && typeof recipe.result.snapshot === "object"
+          ? foundry.utils.deepClone(recipe.result.snapshot)
+          : null
       } : null,
-      knowledge: {
-        label: String(recipe.knowledge?.label || "Recipe").trim() || "Recipe",
-        name: String(recipe.knowledge?.name || "").trim(),
-        img: String(recipe.knowledge?.img || "")
-      },
+      knowledge: (() => {
+        const label = String(recipe.knowledge?.label || "Recipe").trim() || "Recipe";
+        return {
+          label,
+          name: String(recipe.knowledge?.name || "").trim(),
+          img: String((!recipe.knowledge?.img || recipe.knowledge?.img === "icons/svg/book.svg")
+            ? (KNOWLEDGE_ICONS[label] || DEFAULT_KNOWLEDGE_ICON)
+            : recipe.knowledge.img)
+        };
+      })(),
       createdAt: Number(recipe.createdAt) || Date.now(),
       updatedAt: Date.now()
     };
@@ -96,7 +104,7 @@ export class RecipeService {
     ) || null;
   }
 
-  static itemReference(item, quantity=1) {
+  static itemReference(item, quantity=1, { snapshot=false }={}) {
     if (!item) return null;
     return {
       // uuid is the exact definition selected by the GM and is used when materializing the crafted result.
@@ -107,7 +115,8 @@ export class RecipeService {
       img: item.img,
       type: item.type,
       identifier: String(item.system?.identifier ?? ""),
-      quantity: Math.max(1, Math.floor(Number(quantity) || 1))
+      quantity: Math.max(1, Math.floor(Number(quantity) || 1)),
+      ...(snapshot ? { snapshot: item.toObject() } : {})
     };
   }
 
