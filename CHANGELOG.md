@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.15 — Verified Multi-Item Corpse Payload Hotfix
+
+- Fixed Token Harvest corpse piles collapsing/behaving as though only one loot Item had been created after the transactional `createItemPile()` rewrite.
+- `createItemPile()` now receives raw Item data with the real stack quantity embedded at Item Piles' public quantity attribute instead of `{ item, quantity }` wrappers intended for `addItems()`.
+- Added per-transaction payload markers so Crafting Core can verify that every planned gear/Harvest/Essence/Pinpoint row materialized on the new synthetic pile.
+- Crafting Core now waits for Item Piles' asynchronous synthetic Item creation before deleting the original corpse Token. Incomplete piles are rolled back and the original corpse is preserved.
+- Corpse piles are created with single-item display overrides disabled so Item Piles does not replace the corpse Token artwork with the image/scale/name of the only loot Item.
+- The temporary `deleteWhenEmpty: false` creation guard prevents the synthetic pile from disappearing while Item Piles is still materializing Items; normal delete-when-empty behavior is restored after verification.
+- No changes to Scanner classification, Harvest chances, Essence economy, Pinpoint logic, gear normalization matching, or Existing NPC Loot mode semantics.
+
 ## v0.0.14
 - Fixed Item Piles `createItemPile()` result handling for current builds which return `{ tokenUuid, actorUuid }` instead of a direct Token UUID/document.
 - Added robust Token-pile resolution with short post-create retries, actor fallback, and direct-UUID rollback support.

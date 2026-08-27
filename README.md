@@ -1,5 +1,13 @@
 # Crafting Core (DnD 5e)
 
+## v0.0.15 highlights
+
+- Token Harvest now passes Item Piles a native multi-Item creation payload with stack quantities embedded directly in each Item document.
+- The original corpse is not removed until every planned normalized/preserved gear Item plus Crafting Core Harvest/Essence/Pinpoint Item is confirmed on the new pile.
+- Incomplete asynchronous Item Piles creation rolls back the new pile and preserves the corpse for a safe retry.
+- Corpse piles keep the original Token artwork even when the final loot contains only one Item; Item Piles single-item icon/name/scale overrides are disabled for Crafting Core corpses.
+- Existing NPC Loot modes remain: Normalize from Compendiums, Remove All, Keep Physical / Remove Natural & Features, and Keep All.
+
 ## v0.0.12 highlights
 
 - Hotfixes Item Piles corpse cleanup so post-conversion removal uses Item Piles' transferable inventory rather than raw NPC Embedded Item IDs.

@@ -47,8 +47,10 @@ export class ItemPilesBridge {
       delete data.folder;
       data.sort = 0;
       data.system ??= {};
-      // Item Piles receives the requested stack quantity separately. Keep the
-      // item data itself at quantity 1 to avoid multiplying stack sizes twice.
+      // Planning payload keeps quantity separate so Gear Normalization and
+      // Harvest use one common shape. Before createItemPile(), Crafting Core
+      // materializes that quantity into the Item data itself because the
+      // current Item Piles create API unwraps { item, quantity } entries.
       data.system.quantity = 1;
       data.flags ??= {};
       data.flags[MODULE_ID] = {
@@ -79,21 +81,41 @@ export class ItemPilesBridge {
     const gearPlan = await GearNormalizationService.buildPlan(tokenDocument.actor, { sourceItems });
     const gearPayload = GearNormalizationService.outputPayload(gearPlan);
     const harvestPayload = await this.buildItemPayload(result);
-    const finalPayload = [...gearPayload, ...harvestPayload];
+    const plannedPayload = [...gearPayload, ...harvestPayload];
 
     // Empty harvests are still marked by TokenHarvestService, but the corpse is
     // left untouched. We never create an empty pile just to delete the Token.
-    if (!finalPayload.length) {
+    if (!plannedPayload.length) {
       return { converted: false, added: [], empty: true, gearPlan, normalized: this.#normalizationSummary(gearPlan) };
     }
 
+    // Item Piles createItemPile() does NOT use the same payload contract as
+    // addItems(). Current builds unwrap { item, quantity } and then create the
+    // embedded Item from `item`, which drops the wrapper quantity. Build raw
+    // Item data up front, with the real stack quantity embedded at the public
+    // Item Piles quantity attribute and a temporary transaction marker used to
+    // verify that every distinct payload row actually materialized.
+    const transactionId = this.#transactionId();
+    const createPayload = this.#createItemPayload(plannedPayload, api, transactionId);
+    const expectedKeys = createPayload.map(data => String(foundry.utils.getProperty(data, `flags.${MODULE_ID}.corpsePayloadKey`) ?? ""));
+
     const sourceSnapshot = this.#tokenSnapshot(tokenDocument);
+    const finalDeleteWhenEmpty = Boolean(api?.PILE_DEFAULTS?.deleteWhenEmpty ?? true);
     const created = await api.createItemPile({
       position: { x: Number(tokenDocument.x) || 0, y: Number(tokenDocument.y) || 0 },
       sceneId: String(tokenDocument.parent?.id ?? canvas?.scene?.id ?? game.user?.viewedScene ?? ""),
       tokenOverrides: sourceSnapshot.tokenOverrides,
       actorOverrides: sourceSnapshot.actorOverrides,
-      items: finalPayload
+      itemPileFlags: {
+        // Synthetic Item Piles create their Items asynchronously after the
+        // Token exists. Keep the pile alive during that window and prevent the
+        // single-item display rules from replacing the corpse artwork.
+        deleteWhenEmpty: false,
+        displayOne: false,
+        showItemName: false,
+        overrideSingleItemScale: false
+      },
+      items: createPayload
     });
 
     // Item Piles versions in the wild have returned more than one shape here:
@@ -101,11 +123,39 @@ export class ItemPilesBridge {
     // { tokenUuid, actorUuid }. Normalize that public-API result before the
     // transaction commits so Crafting Core never mistakes a successfully
     // created pile for a failed creation.
-    const createdPile = await this.#resolveCreatedPile(created, { sceneId: tokenDocument.parent?.id });
-    const pileDocument = createdPile.tokenDocument;
+    let createdPile = await this.#resolveCreatedPile(created, { sceneId: tokenDocument.parent?.id });
+    let pileDocument = createdPile.tokenDocument;
     if (!pileDocument?.actor) {
       await this.#rollbackCreatedPile(createdPile);
       throw new Error(`Item Piles created a corpse pile for ${tokenDocument.name ?? tokenDocument.id}, but Crafting Core could not resolve its Token/Actor.`);
+    }
+
+    // Item Piles currently schedules synthetic pile Item creation roughly
+    // 250ms after createItemPile() returns. Do not commit the corpse deletion
+    // until every expected row exists on the new pile. This catches partial or
+    // collapsed payloads instead of silently destroying the original corpse.
+    const verified = await this.#awaitPayloadMaterialization(createdPile, expectedKeys);
+    if (!verified.ok) {
+      await this.#rollbackCreatedPile(createdPile);
+      throw new Error(`Item Piles created an incomplete corpse pile for ${tokenDocument.name ?? tokenDocument.id}: expected ${expectedKeys.length} loot item${expectedKeys.length === 1 ? "" : "s"}, resolved ${verified.found}/${expectedKeys.length}. The new pile was rolled back and the corpse was preserved.`);
+    }
+    createdPile = verified.createdPile ?? createdPile;
+    pileDocument = createdPile.tokenDocument ?? pileDocument;
+
+    // The pile is populated now, so normal Item Piles cleanup-on-empty behavior
+    // is safe again. Keep displayOne disabled so the corpse Token artwork is
+    // preserved even when only one loot Item rolled.
+    if (typeof api.updateItemPile === "function") {
+      try {
+        await api.updateItemPile(pileDocument, {
+          deleteWhenEmpty: finalDeleteWhenEmpty,
+          displayOne: false,
+          showItemName: false,
+          overrideSingleItemScale: false
+        });
+      } catch (error) {
+        console.warn(`${MODULE_ID} | Corpse pile was populated, but Item Piles display/cleanup flags could not be finalized.`, error);
+      }
     }
 
     // Commit: only now remove the original corpse. If this fails, roll back the
@@ -114,17 +164,79 @@ export class ItemPilesBridge {
       await tokenDocument.delete();
     } catch (error) {
       await this.#rollbackCreatedPile(createdPile);
-      throw new Error(`The loot pile was created, but the original corpse could not be removed. The new pile was rolled back. ${error?.message ?? error}`);
+      throw new Error(`The loot pile was created and verified, but the original corpse could not be removed. The new pile was rolled back. ${error?.message ?? error}`);
     }
 
     return {
       converted: true,
-      added: finalPayload,
+      added: createPayload,
       empty: false,
       tokenDocument: pileDocument,
       gearPlan,
       normalized: this.#normalizationSummary(gearPlan)
     };
+  }
+
+  static #transactionId() {
+    try {
+      if (typeof foundry.utils?.randomID === "function") return foundry.utils.randomID(16);
+    } catch (_) {}
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  static #createItemPayload(plannedPayload, api, transactionId) {
+    const quantityPath = String(api?.ITEM_QUANTITY_ATTRIBUTE ?? "system.quantity") || "system.quantity";
+    return (plannedPayload ?? []).map((row, index) => {
+      const source = row?.item ?? row;
+      const data = foundry.utils.deepClone(source ?? {});
+      delete data._id;
+      delete data._stats;
+      delete data.folder;
+      data.sort = 0;
+      const quantity = Math.max(1, Math.floor(Number(row?.quantity) || Number(foundry.utils.getProperty(data, quantityPath)) || 1));
+      foundry.utils.setProperty(data, quantityPath, quantity);
+      data.flags ??= {};
+      data.flags[MODULE_ID] = {
+        ...(data.flags[MODULE_ID] ?? {}),
+        corpsePayloadTransaction: transactionId,
+        corpsePayloadKey: `${transactionId}:${index}`
+      };
+      return data;
+    });
+  }
+
+  static async #awaitPayloadMaterialization(createdPile, expectedKeys=[]) {
+    const expected = new Set((expectedKeys ?? []).map(String).filter(Boolean));
+    if (!expected.size) return { ok: true, found: 0, createdPile };
+
+    const tokenUuid = String(createdPile?.tokenUuid ?? createdPile?.tokenDocument?.uuid ?? "");
+    const delays = [0, 150, 200, 300, 450, 650, 900];
+    let bestFound = 0;
+    let currentPile = createdPile;
+
+    for (const delay of delays) {
+      if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+      const resolved = tokenUuid ? await this.#fromUuidSafe(tokenUuid) : currentPile?.tokenDocument;
+      if (resolved?.documentName === "Token" && resolved.actor) {
+        currentPile = {
+          ...currentPile,
+          tokenDocument: resolved,
+          actorDocument: resolved.actor,
+          tokenUuid: resolved.uuid ?? tokenUuid,
+          actorUuid: resolved.actor.uuid ?? currentPile?.actorUuid ?? ""
+        };
+      }
+      const items = [...(currentPile?.tokenDocument?.actor?.items?.contents ?? currentPile?.tokenDocument?.actor?.items ?? [])];
+      const found = new Set(items
+        .map(item => String(item?.getFlag?.(MODULE_ID, "corpsePayloadKey")
+          ?? foundry.utils.getProperty(item, `flags.${MODULE_ID}.corpsePayloadKey`)
+          ?? ""))
+        .filter(key => expected.has(key)));
+      bestFound = Math.max(bestFound, found.size);
+      if (found.size === expected.size) return { ok: true, found: found.size, createdPile: currentPile };
+    }
+
+    return { ok: false, found: bestFound, createdPile: currentPile };
   }
 
   static #normalizationSummary(plan) {
