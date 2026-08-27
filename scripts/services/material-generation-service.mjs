@@ -117,6 +117,59 @@ export class MaterialGenerationService {
     return result;
   }
 
+  /**
+   * Roll one stored per-Actor Harvest Profile. This is intentionally UI-agnostic
+   * so the next Token HUD / Item Piles layer can reuse the exact same rules.
+   */
+  static async generateHarvestProfile({ profile, sources=1 }={}) {
+    if (!game.user?.isGM) throw new Error("Only a GM can generate Crafting Core materials.");
+    if (!profile?.sourceUuid) throw new Error("A valid Harvest Profile is required.");
+
+    const entries = await MaterialCatalogService.allEntries();
+    const materials = new Map(entries.map(entry => [entry.id, entry]));
+    const automatic = (profile.slots ?? []).slice(0, 4).filter(row => row?.materialId);
+    const pinpoint = (profile.pinpointOverrides ?? []).filter(row => row?.materialId);
+    const count = Math.clamp(Math.floor(Number(sources) || 1), 1, 100);
+    const aggregate = new Map();
+    const attempts = [];
+
+    for (let sourceIndex = 0; sourceIndex < count; sourceIndex++) {
+      const sourceAttempts = [];
+      for (const row of [...automatic, ...pinpoint]) {
+        const material = materials.get(String(row.materialId));
+        if (!material) continue;
+        const chance = Math.clamp(Number(row.chance ?? material.chance) || 0, 0, 100);
+        const quantityFormula = String(row.quantity || material.quantity || "1");
+        const success = this.#chance(chance);
+        let quantity = 0;
+        if (success) {
+          quantity = await this.#rollQuantity(quantityFormula);
+          this.#aggregate(aggregate, material, quantity);
+        }
+        sourceAttempts.push({
+          materialId: material.id, name: material.name, rarity: material.rarity, rarityLabel: material.rarityLabel,
+          chance, quantity, success, pinpoint: pinpoint.includes(row)
+        });
+      }
+      attempts.push(sourceAttempts);
+    }
+
+    const result = {
+      source: "profile",
+      sourceLabel: "Creature Harvest Profile",
+      profileId: String(profile.id ?? ""),
+      actorUuid: String(profile.sourceUuid),
+      actorName: String(profile.name ?? "Creature"),
+      nature: String(profile.creatureType ?? ""),
+      natureLabel: String(profile.creatureTypeLabel ?? this.title(profile.creatureType)),
+      sources: count,
+      items: [...aggregate.values()],
+      attempts
+    };
+    result.folderName = `${result.actorName} ×${count} — ${this.timestamp()}`;
+    return result;
+  }
+
   static async generateEnvironment({ biome, resource, abundance="normal" }={}) {
     if (!game.user?.isGM) throw new Error("Only a GM can generate Crafting Core materials.");
     const entries = (await MaterialCatalogService.allEntries()).filter(entry => entry.family === "gathering"
@@ -217,9 +270,9 @@ export class MaterialGenerationService {
    * Token HUD / Item Piles integrations should call.
    */
   static async generate(request={}) {
-    return request.source === "environment"
-      ? this.generateEnvironment(request)
-      : this.generateCreature(request);
+    if (request.source === "environment") return this.generateEnvironment(request);
+    if (request.source === "profile") return this.generateHarvestProfile(request);
+    return this.generateCreature(request);
   }
 
   /**

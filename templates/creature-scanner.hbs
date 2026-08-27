@@ -1,0 +1,75 @@
+<section class="cc-scanner-shell">
+  <header class="cc-scanner-header">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <div>
+      <span class="cc-kicker">Creature Intelligence</span>
+      <h1>Creature Scanner</h1>
+      <p>Read D&D5e NPC Compendiums, infer anatomy from Actor data, and build editable Harvest Profiles without modifying the source Actors.</p>
+    </div>
+  </header>
+
+  <div class="cc-scanner-body">
+    <section class="cc-form-card cc-scanner-sources">
+      <div class="cc-card-heading">
+        <div><span class="cc-kicker">Source</span><h3>Actor Compendiums</h3></div>
+        <small><strong data-selected-pack-count>{{selectedPackCount}}</strong> selected</small>
+      </div>
+      <div class="cc-scanner-pack-actions">
+        <button type="button" data-action="select-all-packs"><i class="fa-solid fa-check-double"></i> Select All</button>
+        <button type="button" data-action="clear-packs"><i class="fa-solid fa-xmark"></i> Clear</button>
+      </div>
+      <div class="cc-scanner-pack-list">
+        {{#each packs}}
+        <label class="cc-scanner-pack-row">
+          <input type="checkbox" name="scan.pack" value="{{collection}}" {{#if selected}}checked{{/if}}>
+          <span><strong>{{label}}</strong><small>{{collection}} · {{packageType}}{{#if packageName}} · {{packageName}}{{/if}}</small></span>
+          {{#if locked}}<i class="fa-solid fa-lock" data-tooltip="Locked source pack is safe to scan"></i>{{/if}}
+        </label>
+        {{else}}
+        <div class="cc-scanner-empty"><i class="fa-solid fa-book-skull"></i><span>No compatible Actor Compendiums are available.</span></div>
+        {{/each}}
+      </div>
+      <button type="button" class="cc-primary-action cc-wide cc-scan-button" data-action="scan-packs"><i class="fa-solid fa-magnifying-glass"></i> Scan Selected Compendiums</button>
+      <div class="cc-scan-progress" data-scan-progress hidden>
+        <div><span data-scan-progress-bar></span></div>
+        <small data-scan-progress-label>Reading Compendium indexes…</small>
+      </div>
+    </section>
+
+    <section class="cc-form-card cc-scanner-profiles">
+      <div class="cc-card-heading cc-scanner-profile-heading">
+        <div><span class="cc-kicker">Crafting Core Metadata</span><h3>Harvest Profiles</h3></div>
+        <small>{{profileCount}} stored · {{visibleProfileCount}} visible</small>
+      </div>
+      <div class="cc-scanner-filters">
+        <input type="search" name="profile.search" value="{{filterSearch}}" placeholder="Search creature, pack, anatomy…">
+        <select name="profile.type">
+          {{#each typeOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+        </select>
+      </div>
+      <div class="cc-profile-list">
+        {{#each profiles}}
+        <article class="cc-profile-row">
+          <img src="{{img}}" alt="">
+          <div class="cc-profile-summary">
+            <strong>{{name}}</strong>
+            <small>{{creatureTypeLabel}}{{#if subtype}} · {{subtype}}{{/if}} · CR {{cr}}</small>
+            <small class="cc-profile-anatomy">{{anatomyLabel}}</small>
+          </div>
+          <div class="cc-profile-counts">
+            <span><strong>{{slotCount}}</strong><small>auto</small></span>
+            <span><strong>{{pinpointCount}}</strong><small>pinpoint</small></span>
+          </div>
+          <div class="cc-profile-actions">
+            <button type="button" data-action="edit-profile" data-profile-id="{{id}}" data-tooltip="Edit Harvest Profile"><i class="fa-solid fa-pen"></i></button>
+            <button type="button" data-action="reanalyze-profile" data-profile-id="{{id}}" data-tooltip="Reanalyze source Actor"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
+            <button type="button" class="danger" data-action="delete-profile" data-profile-id="{{id}}" data-tooltip="Delete profile only"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        </article>
+        {{else}}
+        <div class="cc-scanner-empty cc-profile-empty"><i class="fa-solid fa-paw"></i><strong>No Harvest Profiles yet.</strong><span>Select one or more Actor Compendiums and scan them.</span></div>
+        {{/each}}
+      </div>
+    </section>
+  </div>
+</section>

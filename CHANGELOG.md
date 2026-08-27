@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.0.7
+
+Creature Scanner & Actor Analyzer development release.
+
+- Added a GM-only `Creature Scanner` for selecting and scanning D&D5e Actor Compendiums without modifying source Actors or source packs.
+- Scanner uses Compendium indexes to pre-filter NPC candidates before loading full Actor documents in small batches for detailed analysis.
+- Added deterministic Actor anatomy inference from native D&D5e creature type, subtype/name, movement, embedded Item names, Activities, and attack/damage signals.
+- Added generic fantasy anatomy tags including flesh, blood, bone, hide, claw, fang, beak, feather, scale, horn, venom, wing, shell, eye, tentacle, incorporeal, amorphous, plant, mechanical, metal, mineral, and crystal.
+- Added conservative Undead handling so skeletal, fleshy, and incorporeal sources do not receive incompatible anatomy requirements.
+- Added conservative Construct handling for flesh, stone/mineral, crystal, metal/mechanical, and generic constructs.
+- Added persistent per-Actor Harvest Profiles stored as Crafting Core world metadata keyed to the source Actor UUID.
+- Added deterministic four-slot automatic profiles: Common; Common/Uncommon; Rare; and a high tier that resolves to Very Rare by default or Legendary for sources signaled by CR 17+, Legendary Actions/Resistance, or Lair data.
+- Automatic material selection only uses curated materials whose anatomy requirements are satisfied by the analyzed Actor. Empty slots are allowed when no compatible material exists.
+- Added Harvest Profile Editor with GM control over each automatic material, per-profile chance, quantity formula, and editable anatomy tags.
+- Added `Pinpoint Overrides` for boss/quest materials. Overrides are extra rolls, default to 100%, do not consume one of the four automatic slots, and survive Actor reanalysis.
+- Added profile search/filter, individual reanalysis, and profile deletion. Reanalysis rebuilds automatic analysis/slots from the current source Actor while preserving Pinpoint Overrides.
+- Added a shared `generateHarvestProfile()` rules path to `MaterialGenerationService` so the next Token HUD / Item Piles patch can use these stored profiles without creating a second loot engine.
+- Expanded the Recipe Builder sidebar to a wider dedicated Recipes area and compacted GM tool launchers into a 2x2 block so saved Recipes receive substantially more usable space.
+- Item Piles, Token HUD, corpse conversion, automatic death handling, Region/Vendor generation, and Knowledge Codex remain outside this release.
+- No general-purpose migration work is included during the current internal test phase.
+
 ## 0.0.6
 
 Rarity & Harvest Profile Foundation development release.

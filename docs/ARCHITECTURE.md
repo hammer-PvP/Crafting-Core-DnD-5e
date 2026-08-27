@@ -225,3 +225,9 @@ Creature Harvest intentionally remains capped at four automatic material candida
 Each slot selects at most one material and a material cannot be selected twice for the same source. Anatomy/profile filtering happens before slot construction, so a profile may legitimately produce fewer than four candidates when its body plan excludes available materials.
 
 The final high-tier pool is deliberately shared between Very Rare and Legendary in the manual generator. The future Actor Scanner / precise Harvest Profile layer can narrow that slot based on the specific creature without changing the four-slot result contract.
+
+## v0.0.7 — Creature Scanner / Harvest Profiles
+
+Creature source documents are read-only. `HarvestProfileService` scans Actor Compendium indexes, loads eligible NPCs in bounded batches, infers generic anatomy from D&D5e Actor data, and stores per-Actor profiles in the hidden world `harvestProfiles` setting. Profiles reference the source Actor UUID and contain up to four automatic material rows plus zero or more Pinpoint Overrides. Material IDs always point back to the shared Material Catalog.
+
+`MaterialGenerationService.generateHarvestProfile()` is the single profile-roll path reserved for the next Token HUD / Item Piles integration. Item Piles must remain an output sink only; it must not implement a separate loot RNG model.

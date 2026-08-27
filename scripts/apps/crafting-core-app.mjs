@@ -9,6 +9,7 @@ import { KnowledgeItemService } from "../services/knowledge-item-service.mjs";
 import { RecipeService } from "../services/recipe-service.mjs";
 import { MaterialCatalogApp } from "./material-catalog-app.mjs";
 import { MaterialGeneratorApp } from "./material-generator-app.mjs";
+import { CreatureScannerApp } from "./creature-scanner-app.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const TextEditor = foundry.applications.ux.TextEditor.implementation;
@@ -18,7 +19,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     id: "crafting-core-gm",
     classes: ["crafting-core", "crafting-core-gm-app", "standard-form"],
     tag: "form",
-    position: { width: 1020, height: 780 },
+    position: { width: 1120, height: 780 },
     window: { title: "Crafting Core", resizable: true }
   };
 
@@ -40,6 +41,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const rarity = String(this.draft?.result?.snapshot?.system?.rarity ?? "");
     const rarityLabel = rarity ? (CONFIG.DND5E?.itemRarity?.[rarity] ?? rarity) : "No rarity";
     return {
+      recipeCount: recipes.length,
       recipes: recipes.map(recipe => ({
         ...recipe,
         selected: recipe.id === this.selectedId,
@@ -70,6 +72,10 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       const launcher = game.modules?.get?.(MODULE_ID)?.api?.openGenerator;
       if (typeof launcher === "function") launcher();
       else new MaterialGeneratorApp().render({ force: true });
+    });
+    root.querySelector('[data-action="open-creature-scanner"]')?.addEventListener("click", event => {
+      event.preventDefault();
+      new CreatureScannerApp().render({ force: true });
     });
     root.querySelector('[data-action="open-learn-sources"]')?.addEventListener("click", async event => {
       event.preventDefault();

@@ -1,11 +1,12 @@
 export const MODULE_ID = "dnd5e-crafting-core";
 export const MODULE_TITLE = "Crafting Core (DnD 5e)";
-export const MODULE_VERSION = "0.0.6";
+export const MODULE_VERSION = "0.0.7";
 
 export const SETTINGS = Object.freeze({
   RECIPES: "recipes",
   MATERIAL_ECONOMY: "materialEconomy",
-  MATERIAL_OVERRIDES: "materialOverrides"
+  MATERIAL_OVERRIDES: "materialOverrides",
+  HARVEST_PROFILES: "harvestProfiles"
 });
 
 export const FLAGS = Object.freeze({

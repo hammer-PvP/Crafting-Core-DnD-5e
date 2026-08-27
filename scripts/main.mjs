@@ -7,6 +7,7 @@ import { KnowledgeItemService } from "./services/knowledge-item-service.mjs";
 import { RecipeService } from "./services/recipe-service.mjs";
 import { MaterialCatalogService } from "./services/material-catalog-service.mjs";
 import { MaterialGenerationService } from "./services/material-generation-service.mjs";
+import { HarvestProfileService } from "./services/harvest-profile-service.mjs";
 
 let app = null;
 let generatorApp = null;
@@ -44,7 +45,8 @@ const API = {
   knowledge: KnowledgeItemService,
   get recipes() { return game.user?.isGM ? RecipeService : undefined; },
   get materials() { return game.user?.isGM ? MaterialCatalogService : undefined; },
-  get generation() { return game.user?.isGM ? MaterialGenerationService : undefined; }
+  get generation() { return game.user?.isGM ? MaterialGenerationService : undefined; },
+  get harvestProfiles() { return game.user?.isGM ? HarvestProfileService : undefined; }
 };
 
 function exposeApi() {
@@ -67,6 +69,7 @@ Hooks.once("init", () => {
   exposeApi();
   runInitStep("recipe settings", () => RecipeService.registerSettings());
   runInitStep("material settings", () => MaterialCatalogService.registerSettings());
+  runInitStep("harvest profile settings", () => HarvestProfileService.registerSettings());
   runInitStep("D&D5e Character Sheet patch", () => CharacterSheetService.patchDnd5eSheet());
   runInitStep("Character Sheet hooks", () => CharacterSheetService.installHooks());
   runInitStep("Knowledge Item hooks", () => KnowledgeItemService.installHooks());

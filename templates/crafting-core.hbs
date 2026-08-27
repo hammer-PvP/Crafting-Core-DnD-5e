@@ -10,10 +10,14 @@
     </header>
 
     <button type="button" class="cc-new-recipe" data-action="new-recipe"><i class="fa-solid fa-plus"></i> New Recipe Draft</button>
-    <button type="button" class="cc-materials-launch" data-action="open-material-catalog"><i class="fa-solid fa-boxes-stacked"></i> Material Catalog</button>
-    <button type="button" class="cc-materials-launch cc-generator-launch" data-action="open-material-generator"><i class="fa-solid fa-dice-d20"></i> Generate Materials</button>
-    <button type="button" class="cc-materials-launch" data-action="open-learn-sources"><i class="fa-solid fa-book"></i> Learn Sources Library</button>
+    <div class="cc-sidebar-tools">
+      <button type="button" class="cc-materials-launch" data-action="open-material-catalog"><i class="fa-solid fa-boxes-stacked"></i><span>Materials</span></button>
+      <button type="button" class="cc-materials-launch cc-generator-launch" data-action="open-material-generator"><i class="fa-solid fa-dice-d20"></i><span>Generate</span></button>
+      <button type="button" class="cc-materials-launch cc-scanner-launch" data-action="open-creature-scanner"><i class="fa-solid fa-magnifying-glass"></i><span>Scanner</span></button>
+      <button type="button" class="cc-materials-launch" data-action="open-learn-sources"><i class="fa-solid fa-book"></i><span>Learn Sources</span></button>
+    </div>
 
+    <div class="cc-sidebar-section-label"><span>Recipes</span><small>{{recipeCount}}</small></div>
     <nav class="cc-recipe-list">
       {{#each recipes}}
       <button type="button" class="cc-recipe-nav {{#if selected}}active{{/if}}" data-recipe-id="{{id}}">

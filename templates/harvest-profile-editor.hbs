@@ -1,0 +1,68 @@
+<section class="cc-profile-editor-shell">
+  <header class="cc-profile-editor-header">
+    <img src="{{profile.img}}" alt="">
+    <div>
+      <span class="cc-kicker">Harvest Profile</span>
+      <h2>{{profile.name}}</h2>
+      <p>{{profile.creatureTypeLabel}}{{#if profile.subtype}} · {{profile.subtype}}{{/if}} · CR {{profile.cr}} · {{profile.sourcePackLabel}}</p>
+    </div>
+    <button type="button" data-action="reanalyze-profile"><i class="fa-solid fa-wand-magic-sparkles"></i> Reanalyze</button>
+  </header>
+
+  <div class="cc-profile-editor-body">
+    <section class="cc-form-card cc-analysis-card">
+      <div class="cc-card-heading"><div><span class="cc-kicker">Actor Analyzer</span><h3>Inferred Anatomy</h3></div><small>Last analyzed: {{analyzedAt}}</small></div>
+      <div class="cc-anatomy-tags">
+        {{#each anatomy}}<span>{{label}}</span>{{else}}<span class="muted">No anatomy tags detected</span>{{/each}}
+      </div>
+      <label class="cc-anatomy-edit"><span>Anatomy Tags (comma separated)</span><input type="text" name="analysis.anatomy" value="{{anatomyText}}" placeholder="bone, flesh, claw, feather…"></label>
+      <details>
+        <summary>Why these tags?</summary>
+        <ul>{{#each reasons}}<li>{{this}}</li>{{else}}<li>No additional inference notes.</li>{{/each}}</ul>
+      </details>
+    </section>
+
+    <section class="cc-form-card">
+      <div class="cc-card-heading"><div><span class="cc-kicker">Automatic Harvest</span><h3>Four-Slot Profile</h3></div><small>Scanner suggestions are editable. Empty slots are allowed.</small></div>
+      <div class="cc-profile-slot-list">
+        {{#each profile.slots}}
+        <div class="cc-profile-slot" data-slot-index="{{@index}}">
+          <div class="cc-slot-label"><strong>Slot {{position}}</strong><small>{{label}}</small></div>
+          <label class="cc-slot-material"><span>Material</span><select data-material-select>
+            {{#each options}}<option value="{{value}}" data-rarity="{{rarity}}" data-rarity-label="{{rarityLabel}}" data-chance="{{chance}}" data-quantity="{{quantity}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+          </select></label>
+          <label><span>Chance %</span><input type="number" min="0" max="100" step="1" name="slot.chance" value="{{chance}}"></label>
+          <label><span>Quantity</span><input type="text" name="slot.quantity" value="{{quantity}}"></label>
+          <span class="cc-rarity {{rarity}}" data-row-rarity>{{rarityLabel}}</span>
+        </div>
+        {{/each}}
+      </div>
+    </section>
+
+    <section class="cc-form-card">
+      <div class="cc-card-heading"><div><span class="cc-kicker">Quest / Boss Materials</span><h3>Pinpoint Overrides</h3></div><small>Extra rolls. They never consume one of the four automatic slots.</small></div>
+      <div class="cc-pinpoint-list">
+        {{#each profile.pinpointOverrides}}
+        <div class="cc-profile-slot cc-pinpoint-row" data-pinpoint-index="{{@index}}">
+          <div class="cc-slot-label"><strong>Pinpoint {{position}}</strong><small>Explicit GM override</small></div>
+          <label class="cc-slot-material"><span>Material</span><select data-material-select>
+            {{#each options}}<option value="{{value}}" data-rarity="{{rarity}}" data-rarity-label="{{rarityLabel}}" data-chance="{{chance}}" data-quantity="{{quantity}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+          </select></label>
+          <label><span>Chance %</span><input type="number" min="0" max="100" step="1" name="pinpoint.chance" value="{{chance}}"></label>
+          <label><span>Quantity</span><input type="text" name="pinpoint.quantity" value="{{quantity}}"></label>
+          <span class="cc-rarity {{rarity}}" data-row-rarity>{{rarityLabel}}</span>
+          <button type="button" class="cc-icon-button danger" data-action="remove-pinpoint" data-index="{{@index}}" data-tooltip="Remove Pinpoint Override"><i class="fa-solid fa-trash"></i></button>
+        </div>
+        {{else}}
+        <div class="cc-empty-row">No Pinpoint Overrides. Use these for unique boss/quest materials or guaranteed special drops.</div>
+        {{/each}}
+      </div>
+      <button type="button" class="cc-secondary-action" data-action="add-pinpoint"><i class="fa-solid fa-plus"></i> Add Pinpoint Override</button>
+    </section>
+  </div>
+
+  <footer class="cc-footer cc-profile-editor-footer">
+    <span class="cc-note"><i class="fa-solid fa-shield-halved"></i> Source Actor remains read-only.</span>
+    <button type="button" class="cc-primary-action" data-action="save-profile"><i class="fa-solid fa-floppy-disk"></i> Save Harvest Profile</button>
+  </footer>
+</section>

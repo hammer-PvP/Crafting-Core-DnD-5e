@@ -406,3 +406,190 @@
   .cc-generator-result { min-height: 190px; }
   .cc-generator-result-actions { flex-wrap: wrap; }
 }
+
+/* v0.0.7 — Creature Scanner & Actor Analyzer */
+.crafting-core-gm-app .cc-shell { grid-template-columns: 330px minmax(0, 1fr); }
+.crafting-core-gm-app .cc-sidebar { padding: 16px; gap: 10px; }
+.crafting-core-gm-app .cc-recipe-list { min-height: 150px; }
+.cc-scanner-launch { border-color: rgba(141,233,1,.28); }
+.cc-scanner-launch > i { color: #8de901; }
+
+.crafting-core-scanner-app .window-content,
+.crafting-core-profile-editor-app .window-content {
+  padding: 0;
+  overflow: hidden;
+  background: #111113;
+  color: #eee;
+}
+.cc-scanner-shell,
+.cc-profile-editor-shell {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #111113;
+}
+.cc-scanner-header,
+.cc-profile-editor-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--cc-border);
+  background: #17171a;
+}
+.cc-scanner-header > i { width: 38px; text-align: center; color: #8de901; font-size: 31px; }
+.cc-scanner-header h1,
+.cc-profile-editor-header h2 { margin: 1px 0 0; font-family: var(--dnd5e-font-roboto-slab, serif); }
+.cc-scanner-header p,
+.cc-profile-editor-header p { margin: 3px 0 0; opacity: .66; font-size: 11px; }
+.cc-scanner-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(300px, .82fr) minmax(0, 1.65fr);
+  gap: 10px;
+  padding: 10px;
+  overflow: hidden;
+}
+.cc-scanner-body > .cc-form-card { margin: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.cc-scanner-sources .cc-card-heading,
+.cc-scanner-profiles .cc-card-heading { flex: 0 0 auto; }
+.cc-scanner-pack-actions { flex: 0 0 auto; display: flex; gap: 6px; margin-bottom: 7px; }
+.cc-scanner-pack-actions button { margin: 0; min-height: 30px; }
+.cc-scanner-pack-list {
+  flex: 1 1 auto;
+  min-height: 110px;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding-right: 2px;
+}
+.cc-scanner-pack-row {
+  display: grid !important;
+  grid-template-columns: 18px minmax(0,1fr) 18px;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 7px;
+  border: 1px solid rgba(255,255,255,.06);
+  background: rgba(255,255,255,.025);
+}
+.cc-scanner-pack-row input { margin: 0; }
+.cc-scanner-pack-row strong,
+.cc-scanner-pack-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-scanner-pack-row small { opacity: .5; margin-top: 1px; font-size: 9px; }
+.cc-scanner-pack-row > i { opacity: .55; text-align: center; }
+.cc-scan-button { flex: 0 0 auto; margin: 8px 0 0; min-height: 34px; }
+.cc-scan-progress { flex: 0 0 auto; margin-top: 7px; }
+.cc-scan-progress > div { height: 7px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.08); }
+.cc-scan-progress > div > span { display: block; width: 0; height: 100%; background: #8de901; transition: width .15s linear; }
+.cc-scan-progress small { display: block; margin-top: 3px; opacity: .62; }
+.cc-scanner-filters { flex: 0 0 auto; display: grid; grid-template-columns: minmax(0,1fr) 190px; gap: 7px; margin-bottom: 7px; }
+.cc-profile-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 5px; padding-right: 2px; }
+.cc-profile-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0,1fr) 104px 104px;
+  gap: 9px;
+  align-items: center;
+  min-height: 58px;
+  padding: 6px 7px;
+  border: 1px solid rgba(255,255,255,.065);
+  background: rgba(255,255,255,.025);
+}
+.cc-profile-row > img { width: 42px; height: 42px; object-fit: cover; border-radius: 4px; border: 1px solid rgba(209,176,107,.25); }
+.cc-profile-summary { min-width: 0; }
+.cc-profile-summary strong,
+.cc-profile-summary small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-profile-summary small { opacity: .58; margin-top: 1px; }
+.cc-profile-summary .cc-profile-anatomy { color: #a8cf75; opacity: .75; font-size: 9px; text-transform: capitalize; }
+.cc-profile-counts { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.cc-profile-counts > span { text-align: center; border: 1px solid rgba(255,255,255,.06); padding: 4px 2px; background: rgba(0,0,0,.12); }
+.cc-profile-counts strong,
+.cc-profile-counts small { display: block; }
+.cc-profile-counts strong { color: #8de901; }
+.cc-profile-counts small { opacity: .5; font-size: 8px; text-transform: uppercase; }
+.cc-profile-actions { display: grid; grid-template-columns: repeat(3, 30px); gap: 4px; justify-content: end; }
+.cc-profile-actions button { width: 30px; height: 30px; margin: 0; padding: 0; display: grid; place-items: center; }
+.cc-profile-actions button.danger { color: #ffb4b4; border-color: rgba(142,43,49,.55); }
+.cc-scanner-empty { min-height: 100px; display: grid; place-content: center; justify-items: center; gap: 5px; opacity: .55; text-align: center; }
+.cc-scanner-empty > i { font-size: 30px; color: var(--cc-gold); }
+.cc-profile-empty { min-height: 220px; }
+
+.cc-profile-editor-header { display: grid; grid-template-columns: 64px minmax(0,1fr) auto; }
+.cc-profile-editor-header > img { width: 60px; height: 60px; object-fit: cover; border-radius: 5px; border: 1px solid rgba(209,176,107,.35); }
+.cc-profile-editor-header > button { margin: 0; min-height: 32px; }
+.cc-profile-editor-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px 12px; }
+.cc-analysis-card details { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--cc-border-soft); }
+.cc-analysis-card summary { cursor: pointer; color: var(--cc-gold); font-weight: 700; }
+.cc-analysis-card ul { margin: 7px 0 0 18px; opacity: .7; }
+.cc-anatomy-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.cc-anatomy-tags > span { padding: 3px 7px; border-radius: 999px; border: 1px solid rgba(141,233,1,.26); background: rgba(141,233,1,.06); color: #dfffb2; font-size: 10px; font-weight: 700; }
+.cc-anatomy-tags > span.muted { border-color: var(--cc-border-soft); background: transparent; color: #bbb; }
+.cc-profile-slot-list,
+.cc-pinpoint-list { display: grid; gap: 6px; }
+.cc-profile-slot {
+  display: grid;
+  grid-template-columns: 112px minmax(220px,1fr) 78px 90px 82px;
+  gap: 7px;
+  align-items: end;
+  padding: 7px;
+  border: 1px solid rgba(255,255,255,.065);
+  background: rgba(0,0,0,.13);
+}
+.cc-pinpoint-row { grid-template-columns: 112px minmax(200px,1fr) 78px 90px 82px 32px; }
+.cc-slot-label { align-self: center; }
+.cc-slot-label strong,
+.cc-slot-label small { display: block; }
+.cc-slot-label small { opacity: .55; margin-top: 2px; }
+.cc-profile-slot label { min-width: 0; }
+.cc-profile-slot label > span { font-size: 9px !important; }
+.cc-profile-slot .cc-rarity { align-self: center; text-align: center; font-size: 10px; }
+.cc-profile-editor-footer { align-items: center; }
+.cc-profile-editor-footer .cc-note { margin: 0; }
+
+@media (max-width: 900px) {
+  .crafting-core-gm-app .cc-shell { grid-template-columns: 285px minmax(0,1fr); }
+  .cc-scanner-body { grid-template-columns: 1fr; overflow-y: auto; }
+  .cc-scanner-body > .cc-form-card { min-height: 280px; }
+  .cc-profile-slot, .cc-pinpoint-row { grid-template-columns: 105px minmax(0,1fr) 74px 84px; }
+  .cc-profile-slot .cc-rarity { display: none; }
+  .cc-pinpoint-row .cc-icon-button { grid-column: -2 / -1; justify-self: end; }
+}
+.cc-sidebar-tools {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.cc-sidebar-tools .cc-materials-launch {
+  min-width: 0;
+  min-height: 34px;
+  margin: 0;
+  padding: 5px 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.cc-sidebar-tools .cc-materials-launch > i { margin: 0; }
+.cc-sidebar-section-label {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 3px;
+  padding: 6px 3px 5px;
+  border-bottom: 1px solid var(--cc-border-soft);
+  color: var(--cc-gold);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: 10px;
+  font-weight: 800;
+}
+.cc-sidebar-section-label small { opacity: .6; }
+.cc-anatomy-edit { margin-top: 8px; }
+.cc-anatomy-edit > span { font-size: 9px !important; text-transform: uppercase; font-weight: 800; opacity: .68; }
+.crafting-core.crafting-core-profile-editor-app { min-width: 720px; }
+.crafting-core.crafting-core-scanner-app { min-width: 760px; }
