@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.12 — Item Piles Cleanup Hotfix
+
+- Fixed Token Harvest failures in **Normalize from Compendiums** and **Remove All Existing Items** caused by passing filtered NPC Feature IDs (for example `Amphibious`, `Abduct`, or similar stat-block Items) to Item Piles `removeItems()`.
+- Corpse cleanup now treats Item Piles `getActorItems()` as the post-conversion authority and removes only Item IDs that the pile currently exposes as transferable.
+- `actor.items` remains valid only for the pre-conversion normalization plan; it is no longer used as a removal list after Item Piles converts the corpse.
+- **Keep Physical Gear / Remove Natural & Features** now applies its cleanup only to transferable pile Items as well.
+- Added fail-soft cleanup isolation: if a third-party Item Piles cleanup edge case still occurs, Crafting Core logs the cleanup failure but continues injecting generated Harvest, Essence, and Pinpoint materials instead of aborting the entire corpse Harvest.
+- Normalized replacement gear is only injected after cleanup succeeds, preventing duplicate base gear when a cleanup operation fails.
+- No changes to Actor scanning, Harvest Profile classification, Essence distribution, Pinpoint logic, or manual generation.
+
 ## v0.0.11 — Scanner Scroll & Corpse Gear Normalization
 
 - Restored vertical scrolling in the Creature Scanner Harvest Profile list after the v0.0.10 layout reorganization.

@@ -143,17 +143,20 @@ export class GearNormalizationService {
 
   static async applyToPile(tokenDocument, plan, api) {
     if (!tokenDocument || !plan) return { removed: 0, added: 0, unmatched: 0 };
-    const actor = tokenDocument.actor ?? canvas?.tokens?.get?.(tokenDocument.id)?.actor ?? null;
-    if (!actor) throw new Error("The converted Item Pile has no Actor to normalize.");
 
-    const pileItems = [...(actor.items?.contents ?? actor.items ?? [])].filter(Boolean);
+    // Item Piles can keep filtered NPC Features on the converted Actor while
+    // excluding them from the pile's transferable inventory. removeItems()
+    // validates against the transferable set, so actor.items is NOT a valid
+    // source of IDs after conversion. Always ask Item Piles for the live pile
+    // inventory and only remove IDs it currently exposes as transferable.
+    const pileItems = await this.transferablePileItems(tokenDocument, api);
     let removeIds = [];
     if (plan.mode === this.MODES.REMOVE_ALL || plan.mode === this.MODES.NORMALIZE) {
-      removeIds = pileItems.map(item => String(item.id)).filter(Boolean);
+      removeIds = pileItems.map(item => this.itemId(item)).filter(Boolean);
     } else if (plan.mode === this.MODES.FILTER) {
       removeIds = pileItems
         .filter(item => !this.isPhysicalCandidate(item) || this.isNaturalWeapon(item))
-        .map(item => String(item.id)).filter(Boolean);
+        .map(item => this.itemId(item)).filter(Boolean);
     }
 
     if (removeIds.length) {
@@ -172,6 +175,21 @@ export class GearNormalizationService {
       added: Array.isArray(added) ? added.length : 0,
       unmatched: plan.unmatched?.length ?? 0
     };
+  }
+
+  static async transferablePileItems(tokenDocument, api) {
+    if (typeof api?.getActorItems !== "function") {
+      throw new Error("The active Item Piles version does not expose getActorItems(), which is required for safe corpse loot cleanup.");
+    }
+    const raw = await api.getActorItems(tokenDocument);
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map(row => row?.item ?? row)
+      .filter(item => Boolean(item) && Boolean(this.itemId(item)));
+  }
+
+  static itemId(item) {
+    return String(item?.id ?? item?._id ?? "").trim();
   }
 
   static isPhysicalCandidate(item) {

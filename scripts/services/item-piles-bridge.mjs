@@ -78,7 +78,25 @@ export class ItemPilesBridge {
     }
 
     const refreshed = canvas?.tokens?.get?.(tokenDocument.id)?.document ?? tokenDocument;
-    const normalized = await GearNormalizationService.applyToPile(refreshed, gearPlan, api);
+
+    // Gear cleanup is intentionally fail-soft. A third-party pile/filter edge
+    // case must never suppress Crafting Core's generated Harvest. If cleanup
+    // fails, keep the corpse pile as Item Piles left it, log the problem, and
+    // still inject Harvest / Essence / Pinpoint materials. Normalized
+    // replacements are only added when cleanup itself succeeds, preventing
+    // duplicate base gear after a failed removal.
+    let normalized = { removed: 0, added: 0, unmatched: gearPlan?.unmatched?.length ?? 0, failed: false };
+    try {
+      normalized = {
+        ...normalized,
+        ...(await GearNormalizationService.applyToPile(refreshed, gearPlan, api))
+      };
+    } catch (error) {
+      normalized.failed = true;
+      normalized.error = String(error?.message ?? error);
+      console.warn(`${MODULE_ID} | Corpse gear cleanup failed for ${refreshed?.name ?? refreshed?.id ?? "Token"}; generated Harvest will still be added.`, error);
+    }
+
     const added = harvestPayload.length ? await api.addItems(refreshed, harvestPayload) : [];
     return {
       converted: true,

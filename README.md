@@ -1,6 +1,12 @@
 # Crafting Core (DnD 5e)
 
-## v0.0.11 highlights
+## v0.0.12 highlights
+
+- Hotfixes Item Piles corpse cleanup so post-conversion removal uses Item Piles' transferable inventory rather than raw NPC Embedded Item IDs.
+- Fixes `removeItems()` failures caused by filtered stat-block Features such as Amphibious/Abduct.
+- Keeps generated Harvest, Essence, and Pinpoint injection fail-soft even if third-party gear cleanup encounters an unexpected edge case.
+
+### v0.0.11 normalization foundation
 
 - Creature Scanner Harvest Profiles are vertically scrollable again.
 - Token Harvest can now normalize NPC equipment against up to four ordered Item Compendiums before exposing the corpse to players.
