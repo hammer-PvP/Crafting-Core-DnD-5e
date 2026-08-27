@@ -685,3 +685,18 @@
   .cc-scanner-toolbar { grid-template-columns: minmax(0,1fr) auto; }
   .cc-scanner-toolbar > .cc-primary-action { grid-column: 2; }
 }
+
+/* v0.0.9 — Essence Harvest Layer */
+.cc-profile-summary .cc-profile-essence { color: #c9b6ff; opacity: .78; font-size: 9px; }
+.cc-profile-counts { grid-template-columns: repeat(3, 1fr); }
+.cc-essence-card details { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--cc-border-soft); }
+.cc-essence-card summary { cursor: pointer; color: var(--cc-gold); font-weight: 700; }
+.cc-essence-card ul { margin: 7px 0 0 18px; opacity: .7; }
+.cc-essence-distribution { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-bottom: 8px; }
+.cc-essence-distribution > span { display: grid; gap: 1px; padding: 8px 10px; border: 1px solid rgba(201,182,255,.2); background: rgba(129,95,191,.08); border-radius: 4px; }
+.cc-essence-distribution strong { color: #d9c8ff; font-size: 14px; }
+.cc-essence-distribution small { opacity: .62; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
+.cc-essence-tags > span { border-color: rgba(201,182,255,.26); background: rgba(129,95,191,.08); color: #eadfff; }
+@media (min-width: 901px) {
+  .cc-profile-row { grid-template-columns: 44px minmax(0,1fr) 138px 104px; }
+}

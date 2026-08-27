@@ -175,7 +175,9 @@ export class MaterialCatalogService {
         key,
         family: material.family,
         category: material.category,
-        label: `${this.familyLabel(material.family)} — ${this.categoryLabel(material.family, material.category)}`,
+        label: material.family === "essence"
+          ? this.familyLabel(material.family)
+          : `${this.familyLabel(material.family)} — ${this.categoryLabel(material.family, material.category)}`,
         materials: []
       });
       groups.get(key).materials.push(material);
@@ -190,11 +192,12 @@ export class MaterialCatalogService {
   }
 
   static familyLabel(family) {
-    return ({ creature: "Creature Harvest", gathering: "Gathering", profession: "Profession & Trade" })[family] ?? family;
+    return ({ creature: "Creature Harvest", essence: "Essences", gathering: "Gathering", profession: "Profession & Trade" })[family] ?? family;
   }
 
   static categoryLabel(family, category) {
     if (family === "creature") return this.#title(category);
+    if (family === "essence") return "Essences";
     return ({
       flora: "Flora",
       roots: "Roots",
@@ -214,6 +217,7 @@ export class MaterialCatalogService {
     const tags = new Set((material.tags ?? []).map(tag => String(tag).toLowerCase()));
     const nature = String(material.nature ?? "").toLowerCase();
     if (family === "creature") return nature || "other";
+    if (family === "essence") return "essence";
     if (family === "gathering") {
       if (nature === "mineral") return "mineral";
       if (tags.has("root")) return "roots";
@@ -241,6 +245,7 @@ export class MaterialCatalogService {
   static #folderDefinitions() {
     const defs = [
       { key: "creature", name: "Creature Harvest" },
+      { key: "essence", name: "Essences" },
       { key: "gathering", name: "Gathering" },
       { key: "profession", name: "Profession & Trade" }
     ];
@@ -576,7 +581,7 @@ export class MaterialCatalogService {
   }
 
   static #normalizeMaterial(material) {
-    const family = ["creature", "gathering", "profession"].includes(String(material.family)) ? String(material.family) : "profession";
+    const family = ["creature", "essence", "gathering", "profession"].includes(String(material.family)) ? String(material.family) : "profession";
     const rarity = this.RARITIES.includes(String(material.rarity)) ? String(material.rarity) : "common";
     const normalized = {
       ...material,
@@ -584,7 +589,7 @@ export class MaterialCatalogService {
       name: String(material.name || "Material").trim() || "Material",
       img: String(material.img || DEFAULT_MATERIAL_ICON),
       family,
-      nature: String(material.nature || (family === "profession" ? "trade" : "other")).trim().toLowerCase(),
+      nature: String(material.nature || (family === "profession" ? "trade" : family === "essence" ? "arcane" : "other")).trim().toLowerCase(),
       rarity,
       rarityLabel: this.rarityLabel(rarity),
       chance: Math.clamp(Number(material.chance) || 0, 0, 100),

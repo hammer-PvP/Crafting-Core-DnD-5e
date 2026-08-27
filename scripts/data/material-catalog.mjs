@@ -15,8 +15,12 @@ const gathering = (id, name, nature, rarity, {biomes=[], tags=[], quantity="1", 
 const profession = (id, name, nature, rarity, {tags=[], quantity="1", chance=null}={}) => ({
   id, name, family: "profession", nature, rarity, tags, quantity, chance
 });
+const essence = (id, name, nature, {tags=[], quantity="1"}={}) => ({
+  id, name, family: "essence", nature, category: "essence", rarity: "uncommon",
+  tags: ["essence", ...tags], requires: [], biomes: [], quantity, chance: 100
+});
 
-export const MATERIAL_CATALOG_VERSION = 3;
+export const MATERIAL_CATALOG_VERSION = 4;
 
 export const DEFAULT_MATERIALS = Object.freeze([
   // Aberration
@@ -128,10 +132,25 @@ export const DEFAULT_MATERIALS = Object.freeze([
   creature("undead-flesh", "Undead Flesh", "undead", "common", {requires:["flesh"], tags:["necrotic"]}),
   creature("undead-funerary-dust", "Funerary Dust", "undead", "common", {tags:["necrotic","funerary"]}),
   creature("undead-ectoplasm", "Ectoplasm", "undead", "uncommon", {requires:["incorporeal"], tags:["spirit"]}),
-  creature("undead-necrotic-essence", "Necrotic Essence", "undead", "uncommon", {tags:["necrotic","essence"]}),
+  creature("undead-necrotic-residue", "Necrotic Residue", "undead", "uncommon", {tags:["necrotic","residue"]}),
   creature("undead-corrupted-marrow", "Corrupted Marrow", "undead", "rare", {requires:["bone"], tags:["necrotic"]}),
   creature("undead-spiritual-residue", "Spiritual Residue", "undead", "veryRare", {tags:["spirit","necrotic"]}),
   creature("undead-death-essence", "Death Essence", "undead", "legendary", {tags:["necrotic","soul"]}),
+
+  // Universal essence materials — dedicated fifth Harvest Profile slot.
+  // Physical damage types are intentionally excluded. The Actor Analyzer chooses
+  // between Arcane Essence and one mechanically-supported specific essence at harvest time.
+  essence("essence-arcane", "Arcane Essence", "arcane", {tags:["arcane","universal"]}),
+  essence("essence-acid", "Acid Essence", "acid", {tags:["acid"]}),
+  essence("essence-cold", "Cold Essence", "cold", {tags:["cold"]}),
+  essence("essence-fire", "Flame Essence", "fire", {tags:["fire","flame"]}),
+  essence("essence-force", "Force Essence", "force", {tags:["force"]}),
+  essence("essence-lightning", "Lightning Essence", "lightning", {tags:["lightning"]}),
+  essence("undead-necrotic-essence", "Necrotic Essence", "necrotic", {tags:["necrotic"]}),
+  essence("essence-poison", "Poison Essence", "poison", {tags:["poison"]}),
+  essence("essence-psychic", "Psychic Essence", "psychic", {tags:["psychic","psionic"]}),
+  essence("essence-radiant", "Radiant Essence", "radiant", {tags:["radiant"]}),
+  essence("essence-thunder", "Thunder Essence", "thunder", {tags:["thunder"]}),
 
   // Environment gathering — intended for future biome pools.
   gathering("gathering-elfleaf", "Elvenleaf Herb", "flora", "common", {biomes:["forest","ravine"], tags:["herb"], quantity:"1d4"}),

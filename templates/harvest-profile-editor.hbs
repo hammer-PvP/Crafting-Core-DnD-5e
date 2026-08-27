@@ -39,6 +39,32 @@
       </div>
     </section>
 
+    <section class="cc-form-card cc-essence-card">
+      <div class="cc-card-heading"><div><span class="cc-kicker">Automatic Magical Harvest</span><h3>Slot 5 — Essence</h3></div><small>Separate from the four physical slots and from Pinpoint Overrides.</small></div>
+      {{#if essenceEnabled}}
+        {{#if essenceHasSpecific}}
+        <div class="cc-essence-distribution">
+          <span><strong>{{profile.essenceSlot.arcaneChance}}%</strong><small>Arcane Essence</small></span>
+          <span><strong>{{profile.essenceSlot.specificChance}}%</strong><small>Specific Essence</small></span>
+        </div>
+        <div class="cc-anatomy-tags cc-essence-tags">
+          {{#each essenceAffinities}}<span>{{label}} · weight {{weight}}</span>{{/each}}
+        </div>
+        {{else}}
+        <div class="cc-essence-distribution">
+          <span><strong>{{profile.essenceSlot.arcaneChance}}%</strong><small>Arcane Essence</small></span>
+          <span><strong>{{profile.essenceSlot.emptyChance}}%</strong><small>No Essence</small></span>
+        </div>
+        {{/if}}
+        <details>
+          <summary>Why this Essence profile?</summary>
+          <ul>{{#each essenceReasons}}<li>{{this}}</li>{{else}}<li>No additional Essence inference notes.</li>{{/each}}</ul>
+        </details>
+      {{else}}
+        <div class="cc-empty-row">This profile predates Essence analysis. Reanalyze the source Actor to enable Slot 5.</div>
+      {{/if}}
+    </section>
+
     <section class="cc-form-card">
       <div class="cc-card-heading"><div><span class="cc-kicker">Quest / Boss Materials</span><h3>Pinpoint Overrides</h3></div><small>Extra rolls. They never consume one of the four automatic slots.</small></div>
       <div class="cc-pinpoint-list">

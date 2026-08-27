@@ -1,5 +1,28 @@
 # Crafting Core (DnD 5e)
 
+## v0.0.9 — Essence Harvest Layer
+
+This release adds the magical fifth slot to scanned Harvest Profiles while preserving the live-validated four-slot creature-material model. Pinpoint Overrides remain separate and continue to be controlled explicitly by the GM.
+
+### Essence catalog
+
+The curated Material Catalog now contains **132** built-in materials. The Essence family contains eleven **Uncommon** materials: Arcane, Acid, Cold, Flame, Force, Lightning, Necrotic, Poison, Psychic, Radiant, and Thunder Essence. The former Undead-only **Necrotic Essence** keeps its stable material ID and is promoted into this universal Essence family; a new **Necrotic Residue** material replaces its old role in the Undead four-slot pool.
+
+### Slot 5 — Essence
+
+Every newly scanned or reanalyzed Actor receives a separate Essence slot in addition to the four existing automatic material slots. The Analyzer reads structured D&D5e data instead of guessing from arbitrary descriptive text:
+
+- non-spell Attack / Save / Damage Activities can establish a damage affinity;
+- native damage resistance and immunity can establish an affinity;
+- bludgeoning, piercing, and slashing are ignored;
+- a prepared spell by itself does not turn the creature into an elemental harvesting source.
+
+If the Actor has at least one supported non-physical affinity, each harvested source rolls **45% Arcane Essence / 55% specific Essence**. If several specific affinities are supported, that 55% side is distributed by evidence weight. If the Actor has no supported affinity, the fifth slot rolls **50% Arcane Essence / 50% no Essence**.
+
+Essence is rolled when Harvest is generated, not permanently selected when the Compendium is scanned. This keeps Arcane Essence close to the combined supply of all specific Essences over long play while making each individual specific Essence substantially scarcer.
+
+Existing v0.0.8 profiles are not silently reclassified. Rescan or Reanalyze them to enable the new fifth slot from the real source Actor data.
+
 ## v0.0.8 — Actor Analyzer Intelligence & Scanner Settings
 
 This development release strengthens the entire Creature Scanner inference framework before Token HUD / Item Piles integration. The scanner still never changes source Actors or source Compendiums; it only creates Crafting Core Harvest Profile metadata.

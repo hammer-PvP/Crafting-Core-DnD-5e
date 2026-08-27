@@ -29,6 +29,7 @@ export class MaterialEditorApp extends HandlebarsApplicationMixin(ApplicationV2)
       builtIn: Boolean(material.managed),
       familyOptions: [
         { value: "creature", label: "Creature Harvest", selected: material.family === "creature" },
+        { value: "essence", label: "Essences", selected: material.family === "essence" },
         { value: "gathering", label: "Gathering", selected: material.family === "gathering" },
         { value: "profession", label: "Profession & Trade", selected: material.family === "profession" }
       ],

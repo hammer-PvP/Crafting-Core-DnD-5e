@@ -127,6 +127,7 @@ export class MaterialGenerationService {
 
     const entries = await MaterialCatalogService.allEntries();
     const materials = new Map(entries.map(entry => [entry.id, entry]));
+    const essences = new Map(entries.filter(entry => entry.family === "essence").map(entry => [String(entry.nature), entry]));
     const automatic = (profile.slots ?? []).slice(0, 4).filter(row => row?.materialId);
     const pinpoint = (profile.pinpointOverrides ?? []).filter(row => row?.materialId);
     const count = Math.clamp(Math.floor(Number(sources) || 1), 1, 100);
@@ -151,6 +152,9 @@ export class MaterialGenerationService {
           chance, quantity, success, pinpoint: pinpoint.includes(row)
         });
       }
+
+      const essenceAttempt = await this.#rollEssenceSlot(profile.essenceSlot, essences, aggregate);
+      if (essenceAttempt) sourceAttempts.push(essenceAttempt);
       attempts.push(sourceAttempts);
     }
 
@@ -298,6 +302,71 @@ export class MaterialGenerationService {
     const mi = String(date.getMinutes()).padStart(2, "0");
     const ss = String(date.getSeconds()).padStart(2, "0");
     return `${yy}${mm}${dd}-${hh}${mi}${ss}`;
+  }
+
+  static async #rollEssenceSlot(slot, essences, aggregate) {
+    if (slot?.enabled !== true) return null;
+    const arcane = essences.get("arcane") ?? null;
+    const affinities = (slot.affinities ?? [])
+      .map(row => ({ type: String(row?.type ?? "").toLowerCase(), weight: Math.max(1, Number(row?.weight ?? row?.score ?? 1) || 1) }))
+      .filter(row => row.type && essences.has(row.type));
+
+    let selected = null;
+    let outcome = "empty";
+    let chance = 0;
+
+    if (affinities.length) {
+      const arcaneChance = Math.clamp(Number(slot.arcaneChance ?? 45) || 0, 0, 100);
+      const specificChance = Math.clamp(Number(slot.specificChance ?? 55) || 0, 0, 100);
+      const roll = Math.random() * 100;
+      if (roll < arcaneChance) {
+        selected = arcane;
+        outcome = "arcane";
+        chance = arcaneChance;
+      } else if (roll < arcaneChance + specificChance) {
+        const affinity = this.#weightedPick(affinities);
+        selected = affinity ? essences.get(affinity.type) : null;
+        outcome = selected ? affinity.type : "arcane";
+        chance = specificChance;
+        if (!selected) selected = arcane;
+      }
+    } else {
+      const arcaneChance = Math.clamp(Number(slot.arcaneChance ?? 50) || 0, 0, 100);
+      chance = arcaneChance;
+      if (this.#chance(arcaneChance)) {
+        selected = arcane;
+        outcome = "arcane";
+      }
+    }
+
+    let quantity = 0;
+    if (selected) {
+      quantity = await this.#rollQuantity(String(slot.quantity || selected.quantity || "1"));
+      this.#aggregate(aggregate, selected, quantity);
+    }
+
+    return {
+      essence: true,
+      materialId: selected?.id ?? "",
+      name: selected?.name ?? "No Essence",
+      rarity: selected?.rarity ?? "uncommon",
+      rarityLabel: selected?.rarityLabel ?? MaterialCatalogService.rarityLabel("uncommon"),
+      chance,
+      quantity,
+      success: Boolean(selected),
+      outcome
+    };
+  }
+
+  static #weightedPick(rows) {
+    const total = rows.reduce((sum, row) => sum + Math.max(0, Number(row.weight) || 0), 0);
+    if (total <= 0) return rows[0] ?? null;
+    let roll = Math.random() * total;
+    for (const row of rows) {
+      roll -= Math.max(0, Number(row.weight) || 0);
+      if (roll < 0) return row;
+    }
+    return rows.at(-1) ?? null;
   }
 
   static #matchesProfile(entry, profile) {

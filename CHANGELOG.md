@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.9
+
+Essence Harvest Layer development release.
+
+- Expanded the built-in curated Material Catalog from 121 to 132 materials with 11 Uncommon Essence materials: Arcane, Acid, Cold, Flame, Force, Lightning, Necrotic, Poison, Psychic, Radiant, and Thunder Essence.
+- Promoted the previous Undead-only `Necrotic Essence` record into the universal Essence family while preserving its stable material ID, and added a new `Necrotic Residue` Undead material so four-slot Undead profile completeness is preserved.
+- Added a dedicated fifth Harvest Profile slot for Essence. The existing four automatic physical/thematic material slots remain unchanged, and Pinpoint Overrides remain separate extra rolls.
+- Extended Actor Analyzer v2 with structured Essence-affinity inference from non-spell Attack/Save/Damage Activities plus native D&D5e damage resistance and immunity data.
+- Physical damage types (bludgeoning, piercing, slashing) are excluded from Essence affinity. Prepared spells alone do not define harvest affinity.
+- Actors with one or more supported affinities roll the fifth slot as 45% Arcane Essence / 55% specific Essence. When several specific affinities exist, the 55% side is weighted by supporting Actor evidence.
+- Actors with no supported non-physical affinity roll the fifth slot as 50% Arcane Essence / 50% no Essence.
+- Essence selection is rolled per harvested source at generation time rather than being permanently fixed during scanning, preserving the intended long-term material economy.
+- Existing v0.0.8 Harvest Profiles remain valid and keep Essence disabled until they are rescanned or individually reanalyzed; no affinity is invented during migration.
+- Added Essence visibility to the Creature Scanner and Harvest Profile Editor, including inferred damage affinities and the active Arcane/specific distribution.
+- Bumped the built-in Material Catalog schema to version 4.
+
 ## 0.0.8
 
 Actor Analyzer Intelligence & Scanner Settings development release.

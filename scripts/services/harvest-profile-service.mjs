@@ -12,6 +12,9 @@ export class HarvestProfileService {
     "flesh", "blood", "bone", "hide", "claw", "fang", "beak", "feather",
     "scale", "horn", "venom", "wing", "shell", "eye", "tentacle"
   ]);
+  static ESSENCE_DAMAGE_TYPES = Object.freeze([
+    "acid", "cold", "fire", "force", "lightning", "necrotic", "poison", "psychic", "radiant", "thunder"
+  ]);
 
   static BASE_ANATOMY = Object.freeze({
     aberration: ["flesh", "blood", "bone", "eye"],
@@ -313,7 +316,7 @@ export class HarvestProfileService {
     return this.save(profile);
   }
 
-  /** Analyze one D&D5e NPC into deterministic anatomy + four automatic slots. */
+  /** Analyze one D&D5e NPC into deterministic anatomy, four automatic slots, and one Essence slot. */
   static async analyzeActor(actor, { materials=null, previous=null }={}) {
     const entries = materials ?? await MaterialCatalogService.allEntries();
     const nature = String(actor.system?.details?.type?.value ?? "").toLowerCase();
@@ -321,6 +324,9 @@ export class HarvestProfileService {
     if (!available.length) throw new Error(`No curated Creature Harvest materials exist for type "${nature || "unknown"}".`);
 
     const analysis = this.#inferAnatomy(actor, nature);
+    const essenceAnalysis = this.#inferEssenceAffinities(actor);
+    analysis.essenceAffinities = essenceAnalysis.affinities;
+    analysis.essenceReasons = essenceAnalysis.reasons;
     const cr = Number(actor.system?.details?.cr ?? 0) || 0;
     const legendarySource = cr >= 17
       || Number(actor.system?.resources?.legact?.max ?? 0) > 0
@@ -328,6 +334,7 @@ export class HarvestProfileService {
       || Boolean(actor.system?.resources?.lair?.value);
     if (legendarySource) analysis.reasons.push("High-tier source detected from CR, Legendary Actions/Resistance, or Lair data; the fourth automatic slot targets Legendary materials.");
     const slots = this.#buildAutomaticSlots(available, analysis.anatomy, legendarySource);
+    const essenceSlot = this.#buildEssenceSlot(analysis.essenceAffinities);
     const oldPinpoint = Array.isArray(previous?.pinpointOverrides) ? previous.pinpointOverrides : [];
 
     return this.#normalizeProfile({
@@ -348,6 +355,7 @@ export class HarvestProfileService {
       size: String(actor.system?.traits?.size ?? ""),
       analysis,
       slots,
+      essenceSlot,
       pinpointOverrides: oldPinpoint,
       analyzedAt: Date.now()
     });
@@ -356,6 +364,14 @@ export class HarvestProfileService {
   static creatureTypeLabel(value) {
     const key = String(value ?? "");
     const config = CONFIG.DND5E?.creatureTypes?.[key];
+    if (!config) return this.title(key);
+    const label = typeof config.label === "string" ? config.label : key;
+    return game.i18n?.localize?.(label) ?? label;
+  }
+
+  static damageTypeLabel(value) {
+    const key = String(value ?? "").toLowerCase();
+    const config = CONFIG.DND5E?.damageTypes?.[key];
     if (!config) return this.title(key);
     const label = typeof config.label === "string" ? config.label : key;
     return game.i18n?.localize?.(label) ?? label;
@@ -388,6 +404,10 @@ export class HarvestProfileService {
     const materials = await MaterialCatalogService.allEntries();
     const map = new Map(materials.map(entry => [entry.id, entry]));
     normalized.slots = normalized.slots.map((slot, index) => this.#hydrateRow(slot, map, index + 1));
+    normalized.essenceSlot = {
+      ...normalized.essenceSlot,
+      affinities: normalized.essenceSlot.affinities.map(row => ({ ...row, label: this.damageTypeLabel(row.type) }))
+    };
     normalized.pinpointOverrides = normalized.pinpointOverrides.map((row, index) => this.#hydrateRow(row, map, index + 1, true));
     return normalized;
   }
@@ -494,6 +514,144 @@ export class HarvestProfileService {
     const rarityPriority = Math.max(0, rarityOrder.length - rarityOrder.indexOf(material.rarity));
     const requirementScore = requires.reduce((score, requirement) => score + (anatomySet.has(requirement) ? 25 : 0), 0);
     return requirementScore + requires.length * 10 + rarityPriority;
+  }
+
+  static #buildEssenceSlot(affinities=[]) {
+    const rows = (affinities ?? []).map(row => ({
+      type: String(row?.type ?? "").toLowerCase(),
+      weight: Math.max(1, Number(row?.weight ?? row?.score ?? 1) || 1),
+      score: Math.max(1, Number(row?.score ?? row?.weight ?? 1) || 1),
+      reasons: [...new Set((row?.reasons ?? []).map(String).filter(Boolean))]
+    })).filter(row => this.ESSENCE_DAMAGE_TYPES.includes(row.type));
+    const hasSpecific = rows.length > 0;
+    return {
+      enabled: true,
+      position: 5,
+      label: "Essence",
+      quantity: "1",
+      arcaneChance: hasSpecific ? 45 : 50,
+      specificChance: hasSpecific ? 55 : 0,
+      emptyChance: hasSpecific ? 0 : 50,
+      affinities: rows
+    };
+  }
+
+  /**
+   * Infer magical/elemental harvesting affinities from structured D&D5e mechanics.
+   * Non-spell attacks/features are strong evidence; resistance and immunity are also
+   * valid affinity signals. Physical damage types are deliberately ignored.
+   */
+  static #inferEssenceAffinities(actor) {
+    const allowed = new Set(this.ESSENCE_DAMAGE_TYPES);
+    const scores = new Map();
+    const reasons = new Map();
+    const add = (type, weight, reason) => {
+      const key = String(type ?? "").toLowerCase();
+      if (!allowed.has(key)) return;
+      scores.set(key, (scores.get(key) ?? 0) + Math.max(0, Number(weight) || 0));
+      const list = reasons.get(key) ?? [];
+      if (reason && !list.includes(reason)) list.push(reason);
+      reasons.set(key, list);
+    };
+
+    for (const type of this.#collectionValues(actor.system?.traits?.dr?.value)) {
+      add(type, 2, `${this.damageTypeLabel(type)} resistance detected.`);
+    }
+    for (const type of this.#collectionValues(actor.system?.traits?.di?.value)) {
+      add(type, 3, `${this.damageTypeLabel(type)} immunity detected.`);
+    }
+
+    for (const item of actor.items ?? []) {
+      const itemType = String(item.type ?? "").toLowerCase();
+      // A prepared spell alone does not define what the creature can be harvested for.
+      if (itemType === "spell") continue;
+      let foundActivityDamage = false;
+      const activities = item.system?.activities;
+      if (activities) {
+        for (const activity of activities) {
+          const activityType = String(activity?.type ?? "").toLowerCase();
+          if (!["attack", "save", "damage"].includes(activityType)) continue;
+          const source = activity?.toObject?.() ?? activity;
+          const damage = source?.damage ?? activity?.damage;
+          const types = this.#damageTypesFromData(damage);
+          if (!types.length) continue;
+          foundActivityDamage = true;
+          for (const type of types) {
+            add(type, 4, `${this.damageTypeLabel(type)} damage detected in ${String(activity?.name ?? item.name ?? "a non-spell activity")}.`);
+          }
+        }
+      }
+
+      // Older or item-level D&D5e damage data remains a fallback when no structured
+      // activity on this Item exposed a damage type.
+      if (!foundActivityDamage) {
+        const itemSource = item.toObject?.() ?? item;
+        for (const type of this.#damageTypesFromData(itemSource?.system?.damage ?? item.system?.damage)) {
+          add(type, 3, `${this.damageTypeLabel(type)} damage detected on ${String(item.name ?? "an Actor Item")}.`);
+        }
+      }
+    }
+
+    const affinities = [...scores.entries()]
+      .filter(([, score]) => score > 0)
+      .map(([type, score]) => ({ type, score, weight: score, reasons: reasons.get(type) ?? [] }))
+      .sort((a, b) => b.score - a.score || a.type.localeCompare(b.type));
+
+    const summary = affinities.length
+      ? affinities.map(row => `${this.damageTypeLabel(row.type)} (${row.score})`).join(", ")
+      : "No non-physical damage affinity was found in non-spell attacks, resistances, or immunities; Arcane Essence fallback will be used.";
+    return { affinities, reasons: [summary] };
+  }
+
+  static #damageTypesFromData(data) {
+    const allowed = new Set(this.ESSENCE_DAMAGE_TYPES);
+    const found = new Set();
+    const addValue = value => {
+      for (const raw of this.#collectionValues(value)) {
+        const type = String(raw ?? "").toLowerCase();
+        if (allowed.has(type)) found.add(type);
+      }
+    };
+    const visit = (value, key="") => {
+      if (value == null) return;
+      if (Array.isArray(value)) {
+        // Legacy damage parts can be [formula, type].
+        if (value.length === 2 && typeof value[1] === "string") addValue(value[1]);
+        for (const child of value) visit(child, key);
+        return;
+      }
+      if (value instanceof Set) {
+        addValue(value);
+        return;
+      }
+      if (typeof value !== "object") {
+        if (["type", "types"].includes(key)) addValue(value);
+        return;
+      }
+      for (const [childKey, child] of Object.entries(value)) {
+        const normalizedKey = String(childKey).toLowerCase();
+        if (["type", "types"].includes(normalizedKey)) addValue(child);
+        if (["parts", "base", "damage", "bonus", "critical", "scaling", "type", "types"].includes(normalizedKey)) visit(child, normalizedKey);
+      }
+    };
+    visit(data);
+    return [...found];
+  }
+
+  static #collectionValues(value) {
+    if (value == null) return [];
+    if (Array.isArray(value)) return value.flatMap(entry => this.#collectionValues(entry));
+    if (value instanceof Set) return [...value];
+    if (typeof value === "string" || typeof value === "number") return [value];
+    if (typeof value?.values === "function") {
+      try { return [...value.values()]; } catch (_) { /* fall through */ }
+    }
+    if (typeof value === "object") {
+      return Object.entries(value)
+        .filter(([, enabled]) => enabled === true || enabled === 1)
+        .map(([key]) => key);
+    }
+    return [];
   }
 
   static #inferAnatomy(actor, nature) {
@@ -723,7 +881,14 @@ export class HarvestProfileService {
       size: String(profile?.size ?? ""),
       analysis: {
         anatomy: [...new Set((profile?.analysis?.anatomy ?? []).map(String).filter(Boolean))].sort(),
-        reasons: [...new Set((profile?.analysis?.reasons ?? []).map(String).filter(Boolean))]
+        reasons: [...new Set((profile?.analysis?.reasons ?? []).map(String).filter(Boolean))],
+        essenceAffinities: (profile?.analysis?.essenceAffinities ?? []).map(row => ({
+          type: String(row?.type ?? "").toLowerCase(),
+          score: Math.max(1, Number(row?.score ?? row?.weight ?? 1) || 1),
+          weight: Math.max(1, Number(row?.weight ?? row?.score ?? 1) || 1),
+          reasons: [...new Set((row?.reasons ?? []).map(String).filter(Boolean))]
+        })).filter(row => this.ESSENCE_DAMAGE_TYPES.includes(row.type)),
+        essenceReasons: [...new Set((profile?.analysis?.essenceReasons ?? []).map(String).filter(Boolean))]
       },
       slots: slots.map((slot, index) => ({
         id: String(slot?.id ?? `slot-${index + 1}`),
@@ -736,6 +901,21 @@ export class HarvestProfileService {
         generated: slot?.generated !== false,
         fallback: Boolean(slot?.fallback)
       })),
+      essenceSlot: {
+        enabled: profile?.essenceSlot?.enabled === true,
+        position: 5,
+        label: "Essence",
+        quantity: String(profile?.essenceSlot?.quantity || "1"),
+        arcaneChance: Math.clamp(Number(profile?.essenceSlot?.arcaneChance ?? 50) || 0, 0, 100),
+        specificChance: Math.clamp(Number(profile?.essenceSlot?.specificChance ?? 0) || 0, 0, 100),
+        emptyChance: Math.clamp(Number(profile?.essenceSlot?.emptyChance ?? 50) || 0, 0, 100),
+        affinities: (profile?.essenceSlot?.affinities ?? profile?.analysis?.essenceAffinities ?? []).map(row => ({
+          type: String(row?.type ?? "").toLowerCase(),
+          score: Math.max(1, Number(row?.score ?? row?.weight ?? 1) || 1),
+          weight: Math.max(1, Number(row?.weight ?? row?.score ?? 1) || 1),
+          reasons: [...new Set((row?.reasons ?? []).map(String).filter(Boolean))]
+        })).filter(row => this.ESSENCE_DAMAGE_TYPES.includes(row.type))
+      },
       pinpointOverrides: (Array.isArray(profile?.pinpointOverrides) ? profile.pinpointOverrides : []).map((row, index) => ({
         id: String(row?.id ?? foundry.utils.randomID(12)),
         position: index + 1,

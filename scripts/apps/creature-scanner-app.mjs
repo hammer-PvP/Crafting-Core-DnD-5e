@@ -38,6 +38,12 @@ export class CreatureScannerApp extends HandlebarsApplicationMixin(ApplicationV2
         ...profile,
         anatomyLabel: profile.analysis?.anatomy?.join(", ") || "No anatomy tags",
         slotCount: profile.slots?.filter(slot => slot.materialId).length ?? 0,
+        essenceCount: profile.essenceSlot?.enabled ? 1 : 0,
+        essenceLabel: profile.essenceSlot?.enabled
+          ? (profile.essenceSlot.affinities?.length
+            ? `Arcane ${profile.essenceSlot.arcaneChance}% / Specific ${profile.essenceSlot.specificChance}% · ${profile.essenceSlot.affinities.map(row => HarvestProfileService.damageTypeLabel(row.type)).join(", ")}`
+            : `Arcane ${profile.essenceSlot.arcaneChance}% / Empty ${profile.essenceSlot.emptyChance}%`)
+          : "Essence slot pending reanalysis",
         pinpointCount: profile.pinpointOverrides?.length ?? 0
       })),
       profileCount: profiles.length,
@@ -126,7 +132,7 @@ export class CreatureScannerApp extends HandlebarsApplicationMixin(ApplicationV2
     if (this.filters.type !== "all" && profile.creatureType !== this.filters.type) return false;
     const search = String(this.filters.search || "").trim().toLowerCase();
     if (!search) return true;
-    return [profile.name, profile.creatureTypeLabel, profile.subtype, profile.sourcePackLabel, ...(profile.analysis?.anatomy ?? [])]
+    return [profile.name, profile.creatureTypeLabel, profile.subtype, profile.sourcePackLabel, ...(profile.analysis?.anatomy ?? []), ...(profile.essenceSlot?.affinities ?? []).map(row => row.type)]
       .join(" ").toLowerCase().includes(search);
   }
 

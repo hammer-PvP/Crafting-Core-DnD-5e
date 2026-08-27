@@ -36,6 +36,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       familyOptions: [
         { value: "all", label: "All Families", selected: this.filters.family === "all" },
         { value: "creature", label: "Creature Harvest", selected: this.filters.family === "creature" },
+        { value: "essence", label: "Essences", selected: this.filters.family === "essence" },
         { value: "gathering", label: "Gathering", selected: this.filters.family === "gathering" },
         { value: "profession", label: "Profession & Trade", selected: this.filters.family === "profession" }
       ],

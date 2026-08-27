@@ -41,6 +41,10 @@ export class HarvestProfileEditorApp extends HandlebarsApplicationMixin(Applicat
       anatomy: hydrated.analysis.anatomy.map(tag => ({ tag, label: HarvestProfileService.title(tag) })),
       anatomyText: hydrated.analysis.anatomy.join(", "),
       reasons: hydrated.analysis.reasons,
+      essenceReasons: hydrated.analysis.essenceReasons ?? [],
+      essenceEnabled: hydrated.essenceSlot?.enabled === true,
+      essenceAffinities: hydrated.essenceSlot?.affinities ?? [],
+      essenceHasSpecific: Boolean(hydrated.essenceSlot?.affinities?.length),
       analyzedAt: hydrated.analyzedAt ? new Date(hydrated.analyzedAt).toLocaleString() : "Unknown"
     };
   }
@@ -123,7 +127,7 @@ export class HarvestProfileEditorApp extends HandlebarsApplicationMixin(Applicat
     event.preventDefault();
     const confirmed = await foundry.applications.api.DialogV2.confirm({
       window: { title: "Reanalyze Creature" },
-      content: "<p>Rebuild the four automatic slots from the current source Actor data?</p><p>Pinpoint Overrides are preserved. Unsaved automatic-slot edits are replaced.</p>",
+      content: "<p>Rebuild the four automatic slots and the Essence slot from the current source Actor data?</p><p>Pinpoint Overrides are preserved. Unsaved automatic-slot edits are replaced.</p>",
       yes: { label: "Reanalyze", icon: "fa-solid fa-wand-magic-sparkles" },
       no: { label: "Cancel" }
     });
