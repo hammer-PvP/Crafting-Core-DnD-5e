@@ -43,7 +43,7 @@
         {{else}}
         <div class="cc-generated-list">
           {{#each lastResult.items}}
-          <div class="cc-generated-row"><img src="{{img}}" alt=""><span><strong>{{name}}</strong><small class="cc-rarity {{rarity}}">{{rarity}}</small></span><b>×{{quantity}}</b></div>
+          <div class="cc-generated-row"><img src="{{img}}" alt=""><span><strong>{{name}}</strong><small class="cc-rarity {{rarity}}">{{rarityLabel}}</small></span><b>×{{quantity}}</b></div>
           {{/each}}
         </div>
         {{#if lastResult.created}}

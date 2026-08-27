@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.6
+
+Rarity & Harvest Profile Foundation development release.
+
+- Expanded Crafting Core material rarity to the complete D&D5e ladder used by the project: Common, Uncommon, Rare, Very Rare, and Legendary.
+- Added `Uncommon` and `Very Rare` to the Material Catalog editor, rarity filter, economy defaults, Compendium Item rarity metadata, and generator preview.
+- Added a purple Very Rare presentation tier and distinct Common/Uncommon/Rare/Legendary rarity colors.
+- Revised all 119 built-in curated materials without changing the catalog size, distributing Creature Harvest, Gathering, and Profession / Trade records across the five rarity tiers.
+- Updated default material economy/drop chances to Common 65%, Uncommon 35%, Rare 15%, Very Rare 5%, Legendary 1%; default GP values are 5 / 25 / 100 / 500 / 1,000 respectively and remain GM-editable.
+- Preserved the established maximum of four automatic Creature Harvest candidate materials per source.
+- Replaced the old `2 Common + 1 Rare + 1 Legendary` layout with four slot pools: `Common`, `Common or Uncommon`, `Rare`, and `Very Rare or Legendary`.
+- Slot selection remains unique per source and each selected material still performs its own configured chance and quantity roll.
+- Kept manual Undead anatomy profiles and Environment Gathering behavior intact.
+- Bumped the built-in Material Catalog schema to version 2 so stale curated Compendium records synchronize before being used as generated loot sources.
+- No general-purpose release migration layer is included during this internal development phase.
+
 ## 0.0.5
 
 Generator UX Refinement development release.

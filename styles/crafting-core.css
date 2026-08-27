@@ -158,8 +158,11 @@
 .cc-material-name { display: grid; grid-template-columns: 30px minmax(0,1fr); gap: 8px; align-items: center; min-width: 0; }
 .cc-material-name img { width: 28px; height: 28px; object-fit: cover; border-radius: 3px; }
 .cc-material-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cc-rarity { text-transform: capitalize; }
+.cc-rarity { font-weight: 700; }
+.cc-rarity.common { color: #c9c9c9; }
+.cc-rarity.uncommon { color: #72cf7b; }
 .cc-rarity.rare { color: #77a9e8; }
+.cc-rarity.veryRare { color: #c184f4; }
 .cc-rarity.legendary { color: #d6a354; }
 
 /* v0.0.3 — Library & Publication Foundation */

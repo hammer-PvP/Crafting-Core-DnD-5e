@@ -9,6 +9,18 @@ export class MaterialGenerationService {
   static GENERATED_FOLDER_NAME = "Crafting Core — Generated Loot";
   static FOLDER_COLOR = "#8de901";
 
+  /**
+   * Four automatic harvest candidates per source. The second and fourth slots
+   * deliberately span adjacent tiers so the full D&D5e material rarity ladder
+   * fits without increasing the established four-material profile limit.
+   */
+  static DEFAULT_HARVEST_SLOTS = Object.freeze([
+    Object.freeze(["common"]),
+    Object.freeze(["common", "uncommon"]),
+    Object.freeze(["rare"]),
+    Object.freeze(["veryRare", "legendary"])
+  ]);
+
   static ABUNDANCE = Object.freeze({
     scarce: { label: "Scarce", maxTypes: 1, quantityFactor: 1 },
     normal: { label: "Normal", maxTypes: 2, quantityFactor: 1 },
@@ -64,22 +76,19 @@ export class MaterialGenerationService {
     const profiles = this.profilesFor(nature);
     const profile = profiles.find(p => p.id === profileId) ?? profiles[0];
     const eligible = entries.filter(entry => this.#matchesProfile(entry, profile));
-    const byRarity = {
-      common: eligible.filter(e => e.rarity === "common"),
-      rare: eligible.filter(e => e.rarity === "rare"),
-      legendary: eligible.filter(e => e.rarity === "legendary")
-    };
+    const byRarity = Object.fromEntries(
+      MaterialCatalogService.RARITIES.map(rarity => [rarity, eligible.filter(entry => entry.rarity === rarity)])
+    );
 
     const count = Math.clamp(Math.floor(Number(sources) || 1), 1, 100);
     const aggregate = new Map();
     const attempts = [];
 
     for (let sourceIndex = 0; sourceIndex < count; sourceIndex++) {
-      const slots = [
-        ...this.#pickUnique(byRarity.common, 2),
-        ...this.#pickUnique(byRarity.rare, 1),
-        ...this.#pickUnique(byRarity.legendary, 1)
-      ];
+      const used = new Set();
+      const slots = this.DEFAULT_HARVEST_SLOTS
+        .map(rarities => this.#pickSlot(rarities.flatMap(rarity => byRarity[rarity] ?? []), used))
+        .filter(Boolean);
       const sourceAttempts = [];
       for (const material of slots) {
         const success = this.#chance(material.chance);
@@ -88,7 +97,7 @@ export class MaterialGenerationService {
           quantity = await this.#rollQuantity(material.quantity);
           this.#aggregate(aggregate, material, quantity);
         }
-        sourceAttempts.push({ materialId: material.id, name: material.name, rarity: material.rarity, chance: material.chance, success, quantity });
+        sourceAttempts.push({ materialId: material.id, name: material.name, rarity: material.rarity, rarityLabel: material.rarityLabel, chance: material.chance, success, quantity });
       }
       attempts.push(sourceAttempts);
     }
@@ -120,7 +129,7 @@ export class MaterialGenerationService {
     const attempts = [];
     for (const material of entries) {
       const success = this.#chance(material.chance);
-      attempts.push({ materialId: material.id, name: material.name, rarity: material.rarity, chance: material.chance, success });
+      attempts.push({ materialId: material.id, name: material.name, rarity: material.rarity, rarityLabel: material.rarityLabel, chance: material.chance, success });
       if (success) successes.push(material);
     }
 
@@ -273,12 +282,17 @@ export class MaterialGenerationService {
       name: material.name,
       img: material.img,
       rarity: material.rarity,
+      rarityLabel: material.rarityLabel ?? MaterialCatalogService.rarityLabel(material.rarity),
       quantity
     });
   }
 
-  static #pickUnique(pool, count) {
-    return this.#shuffle(pool).slice(0, Math.max(0, Number(count) || 0));
+  static #pickSlot(pool, used) {
+    const available = pool.filter(material => !used.has(material.id));
+    if (!available.length) return null;
+    const [selected] = this.#shuffle(available);
+    if (selected) used.add(selected.id);
+    return selected ?? null;
   }
 
   static #shuffle(values) {

@@ -2,36 +2,42 @@
 
 Crafting Core is a D&D5e crafting framework for Foundry VTT 14.
 
-## v0.0.5 — Generator UX Refinement
+## v0.0.6 — Rarity & Harvest Profile Foundation
 
-This release keeps the validated v0.0.4 material-generation rules intact and improves the GM workflow used during live sessions.
+This development release completes the material rarity model before the future Creature Scanner / Actor Analyzer starts generating per-Actor Harvest Profiles.
 
-### Preview first, materialize second
+### Full five-tier material rarity
 
-`Generate Materials` no longer writes to the Item Directory when the GM rolls. Creature Harvest or Environment Gathering first produces an in-memory **Preview**. The GM may reroll as often as desired. Only **Create Loot Folder** materializes that exact preview as real D&D5e Items under `Crafting Core — Generated Loot`; accepting a preview does not reroll it.
+Crafting Core materials now use the complete project rarity ladder:
 
-This preserves GM control during play and also matches the planned future corpse workflow: the shared generation engine decides the result first, then a destination adapter chooses where the accepted Items go.
+- **Common** — 65% default drop chance, 5 gp default value
+- **Uncommon** — 35%, 25 gp
+- **Rare** — 15%, 100 gp
+- **Very Rare** — 5%, 500 gp
+- **Legendary** — 1%, 1,000 gp
 
-### One-click session launcher
+These are Material Catalog defaults, not hard rules. The GM can edit rarity, chance, value, and quantity per material. Very Rare is presented in purple throughout the Crafting Core UI.
 
-The Item Directory GM launcher is split into two controls:
+The built-in curated catalog still contains exactly **119 materials**. Existing Creature Harvest, Gathering, and Profession / Trade records were redistributed across the five tiers rather than adding artificial duplicate materials merely to fill rarity bands.
 
-- **Crafting Core** — opens the complete GM authoring/library workbench.
-- **Generate** — opens Generate Materials directly for session use.
+### Four-slot Harvest Profile model
 
-Players do not receive these administrative launchers.
+Creature Harvest keeps the established maximum of **four automatic material candidates per source**. The default slot pools are now:
 
-### Compact generator
+1. `Common`
+2. `Common or Uncommon`
+3. `Rare`
+4. `Very Rare or Legendary`
 
-The Material Generator now uses a smaller default window and a denser layout. The green d20, title, and context occupy a compact header; Source and generation parameters use a smaller configuration block; the remaining height is reserved for Preview results. When many materials are generated, only the result list scrolls so the generation/materialization controls remain reachable on smaller displays.
+A material can occupy only one slot in a source roll. After slot selection, its own configured drop chance and quantity formula are rolled exactly as before. This structure is intentionally scanner-ready: a future per-Actor Harvest Profile can choose whether its high-tier slot resolves to Very Rare or Legendary without increasing the four-material limit.
 
-### Recipe Builder sidebar polish
+### Generator workflow unchanged
 
-The saved Recipe list now consumes the remaining sidebar height and only scrolls when the number of drafts actually exceeds that space, removing the unnecessary scrollbar/clipping seen with a single Recipe.
+The live-validated v0.0.5 workflow remains intact: **Generate Materials** creates only an in-memory Preview; **Generate Again** replaces it; **Create Loot Folder** materializes exactly the accepted preview without rerolling. Creature Harvest and Environment Gathering continue to share the same generation engine.
 
 ## Existing generation foundation
 
-- **Creature Harvest** — Creature Type, coarse manual Profile, and independent Sources/Bodies. Each source uses up to 2 Common, 1 Rare and 1 Legendary candidate slots and then applies each Material Catalog chance/quantity.
+- **Creature Harvest** — Creature Type, coarse manual Profile, and independent Sources/Bodies. Each source uses four candidate slot pools — Common, Common/Uncommon, Rare, and Very Rare/Legendary — and then applies each Material Catalog chance/quantity.
 - **Environment Gathering** — Biome, Resource and Abundance. Biome/Resource pools are derived from Material Catalog metadata. Nature/Survival checks remain GM adjudication outside the module.
 - Materials remain eligible even when no current Recipe consumes them.
 - The same `MaterialGenerationService` is intended to power the future Token HUD / Item Piles corpse destination.

@@ -12,11 +12,33 @@ export class MaterialCatalogService {
   static PACK_LABEL = "Crafting Core — Materials";
   static PACK_ID = `world.${this.PACK_NAME}`;
 
+  static RARITIES = Object.freeze(["common", "uncommon", "rare", "veryRare", "legendary"]);
+
+  static RARITY_LABELS = Object.freeze({
+    common: "Common",
+    uncommon: "Uncommon",
+    rare: "Rare",
+    veryRare: "Very Rare",
+    legendary: "Legendary"
+  });
+
   static DEFAULT_ECONOMY = Object.freeze({
     common: { price: 5, denomination: "gp", chance: 65 },
+    uncommon: { price: 25, denomination: "gp", chance: 35 },
     rare: { price: 100, denomination: "gp", chance: 15 },
+    veryRare: { price: 500, denomination: "gp", chance: 5 },
     legendary: { price: 1000, denomination: "gp", chance: 1 }
   });
+
+
+  static rarityLabel(rarity) {
+    return this.RARITY_LABELS[String(rarity)] ?? this.#title(rarity);
+  }
+
+  static rarityOptions({ includeAll=false }={}) {
+    const options = this.RARITIES.map(value => ({ value, label: this.rarityLabel(value) }));
+    return includeAll ? [{ value: "all", label: "All Rarities" }, ...options] : options;
+  }
 
   static registerSettings() {
     game.settings.register(MODULE_ID, SETTINGS.MATERIAL_ECONOMY, {
@@ -130,7 +152,11 @@ export class MaterialCatalogService {
       .map(item => [String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? ""), item])
       .filter(([id]) => id));
 
-    if (ensureComplete && this.definitions().some(entry => !map.has(entry.id))) {
+    const missingCurated = this.definitions().some(entry => !map.has(entry.id));
+    const staleCurated = docs.some(item => item.getFlag(MODULE_ID, FLAGS.MATERIAL_MANAGED)
+      && Number(item.getFlag(MODULE_ID, FLAGS.MATERIAL_CATALOG_VERSION) ?? 0) !== MATERIAL_CATALOG_VERSION);
+
+    if (ensureComplete && (missingCurated || staleCurated)) {
       pack = (await this.sync()).pack;
       docs = await pack.getDocuments();
       map = new Map(docs
@@ -551,7 +577,7 @@ export class MaterialCatalogService {
 
   static #normalizeMaterial(material) {
     const family = ["creature", "gathering", "profession"].includes(String(material.family)) ? String(material.family) : "profession";
-    const rarity = ["common", "rare", "legendary"].includes(String(material.rarity)) ? String(material.rarity) : "common";
+    const rarity = this.RARITIES.includes(String(material.rarity)) ? String(material.rarity) : "common";
     const normalized = {
       ...material,
       id: String(material.id),
@@ -560,6 +586,7 @@ export class MaterialCatalogService {
       family,
       nature: String(material.nature || (family === "profession" ? "trade" : "other")).trim().toLowerCase(),
       rarity,
+      rarityLabel: this.rarityLabel(rarity),
       chance: Math.clamp(Number(material.chance) || 0, 0, 100),
       quantity: String(material.quantity || "1").trim() || "1",
       tags: this.#array(material.tags),

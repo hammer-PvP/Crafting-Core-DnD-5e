@@ -32,7 +32,7 @@ export class MaterialEditorApp extends HandlebarsApplicationMixin(ApplicationV2)
         { value: "gathering", label: "Gathering", selected: material.family === "gathering" },
         { value: "profession", label: "Profession & Trade", selected: material.family === "profession" }
       ],
-      rarityOptions: ["common", "rare", "legendary"].map(value => ({ value, label: value[0].toUpperCase()+value.slice(1), selected: material.rarity === value }))
+      rarityOptions: MaterialCatalogService.rarityOptions().map(option => ({ ...option, selected: material.rarity === option.value }))
     };
   }
 

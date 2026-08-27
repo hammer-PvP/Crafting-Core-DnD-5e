@@ -39,7 +39,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
         { value: "gathering", label: "Gathering", selected: this.filters.family === "gathering" },
         { value: "profession", label: "Profession & Trade", selected: this.filters.family === "profession" }
       ],
-      rarityOptions: ["all","common","rare","legendary"].map(value => ({ value, label: value === "all" ? "All Rarities" : value[0].toUpperCase()+value.slice(1), selected: this.filters.rarity === value }))
+      rarityOptions: MaterialCatalogService.rarityOptions({ includeAll: true }).map(option => ({ ...option, selected: this.filters.rarity === option.value }))
     };
   }
 
@@ -118,7 +118,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     event?.preventDefault?.();
     const root = this.element;
     const economy = {};
-    for (const rarity of ["common", "rare", "legendary"]) {
+    for (const rarity of MaterialCatalogService.RARITIES) {
       economy[rarity] = {
         price: Number(root.querySelector(`[name="economy.${rarity}.price"]`)?.value ?? 0),
         chance: Number(root.querySelector(`[name="economy.${rarity}.chance"]`)?.value ?? 0),

@@ -179,7 +179,7 @@ For every source independently:
 
 1. Resolve eligible Creature Harvest materials from the Material Catalog.
 2. Apply coarse profile anatomy filtering when configured.
-3. Randomly select up to two Common, one Rare, and one Legendary material slots.
+3. Resolve up to four unique candidate slots from the current rarity pools: Common; Common/Uncommon; Rare; Very Rare/Legendary.
 4. Roll each selected material's configured drop chance silently.
 5. Roll each successful material's configured quantity formula silently.
 6. Aggregate duplicate material IDs across all sources.
@@ -210,3 +210,18 @@ Manual generation is now explicitly split into two phases:
 2. A destination materializes that accepted result. The v0.0.5 manual destination is `createWorldLoot(result)`, which creates a world Item folder. Future Token HUD / Item Piles integration should call the same `generate()` method and provide a corpse/pile destination instead of duplicating generation rules.
 
 This boundary also guarantees that `Create Loot Folder` persists the exact preview the GM saw; materialization must never reroll the request.
+
+## v0.0.6 Five-Tier Rarity / Harvest Slot Foundation
+
+Material rarity is normalized to the D&D5e keys `common`, `uncommon`, `rare`, `veryRare`, and `legendary`. The Material Catalog owns display labels and default economy/chance values for those keys.
+
+Creature Harvest intentionally remains capped at four automatic material candidates per source. `MaterialGenerationService.DEFAULT_HARVEST_SLOTS` defines the default candidate pools:
+
+1. `[common]`
+2. `[common, uncommon]`
+3. `[rare]`
+4. `[veryRare, legendary]`
+
+Each slot selects at most one material and a material cannot be selected twice for the same source. Anatomy/profile filtering happens before slot construction, so a profile may legitimately produce fewer than four candidates when its body plan excludes available materials.
+
+The final high-tier pool is deliberately shared between Very Rare and Legendary in the manual generator. The future Actor Scanner / precise Harvest Profile layer can narrow that slot based on the specific creature without changing the four-slot result contract.
