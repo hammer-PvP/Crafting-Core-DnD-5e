@@ -1,5 +1,13 @@
 # Crafting Core (DnD 5e)
 
+## v0.0.10 highlights
+
+- Manual Creature Harvest now supports multi-select **Essence Affinity** and the same Arcane-vs-specific Essence economy as scanned Actors.
+- Optional **Item Piles** bridge adds explicit GM-only corpse harvesting from the Token HUD using Foundry's small item-bag icon.
+- Harvesting is never automatic on death. Dead Tokens must be explicitly harvested, individually or as a controlled multi-selection.
+- A Token requires a Harvest Profile from the latest Scan/Reanalyze and can only be harvested once.
+
+
 ## v0.0.9 — Essence Harvest Layer
 
 This release adds the magical fifth slot to scanned Harvest Profiles while preserving the live-validated four-slot creature-material model. Pinpoint Overrides remain separate and continue to be controlled explicitly by the GM.

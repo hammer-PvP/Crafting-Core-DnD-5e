@@ -9,6 +9,8 @@ import { MaterialCatalogService } from "./services/material-catalog-service.mjs"
 import { MaterialGenerationService } from "./services/material-generation-service.mjs";
 import { HarvestProfileService } from "./services/harvest-profile-service.mjs";
 import { CraftingCoreSettingsApp } from "./apps/crafting-core-settings-app.mjs";
+import { TokenHarvestService } from "./services/token-harvest-service.mjs";
+import { ItemPilesBridge } from "./services/item-piles-bridge.mjs";
 
 let app = null;
 let generatorApp = null;
@@ -47,7 +49,9 @@ const API = {
   get recipes() { return game.user?.isGM ? RecipeService : undefined; },
   get materials() { return game.user?.isGM ? MaterialCatalogService : undefined; },
   get generation() { return game.user?.isGM ? MaterialGenerationService : undefined; },
-  get harvestProfiles() { return game.user?.isGM ? HarvestProfileService : undefined; }
+  get harvestProfiles() { return game.user?.isGM ? HarvestProfileService : undefined; },
+  get tokenHarvest() { return game.user?.isGM ? TokenHarvestService : undefined; },
+  get itemPiles() { return game.user?.isGM ? ItemPilesBridge : undefined; }
 };
 
 function exposeApi() {
@@ -82,6 +86,7 @@ Hooks.once("init", () => {
   runInitStep("D&D5e Character Sheet patch", () => CharacterSheetService.patchDnd5eSheet());
   runInitStep("Character Sheet hooks", () => CharacterSheetService.installHooks());
   runInitStep("Knowledge Item hooks", () => KnowledgeItemService.installHooks());
+  runInitStep("Token Harvest hooks", () => TokenHarvestService.installHooks());
 
   console.info(`${MODULE_TITLE} | Initialized.`);
 });

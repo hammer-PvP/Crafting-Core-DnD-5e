@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.0.10 — Manual Essence & Token Harvest
+
+- Added multi-select **Essence Affinity** controls to manual Creature Harvest generation.
+- Manual Creature Harvest now uses the same Essence roll engine as scanned Actor Harvest Profiles:
+  - selected affinities: 45% Arcane Essence / 55% split across selected specific Essences;
+  - no selected affinity: 50% Arcane Essence / 50% no Essence.
+- Added optional Item Piles integration through its public API; Crafting Core still loads normally without Item Piles.
+- Added a GM-only Token HUD **Generate Harvest** control using Foundry's `icons/svg/item-bag.svg`.
+- Token Harvest is always explicit/manual; no automatic harvesting is performed on death.
+- Supports batch harvesting of multiple controlled Tokens from one Token HUD action.
+- Each Token is evaluated independently and must be dead, have a resolvable profile from the last Scan/Reanalyze, and not already be harvested.
+- Successful Token Harvest converts the corpse Token into an Item Pile and injects the generated Crafting Core materials.
+- Empty harvests are recorded without creating an empty Item Pile, preventing reroll farming.
+- Added per-Token harvested metadata to prevent generating the same corpse repeatedly.
+- Added robust profile resolution for live/imported Actors using UUID, compendium source metadata, preserved source id, and a conservative unique identity fallback.
+- Missing material Items abort Token Harvest cleanly and direct the GM to run Materials → Create / Sync Materials instead of partially consuming the corpse.
+
 ## 0.0.9
 
 Essence Harvest Layer development release.

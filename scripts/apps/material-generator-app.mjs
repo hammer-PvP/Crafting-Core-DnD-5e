@@ -24,7 +24,8 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
     sources: 1,
     biome: "forest",
     resource: "flora",
-    abundance: "normal"
+    abundance: "normal",
+    essenceAffinities: []
   };
 
   lastResult = null;
@@ -48,6 +49,8 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
       biomeOptions: biomes.map(value => ({ value, label: MaterialGenerationService.title(value), selected: value === this.state.biome })),
       resourceOptions: resources.map(value => ({ value, label: MaterialCatalogService.categoryLabel("gathering", value), selected: value === this.state.resource })),
       abundanceOptions: Object.entries(MaterialGenerationService.ABUNDANCE).map(([value, row]) => ({ value, label: row.label, selected: value === this.state.abundance })),
+      essenceOptions: MaterialGenerationService.essenceAffinityOptions(this.state.essenceAffinities),
+      hasEssenceAffinities: this.state.essenceAffinities.length > 0,
       lastResult: this.lastResult ? {
         ...this.lastResult,
         empty: !this.lastResult.items?.length,
@@ -70,6 +73,10 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
       });
     }
     root.querySelector('[name="sources"]')?.addEventListener("change", () => this.#syncState());
+    root.querySelectorAll('[name="essenceAffinity"]').forEach(input => input.addEventListener("change", () => {
+      this.#syncState();
+      this.lastResult = null;
+    }));
     root.querySelector('[data-action="generate"]')?.addEventListener("click", event => this.#generate(event));
     root.querySelector('[data-action="generate-again"]')?.addEventListener("click", event => this.#generate(event));
     root.querySelector('[data-action="create-folder"]')?.addEventListener("click", event => this.#createFolder(event));
@@ -87,12 +94,13 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
     }
     const sources = root.querySelector('[name="sources"]');
     if (sources) this.state.sources = Math.clamp(Math.floor(Number(sources.value) || 1), 1, 100);
+    this.state.essenceAffinities = [...root.querySelectorAll('[name="essenceAffinity"]:checked')].map(input => input.value);
   }
 
   #request() {
     return this.state.source === "environment"
       ? { source: "environment", biome: this.state.biome, resource: this.state.resource, abundance: this.state.abundance }
-      : { source: "creature", nature: this.state.nature, profileId: this.state.profileId, sources: this.state.sources };
+      : { source: "creature", nature: this.state.nature, profileId: this.state.profileId, sources: this.state.sources, essenceAffinities: [...this.state.essenceAffinities] };
   }
 
   async #generate(event) {

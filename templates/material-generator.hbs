@@ -18,6 +18,18 @@
         <label><span>Profile</span><select name="profileId">{{#each profileOptions}}<option value="{{id}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
         <label><span>Sources / Bodies</span><input type="number" name="sources" min="1" max="100" step="1" value="{{state.sources}}"></label>
       </div>
+      <div class="cc-essence-affinity-fieldset">
+        <div class="cc-essence-affinity-heading">
+          <span>Essence Affinity</span>
+          <small>Select one or more affinities. With none selected, each source has a 50% Arcane Essence fallback.</small>
+        </div>
+        <div class="cc-essence-affinity-options">
+          {{#each essenceOptions}}
+          <label class="cc-essence-check"><input type="checkbox" name="essenceAffinity" value="{{value}}" {{#if selected}}checked{{/if}}><span>{{label}}</span></label>
+          {{/each}}
+        </div>
+        <small class="cc-essence-affinity-note">With affinities selected: 45% Arcane / 55% split between selected specific Essences.</small>
+      </div>
       {{/if}}
 
       {{#if isEnvironment}}

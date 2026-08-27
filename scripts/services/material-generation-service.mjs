@@ -21,6 +21,33 @@ export class MaterialGenerationService {
     Object.freeze(["veryRare", "legendary"])
   ]);
 
+  static ESSENCE_AFFINITIES = Object.freeze([
+    "acid", "cold", "fire", "force", "lightning", "necrotic", "poison", "psychic", "radiant", "thunder"
+  ]);
+
+  static essenceAffinityOptions(selected=[]) {
+    const chosen = new Set((selected ?? []).map(value => String(value).toLowerCase()));
+    return this.ESSENCE_AFFINITIES.map(value => ({
+      value,
+      label: value === "fire" ? "Fire" : this.title(value),
+      selected: chosen.has(value)
+    }));
+  }
+
+  static essenceSlotForAffinities(affinities=[]) {
+    const unique = [...new Set((affinities ?? [])
+      .map(value => String(value).toLowerCase())
+      .filter(value => this.ESSENCE_AFFINITIES.includes(value)))];
+    return {
+      enabled: true,
+      quantity: "1",
+      arcaneChance: unique.length ? 45 : 50,
+      specificChance: unique.length ? 55 : 0,
+      emptyChance: unique.length ? 0 : 50,
+      affinities: unique.map(type => ({ type, weight: 1, score: 1 }))
+    };
+  }
+
   static ABUNDANCE = Object.freeze({
     scarce: { label: "Scarce", maxTypes: 1, quantityFactor: 1 },
     normal: { label: "Normal", maxTypes: 2, quantityFactor: 1 },
@@ -67,11 +94,15 @@ export class MaterialGenerationService {
     });
   }
 
-  static async generateCreature({ nature, profileId="general", sources=1 }={}) {
+  static async generateCreature({ nature, profileId="general", sources=1, essenceAffinities=[] }={}) {
     if (!game.user?.isGM) throw new Error("Only a GM can generate Crafting Core materials.");
-    const entries = (await MaterialCatalogService.allEntries())
+    const allEntries = await MaterialCatalogService.allEntries();
+    const entries = allEntries
       .filter(entry => entry.family === "creature" && entry.nature === String(nature));
     if (!entries.length) throw new Error("No Creature Harvest materials are configured for that creature type.");
+
+    const essences = new Map(allEntries.filter(entry => entry.family === "essence").map(entry => [String(entry.nature), entry]));
+    const essenceSlot = this.essenceSlotForAffinities(essenceAffinities);
 
     const profiles = this.profilesFor(nature);
     const profile = profiles.find(p => p.id === profileId) ?? profiles[0];
@@ -99,6 +130,8 @@ export class MaterialGenerationService {
         }
         sourceAttempts.push({ materialId: material.id, name: material.name, rarity: material.rarity, rarityLabel: material.rarityLabel, chance: material.chance, success, quantity });
       }
+      const essenceAttempt = await this.#rollEssenceSlot(essenceSlot, essences, aggregate);
+      if (essenceAttempt) sourceAttempts.push(essenceAttempt);
       attempts.push(sourceAttempts);
     }
 
@@ -110,6 +143,8 @@ export class MaterialGenerationService {
       profileId: profile.id,
       profileLabel: profile.label,
       sources: count,
+      essenceAffinities: essenceSlot.affinities.map(row => row.type),
+      essenceMode: essenceSlot.affinities.length ? "specific" : "arcane-fallback",
       items: [...aggregate.values()],
       attempts
     };

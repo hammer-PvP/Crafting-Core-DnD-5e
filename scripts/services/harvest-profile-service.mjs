@@ -72,6 +72,52 @@ export class HarvestProfileService {
     return this.list().find(profile => profile.sourceUuid === String(uuid)) ?? null;
   }
 
+  /** Resolve the last scanned Harvest Profile for a live/world/synthetic Actor. */
+  static getForActor(actor) {
+    if (!actor) return null;
+    const profiles = this.list();
+    const candidates = new Set();
+    const add = value => {
+      const text = String(value ?? "").trim();
+      if (text) candidates.add(text);
+    };
+
+    add(actor.uuid);
+    add(actor._stats?.compendiumSource);
+    add(actor._source?._stats?.compendiumSource);
+    add(actor.flags?.core?.sourceId);
+    try { add(actor.getFlag?.("core", "sourceId")); } catch (_) {}
+
+    for (const uuid of candidates) {
+      const direct = profiles.find(profile => profile.sourceUuid === uuid);
+      if (direct) return direct;
+    }
+
+    // Compendium imports commonly preserve the original document id even when
+    // their runtime UUID becomes Actor.<id>. Only accept a unique source-id hit.
+    const actorId = String(actor.id ?? "");
+    if (actorId) {
+      const byId = profiles.filter(profile => String(profile.sourceId ?? "") === actorId);
+      if (byId.length === 1) return byId[0];
+    }
+
+    // Conservative last resort for imported copies whose source metadata was
+    // stripped: same name + D&D5e creature type + CR, and only when unique.
+    const name = String(actor.name ?? "").trim().toLowerCase();
+    const creatureType = String(foundry.utils.getProperty(actor, "system.details.type.value") ?? "").toLowerCase();
+    const cr = Number(foundry.utils.getProperty(actor, "system.details.cr") ?? 0) || 0;
+    const identity = profiles.filter(profile =>
+      String(profile.name ?? "").trim().toLowerCase() === name
+      && String(profile.creatureType ?? "").toLowerCase() === creatureType
+      && Number(profile.cr ?? 0) === cr
+    );
+    return identity.length === 1 ? identity[0] : null;
+  }
+
+  static isActorHarvestEligible(actor) {
+    return Boolean(this.getForActor(actor));
+  }
+
   static async save(profile) {
     if (!game.user?.isGM) throw new Error("Only a GM can edit Harvest Profiles.");
     const normalized = this.#normalizeProfile(profile);

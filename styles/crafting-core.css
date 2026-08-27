@@ -700,3 +700,67 @@
 @media (min-width: 901px) {
   .cc-profile-row { grid-template-columns: 44px minmax(0,1fr) 138px 104px; }
 }
+
+/* v0.0.10 — manual Essence affinity + Token Harvest */
+.cc-essence-affinity-fieldset {
+  display: grid;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 1px solid rgba(201, 164, 87, .20);
+  background: rgba(255, 255, 255, .018);
+}
+.cc-essence-affinity-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cc-essence-affinity-heading > span {
+  font-size: 9px;
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: .04em;
+  opacity: .76;
+}
+.cc-essence-affinity-heading > small,
+.cc-essence-affinity-note {
+  opacity: .58;
+  font-size: 10px;
+}
+.cc-essence-affinity-options {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+.cc-essence-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid rgba(255,255,255,.06);
+  background: rgba(255,255,255,.025);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.cc-essence-check input { margin: 0; }
+.cc-essence-check span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+
+#token-hud .crafting-core-harvest-control img,
+.token-hud .crafting-core-harvest-control img {
+  width: 18px;
+  height: 18px;
+  display: block;
+  margin: auto;
+  object-fit: contain;
+}
+#token-hud .crafting-core-harvest-control.cc-disabled,
+.token-hud .crafting-core-harvest-control.cc-disabled {
+  opacity: .38;
+  pointer-events: none;
+}
+
+@media (max-width: 680px) {
+  .cc-essence-affinity-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cc-essence-affinity-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
+}
