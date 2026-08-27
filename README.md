@@ -1,5 +1,13 @@
 # Crafting Core (DnD 5e)
 
+## v0.0.11 highlights
+
+- Creature Scanner Harvest Profiles are vertically scrollable again.
+- Token Harvest can now normalize NPC equipment against up to four ordered Item Compendiums before exposing the corpse to players.
+- **Normalize from Compendiums** replaces monster/stat-block versions of physical gear with clean base Items; unmatched gear and non-physical mechanics are discarded.
+- Alternate handling modes remain available for GMs who prefer to remove all existing NPC Items, keep only physical gear, or keep everything.
+- Crafting Core Harvest, Essence, and Pinpoint materials are added after normalization and are never removed by the gear cleanup pass.
+
 ## v0.0.10 highlights
 
 - Manual Creature Harvest now supports multi-select **Essence Affinity** and the same Arcane-vs-specific Essence economy as scanned Actors.

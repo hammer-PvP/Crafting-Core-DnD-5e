@@ -72,12 +72,6 @@ export class TokenHarvestService {
       this.active.add(tokenId);
       try {
         const result = await MaterialGenerationService.generate({ source: "profile", profile: check.profile, sources: 1 });
-        if (!result.items?.length) {
-          await this.#markHarvested(check.tokenDocument, check.profile, result, { empty: true });
-          summary.empty++;
-          continue;
-        }
-
         const pile = await ItemPilesBridge.turnTokenIntoLootPile(check.tokenDocument, result);
         if (!pile.converted) {
           await this.#markHarvested(check.tokenDocument, check.profile, result, { empty: true });

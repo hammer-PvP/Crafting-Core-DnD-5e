@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.0.11 — Scanner Scroll & Corpse Gear Normalization
+
+- Restored vertical scrolling in the Creature Scanner Harvest Profile list after the v0.0.10 layout reorganization.
+- Added **Existing NPC Loot** handling to `Game Settings → Crafting Core` for Token Harvest.
+- Added **Normalize from Compendiums** mode with up to four ordered D&D5e Item Compendiums. The first safe match wins, allowing setups such as PHB 2024 first and SRD 5.2 as fallback.
+- Normalization resolves conservatively by matching Item type plus stable identifier/base-item metadata first, then exact normalized name. No fuzzy matching is used for unique monster gear.
+- Physical NPC gear that resolves is replaced with a fresh base copy from the configured Compendium while preserving the corpse stack quantity. NPC-tuned damage/activities/effects are therefore not carried into player loot.
+- Natural weapons, Features, Spells, Actions represented as non-physical Items, and any physical Item without a safe base match are removed from normalized corpse loot.
+- Added alternate GM modes: **Remove All Existing Items**, **Keep Physical Gear / Remove Natural & Features**, and **Keep All Existing Items**.
+- Gear cleanup runs on the converted Item Pile before Crafting Core Harvest materials are injected. Generated Harvest, Essence, and Pinpoint materials are never normalized away.
+- Empty material Harvest can still produce an Item Pile when normalized/retained physical gear remains on the corpse.
+
 ## v0.0.10 — Manual Essence & Token Harvest
 
 - Added multi-select **Essence Affinity** controls to manual Creature Harvest generation.

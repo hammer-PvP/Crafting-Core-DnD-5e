@@ -1,5 +1,6 @@
 import { MODULE_ID } from "../constants.mjs";
 import { MaterialCatalogService } from "./material-catalog-service.mjs";
+import { GearNormalizationService } from "./gear-normalization-service.mjs";
 
 /**
  * Narrow optional bridge to Item Piles. Crafting Core never requires Item Piles
@@ -62,8 +63,13 @@ export class ItemPilesBridge {
   static async turnTokenIntoLootPile(tokenDocument, result) {
     const api = this.api();
     if (!tokenDocument) throw new Error("A Token is required to create an Item Pile.");
-    const payload = await this.buildItemPayload(result);
-    if (!payload.length) return { converted: false, added: [], empty: true };
+
+    // Snapshot/resolve the corpse inventory while the original NPC Actor is still
+    // intact. The source Actor itself is not edited by Crafting Core.
+    const gearPlan = await GearNormalizationService.buildPlan(tokenDocument.actor);
+    const harvestPayload = await this.buildItemPayload(result);
+    const hasGearOutput = GearNormalizationService.hasOutput(gearPlan);
+    if (!harvestPayload.length && !hasGearOutput) return { converted: false, added: [], empty: true, gearPlan };
 
     // The public API accepts Token / TokenDocument objects. Preserve the corpse
     // token itself rather than creating a second chest beside it.
@@ -72,8 +78,16 @@ export class ItemPilesBridge {
     }
 
     const refreshed = canvas?.tokens?.get?.(tokenDocument.id)?.document ?? tokenDocument;
-    const added = await api.addItems(refreshed, payload);
-    return { converted: true, added: added ?? [], empty: false, tokenDocument: refreshed };
+    const normalized = await GearNormalizationService.applyToPile(refreshed, gearPlan, api);
+    const added = harvestPayload.length ? await api.addItems(refreshed, harvestPayload) : [];
+    return {
+      converted: true,
+      added: added ?? [],
+      empty: !harvestPayload.length && !hasGearOutput,
+      tokenDocument: refreshed,
+      gearPlan,
+      normalized
+    };
   }
 
   static #isItemPile(tokenDocument, api) {

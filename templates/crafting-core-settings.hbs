@@ -4,7 +4,7 @@
     <div>
       <span class="cc-kicker">Game Settings</span>
       <h1>Crafting Core</h1>
-      <p>Choose which installed content sources the Creature Scanner is allowed to read. Crafting Core automatically discovers Actor Compendiums inside each selected source.</p>
+      <p>Configure Creature Scanner content sources and how physical NPC gear is normalized before a harvested corpse becomes an Item Pile.</p>
     </div>
   </header>
 
@@ -41,10 +41,54 @@
         {{/each}}
       </div>
     </section>
+
+    <section class="cc-form-card cc-settings-source-card cc-normalization-card">
+      <div class="cc-card-heading">
+        <div><span class="cc-kicker">Token Harvest</span><h3>Existing NPC Loot</h3></div>
+        <small><strong>{{normalizationSelectedCount}}</strong> / {{normalizationMaxSources}} normalization packs</small>
+      </div>
+      <div class="cc-normalization-mode-row">
+        <label>
+          <span>Loot Handling</span>
+          <select name="normalization.mode">
+            <option value="normalize" {{#if normalizeMode}}selected{{/if}}>Normalize from Compendiums</option>
+            <option value="remove-all" {{#if removeAllMode}}selected{{/if}}>Remove All Existing Items</option>
+            <option value="filter" {{#if filterMode}}selected{{/if}}>Keep Physical Gear / Remove Natural & Features</option>
+            <option value="keep-all" {{#if keepAllMode}}selected{{/if}}>Keep All Existing Items</option>
+          </select>
+        </label>
+        <p class="cc-settings-hint">Normalize is the recommended mode: every physical candidate is replaced by the first safe base match found below. Unmatched items are deleted; generated Harvest, Essence and Pinpoints are always kept.</p>
+      </div>
+      <div class="cc-settings-source-actions">
+        <button type="button" data-action="clear-normalization"><i class="fa-solid fa-xmark"></i> Clear Sources</button>
+        <span class="cc-normalization-limit"><i class="fa-solid fa-arrow-down-1-9"></i> Priority is top to bottom · max {{normalizationMaxSources}}</span>
+      </div>
+      <div class="cc-settings-source-list cc-normalization-source-list">
+        {{#each normalizationSources}}
+        <article class="cc-settings-source-row {{#if selected}}selected{{/if}}">
+          <label>
+            <input type="checkbox" name="normalization.source" value="{{collection}}" {{#if selected}}checked{{/if}} {{#if disabled}}disabled{{/if}}>
+            <span>
+              <strong>{{label}}</strong>
+              <small>{{detail}}</small>
+              <small class="cc-settings-pack-summary">{{collection}}</small>
+            </span>
+          </label>
+          <div class="cc-settings-source-priority">
+            {{#if selected}}<strong>#{{priority}}</strong>{{else}}<span>—</span>{{/if}}
+            <button type="button" data-action="normalization-up" data-collection="{{collection}}" {{#unless selected}}disabled{{/unless}} data-tooltip="Higher priority"><i class="fa-solid fa-chevron-up"></i></button>
+            <button type="button" data-action="normalization-down" data-collection="{{collection}}" {{#unless selected}}disabled{{/unless}} data-tooltip="Lower priority"><i class="fa-solid fa-chevron-down"></i></button>
+          </div>
+        </article>
+        {{else}}
+        <div class="cc-scanner-empty"><i class="fa-solid fa-box-archive"></i><strong>No compatible Item Compendiums found.</strong><span>Normalization will remove unmatched NPC items and keep only generated Crafting Core loot.</span></div>
+        {{/each}}
+      </div>
+    </section>
   </div>
 
   <footer class="cc-settings-footer">
-    <span class="cc-note"><i class="fa-solid fa-circle-info"></i> Source priority is stored now and can be used when equivalent creatures exist in multiple content sources.</span>
+    <span class="cc-note"><i class="fa-solid fa-circle-info"></i> Normalization never fuzzy-matches unique monster gear: identifier/base item or exact name + Item type only.</span>
     <button type="button" class="cc-primary-action" data-action="save-settings"><i class="fa-solid fa-floppy-disk"></i> Save</button>
   </footer>
 </section>

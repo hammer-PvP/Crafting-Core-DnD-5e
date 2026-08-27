@@ -764,3 +764,45 @@
   .cc-essence-affinity-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cc-essence-affinity-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
 }
+
+/* v0.0.11 — Scanner scroll restoration & Gear Normalization settings */
+.cc-scanner-profiles {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.crafting-core-settings-app .cc-settings-body {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  overflow: hidden;
+}
+.crafting-core-settings-app .cc-settings-source-card {
+  height: auto;
+  min-height: 0;
+  margin: 0;
+}
+.cc-normalization-mode-row {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(240px, .72fr) minmax(0, 1.28fr);
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 7px;
+}
+.cc-normalization-mode-row .cc-settings-hint { margin: 0; }
+.cc-normalization-limit {
+  margin-left: auto;
+  align-self: center;
+  opacity: .58;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.cc-normalization-limit > i { color: var(--cc-gold); margin-right: 4px; }
+.cc-normalization-source-list { min-height: 92px; }
+
+@media (max-width: 720px) {
+  .crafting-core-settings-app .cc-settings-body { overflow-y: auto; grid-template-rows: auto auto; }
+  .crafting-core-settings-app .cc-settings-source-card { min-height: 300px; }
+  .cc-normalization-mode-row { grid-template-columns: 1fr; }
+}

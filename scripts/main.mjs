@@ -11,6 +11,7 @@ import { HarvestProfileService } from "./services/harvest-profile-service.mjs";
 import { CraftingCoreSettingsApp } from "./apps/crafting-core-settings-app.mjs";
 import { TokenHarvestService } from "./services/token-harvest-service.mjs";
 import { ItemPilesBridge } from "./services/item-piles-bridge.mjs";
+import { GearNormalizationService } from "./services/gear-normalization-service.mjs";
 
 let app = null;
 let generatorApp = null;
@@ -51,7 +52,8 @@ const API = {
   get generation() { return game.user?.isGM ? MaterialGenerationService : undefined; },
   get harvestProfiles() { return game.user?.isGM ? HarvestProfileService : undefined; },
   get tokenHarvest() { return game.user?.isGM ? TokenHarvestService : undefined; },
-  get itemPiles() { return game.user?.isGM ? ItemPilesBridge : undefined; }
+  get itemPiles() { return game.user?.isGM ? ItemPilesBridge : undefined; },
+  get gearNormalization() { return game.user?.isGM ? GearNormalizationService : undefined; }
 };
 
 function exposeApi() {
@@ -75,10 +77,11 @@ Hooks.once("init", () => {
   runInitStep("recipe settings", () => RecipeService.registerSettings());
   runInitStep("material settings", () => MaterialCatalogService.registerSettings());
   runInitStep("harvest profile settings", () => HarvestProfileService.registerSettings());
+  runInitStep("gear normalization settings", () => GearNormalizationService.registerSettings());
   runInitStep("Crafting Core settings menu", () => game.settings.registerMenu(MODULE_ID, "craftingCoreSettings", {
     name: "Crafting Core",
     label: "Configure Crafting Core",
-    hint: "Configure the Actor content sources used by the Crafting Core Creature Scanner.",
+    hint: "Configure Creature Scanner sources and Token Harvest gear normalization.",
     icon: "fa-solid fa-hammer",
     type: CraftingCoreSettingsApp,
     restricted: true
