@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.13
+
+- Reworked Token Harvest → Item Piles into a transactional create-first pipeline.
+- The complete final corpse payload (preserved/normalized gear + Crafting Core Harvest + Essence + Pinpoint) is resolved before any canvas Token is changed.
+- New loot piles are created already populated at the corpse position; the original corpse Token is deleted only after successful pile creation.
+- Eliminated the empty intermediate pile that could trigger Item Piles' delete-when-empty behavior during Normalize/Remove All.
+- Gear normalization now uses Item Piles `getActorItems()` on the original corpse as the authoritative transferable inventory, so filtered NPC features never enter normalization.
+- If pile creation fails, the original corpse remains untouched. If deleting the original corpse fails after creation, Crafting Core rolls back the newly-created pile.
+
 ## v0.0.12 — Item Piles Cleanup Hotfix
 
 - Fixed Token Harvest failures in **Normalize from Compendiums** and **Remove All Existing Items** caused by passing filtered NPC Feature IDs (for example `Amphibious`, `Abduct`, or similar stat-block Items) to Item Piles `removeItems()`.

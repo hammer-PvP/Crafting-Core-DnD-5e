@@ -206,3 +206,8 @@ The top-level Crafting Core Compendium folder defaults to `#8de901` and Crafting
 ## Item Piles
 
 Crafting Core works without Item Piles. Item Piles remains the planned/recommended integration for the complete corpse-harvesting experience. Crafting Core will roll the same material result already used by the manual generator; Item Piles will only provide the individual corpse/container destination.
+
+
+## v0.0.13 Token Harvest transaction safety
+
+Token Harvest now creates a fully-populated Item Pile at the corpse position before deleting the original Token. This avoids transient empty piles during gear normalization and keeps the original corpse intact whenever pile creation fails.

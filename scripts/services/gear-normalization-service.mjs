@@ -1,11 +1,11 @@
 import { MODULE_ID, SETTINGS } from "../constants.mjs";
 
 /**
- * Normalize physical NPC gear before a corpse is exposed as an Item Pile.
+ * Build the physical NPC gear payload that a corpse Item Pile should receive.
  *
- * The source Actor is treated as read-only. A snapshot/plan is built before the
- * Token is converted; cleanup and replacement happen only after Item Piles has
- * taken over the corpse Token.
+ * The source Actor is always read-only. Token Harvest resolves the final payload
+ * before any canvas document is changed, so normalization never needs to empty
+ * and repopulate an already-created Item Pile.
  */
 export class GearNormalizationService {
   static MAX_SOURCES = 4;
@@ -71,13 +71,26 @@ export class GearNormalizationService {
       .sort((a, b) => a.label.localeCompare(b.label, game.i18n.lang));
   }
 
-  static async buildPlan(actor) {
+  static async buildPlan(actor, { sourceItems=null }={}) {
     const { mode, sources } = this.config();
-    const sourceItems = [...(actor?.items?.contents ?? actor?.items ?? [])].filter(Boolean);
+    const actorItems = [...(actor?.items?.contents ?? actor?.items ?? [])].filter(Boolean);
+    const suppliedItems = Array.isArray(sourceItems)
+      ? sourceItems.map(row => row?.item ?? row).filter(Boolean)
+      : null;
+    // When Token Harvest is creating an Item Pile, Item Piles' own
+    // getActorItems() result is the authority for what the corpse can
+    // actually transfer. Falling back to actor.items keeps this service
+    // useful outside that pipeline.
+    sourceItems = suppliedItems ?? actorItems;
     const retained = sourceItems.filter(item => this.isPhysicalCandidate(item) && !this.isNaturalWeapon(item));
     const removedByFilter = sourceItems.filter(item => !retained.includes(item));
 
     if (mode !== this.MODES.NORMALIZE) {
+      const output = mode === this.MODES.KEEP_ALL
+        ? this.payloadFromItems(sourceItems)
+        : mode === this.MODES.FILTER
+          ? this.payloadFromItems(retained)
+          : [];
       return {
         mode,
         sources,
@@ -85,7 +98,8 @@ export class GearNormalizationService {
         retainedItemCount: retained.length,
         removedItemCount: removedByFilter.length,
         normalized: [],
-        unmatched: []
+        unmatched: [],
+        output
       };
     }
 
@@ -129,67 +143,34 @@ export class GearNormalizationService {
       retainedItemCount: retained.length,
       removedItemCount: removedByFilter.length,
       normalized,
-      unmatched
+      unmatched,
+      output: normalized.map(row => ({ item: foundry.utils.deepClone(row.item), quantity: row.quantity }))
     };
   }
 
   static hasOutput(plan) {
-    if (!plan) return false;
-    if (plan.mode === this.MODES.KEEP_ALL) return Number(plan.sourceItemCount) > 0;
-    if (plan.mode === this.MODES.FILTER) return Number(plan.retainedItemCount) > 0;
-    if (plan.mode === this.MODES.NORMALIZE) return Array.isArray(plan.normalized) && plan.normalized.length > 0;
-    return false;
+    return Array.isArray(plan?.output) && plan.output.length > 0;
   }
 
-  static async applyToPile(tokenDocument, plan, api) {
-    if (!tokenDocument || !plan) return { removed: 0, added: 0, unmatched: 0 };
-
-    // Item Piles can keep filtered NPC Features on the converted Actor while
-    // excluding them from the pile's transferable inventory. removeItems()
-    // validates against the transferable set, so actor.items is NOT a valid
-    // source of IDs after conversion. Always ask Item Piles for the live pile
-    // inventory and only remove IDs it currently exposes as transferable.
-    const pileItems = await this.transferablePileItems(tokenDocument, api);
-    let removeIds = [];
-    if (plan.mode === this.MODES.REMOVE_ALL || plan.mode === this.MODES.NORMALIZE) {
-      removeIds = pileItems.map(item => this.itemId(item)).filter(Boolean);
-    } else if (plan.mode === this.MODES.FILTER) {
-      removeIds = pileItems
-        .filter(item => !this.isPhysicalCandidate(item) || this.isNaturalWeapon(item))
-        .map(item => this.itemId(item)).filter(Boolean);
-    }
-
-    if (removeIds.length) {
-      if (typeof api.removeItems !== "function") throw new Error("The active Item Piles version does not expose removeItems(), which is required for Crafting Core loot cleanup.");
-      await api.removeItems(tokenDocument, removeIds);
-    }
-
-    let added = [];
-    if (plan.mode === this.MODES.NORMALIZE && plan.normalized?.length) {
-      const payload = plan.normalized.map(row => ({ item: row.item, quantity: row.quantity }));
-      added = await api.addItems(tokenDocument, payload) ?? [];
-    }
-
-    return {
-      removed: removeIds.length,
-      added: Array.isArray(added) ? added.length : 0,
-      unmatched: plan.unmatched?.length ?? 0
-    };
+  static outputPayload(plan) {
+    return Array.isArray(plan?.output)
+      ? plan.output.map(row => ({ item: foundry.utils.deepClone(row.item), quantity: Math.max(1, Math.floor(Number(row.quantity) || 1)) }))
+      : [];
   }
 
-  static async transferablePileItems(tokenDocument, api) {
-    if (typeof api?.getActorItems !== "function") {
-      throw new Error("The active Item Piles version does not expose getActorItems(), which is required for safe corpse loot cleanup.");
-    }
-    const raw = await api.getActorItems(tokenDocument);
-    if (!Array.isArray(raw)) return [];
-    return raw
-      .map(row => row?.item ?? row)
-      .filter(item => Boolean(item) && Boolean(this.itemId(item)));
-  }
-
-  static itemId(item) {
-    return String(item?.id ?? item?._id ?? "").trim();
+  static payloadFromItems(items=[]) {
+    return (items ?? []).map(item => {
+      const data = item?.toObject ? item.toObject() : foundry.utils.deepClone(item);
+      if (!data) return null;
+      delete data._id;
+      delete data._stats;
+      delete data.folder;
+      data.sort = 0;
+      data.system ??= {};
+      const quantity = this.quantityOf(item);
+      data.system.quantity = 1;
+      return { item: data, quantity };
+    }).filter(Boolean);
   }
 
   static isPhysicalCandidate(item) {
