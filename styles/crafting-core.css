@@ -701,6 +701,7 @@
   .cc-profile-row { grid-template-columns: 44px minmax(0,1fr) 138px 104px; }
 }
 
+
 /* v0.0.10 — manual Essence affinity + Token Harvest */
 .cc-essence-affinity-fieldset {
   display: grid;
@@ -746,13 +747,13 @@
 .cc-essence-check input { margin: 0; }
 .cc-essence-check span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
 
-#token-hud .crafting-core-harvest-control img,
-.token-hud .crafting-core-harvest-control img {
-  width: 18px;
-  height: 18px;
+#token-hud .crafting-core-harvest-control > i,
+.token-hud .crafting-core-harvest-control > i {
   display: block;
   margin: auto;
-  object-fit: contain;
+  font-size: 16px;
+  line-height: 1;
+  color: #fff;
 }
 #token-hud .crafting-core-harvest-control.cc-disabled,
 .token-hud .crafting-core-harvest-control.cc-disabled {
@@ -764,6 +765,7 @@
   .cc-essence-affinity-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cc-essence-affinity-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
 }
+
 
 /* v0.0.11 — Scanner scroll restoration & Gear Normalization settings */
 .cc-scanner-profiles {

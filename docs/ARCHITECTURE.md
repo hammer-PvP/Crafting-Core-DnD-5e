@@ -241,15 +241,3 @@ Strong incorporeal classification is reserved for explicit identity or structura
 Creature Scanner source selection is stored in the hidden world `scannerSources` setting and edited through the GM-only Crafting Core settings submenu. Installed module/system sources are grouped at package level and automatically resolve only compatible Actor Compendiums. World Actor Compendiums are exposed individually. Selected order is retained as source priority metadata; complex duplicate-creature reconciliation is intentionally deferred.
 
 Generic family materials may have no anatomy requirements and act as coherent fallback candidates after anatomy-specific materials. v0.0.8 adds Funerary Dust and Necrotic Essence to broaden Undead fallback coverage without introducing fake body tags.
-
-## v0.0.10 — Manual Essence / Explicit Token Harvest
-
-Manual Creature Harvest now supplies an explicit Essence-affinity input to the same runtime Essence roll used by scanned Actor profiles. The UI does not infer affinities from Creature Type: the GM may select zero, one, or several supported damage affinities. Zero selections use the 50% Arcane / 50% empty fallback; selected affinities use 45% Arcane / 55% specific, with the specific share divided among selected affinities.
-
-Token Harvest is an optional, GM-only output path and never hooks Actor death to perform work automatically. The Token HUD control is only exposed while Item Piles is active and at least one applicable controlled Token is dead, unharvested, and resolves to a stored Harvest Profile from the last Scan/Reanalyze. A batch action evaluates every controlled Token independently.
-
-The generation pipeline remains shared:
-
-`Harvest Profile -> MaterialGenerationService -> generated result -> ItemPilesBridge`
-
-`ItemPilesBridge` is intentionally narrow and optional. It converts the corpse Token using Item Piles' public API and then injects material stacks. A successful or legitimately empty harvest writes per-Token Crafting Core metadata so the same corpse cannot be rerolled. Failed integrations do not mark the Token harvested, allowing the GM to correct the problem and retry.

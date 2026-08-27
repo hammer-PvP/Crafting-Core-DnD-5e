@@ -1,34 +1,14 @@
 # Crafting Core (DnD 5e)
 
-## v0.0.15 highlights
+## v0.0.16 — Stable-baseline Token Harvest rebuild
 
-- Token Harvest now passes Item Piles a native multi-Item creation payload with stack quantities embedded directly in each Item document.
-- The original corpse is not removed until every planned normalized/preserved gear Item plus Crafting Core Harvest/Essence/Pinpoint Item is confirmed on the new pile.
-- Incomplete asynchronous Item Piles creation rolls back the new pile and preserves the corpse for a safe retry.
-- Corpse piles keep the original Token artwork even when the final loot contains only one Item; Item Piles single-item icon/name/scale overrides are disabled for Crafting Core corpses.
-- Existing NPC Loot modes remain: Normalize from Compendiums, Remove All, Keep Physical / Remove Natural & Features, and Keep All.
+This build deliberately returns to the stable v0.0.9 codebase and reapplies only the proven Token Harvest features plus a new atomic gear-normalization path. Token Harvest is always an explicit GM action; Crafting Core never generates corpse loot automatically on death.
 
-## v0.0.12 highlights
+When Item Piles is active, an eligible dead Token with a stored Harvest Profile receives a compact loot-bag control in the Token HUD. Multiple controlled corpses can be harvested in one action, with each Token resolving its own last scanned/reanalyzed profile.
 
-- Hotfixes Item Piles corpse cleanup so post-conversion removal uses Item Piles' transferable inventory rather than raw NPC Embedded Item IDs.
-- Fixes `removeItems()` failures caused by filtered stat-block Features such as Amphibious/Abduct.
-- Keeps generated Harvest, Essence, and Pinpoint injection fail-soft even if third-party gear cleanup encounters an unexpected edge case.
+Existing NPC loot can be kept, filtered, removed, or normalized against up to four ordered Item Compendiums. The normalization pipeline never uses fuzzy matching and never separately empties an Item Pile: Item Piles performs removal of its transferable inventory and addition of the final normalized gear + Crafting Core materials in one `addItems(..., { removeExistingActorItems: true })` transaction.
 
-### v0.0.11 normalization foundation
-
-- Creature Scanner Harvest Profiles are vertically scrollable again.
-- Token Harvest can now normalize NPC equipment against up to four ordered Item Compendiums before exposing the corpse to players.
-- **Normalize from Compendiums** replaces monster/stat-block versions of physical gear with clean base Items; unmatched gear and non-physical mechanics are discarded.
-- Alternate handling modes remain available for GMs who prefer to remove all existing NPC Items, keep only physical gear, or keep everything.
-- Crafting Core Harvest, Essence, and Pinpoint materials are added after normalization and are never removed by the gear cleanup pass.
-
-## v0.0.10 highlights
-
-- Manual Creature Harvest now supports multi-select **Essence Affinity** and the same Arcane-vs-specific Essence economy as scanned Actors.
-- Optional **Item Piles** bridge adds explicit GM-only corpse harvesting from the Token HUD using Foundry's small item-bag icon.
-- Harvesting is never automatic on death. Dead Tokens must be explicitly harvested, individually or as a controlled multi-selection.
-- A Token requires a Harvest Profile from the latest Scan/Reanalyze and can only be harvested once.
-
+Manual Creature Harvest also includes the Essence Affinity controls introduced in the original v0.0.10 line.
 
 ## v0.0.9 — Essence Harvest Layer
 
@@ -214,8 +194,3 @@ The top-level Crafting Core Compendium folder defaults to `#8de901` and Crafting
 ## Item Piles
 
 Crafting Core works without Item Piles. Item Piles remains the planned/recommended integration for the complete corpse-harvesting experience. Crafting Core will roll the same material result already used by the manual generator; Item Piles will only provide the individual corpse/container destination.
-
-
-## v0.0.14 Token Harvest transaction safety
-
-Token Harvest now creates a fully-populated Item Pile at the corpse position before deleting the original Token. This avoids transient empty piles during gear normalization and keeps the original corpse intact whenever pile creation fails.

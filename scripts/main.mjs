@@ -81,7 +81,7 @@ Hooks.once("init", () => {
   runInitStep("Crafting Core settings menu", () => game.settings.registerMenu(MODULE_ID, "craftingCoreSettings", {
     name: "Crafting Core",
     label: "Configure Crafting Core",
-    hint: "Configure Creature Scanner sources and Token Harvest gear normalization.",
+    hint: "Configure Creature Scanner sources and Token Harvest loot handling.",
     icon: "fa-solid fa-hammer",
     type: CraftingCoreSettingsApp,
     restricted: true

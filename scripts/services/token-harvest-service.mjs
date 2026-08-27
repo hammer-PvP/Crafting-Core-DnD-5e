@@ -72,6 +72,12 @@ export class TokenHarvestService {
       this.active.add(tokenId);
       try {
         const result = await MaterialGenerationService.generate({ source: "profile", profile: check.profile, sources: 1 });
+        if (!result.items?.length) {
+          await this.#markHarvested(check.tokenDocument, check.profile, result, { empty: true });
+          summary.empty++;
+          continue;
+        }
+
         const pile = await ItemPilesBridge.turnTokenIntoLootPile(check.tokenDocument, result);
         if (!pile.converted) {
           await this.#markHarvested(check.tokenDocument, check.profile, result, { empty: true });
@@ -145,7 +151,7 @@ export class TokenHarvestService {
     control.dataset.tooltip = targets.length > 1 ? "Generate Harvest for Selected" : "Generate Harvest";
     control.setAttribute("role", "button");
     control.setAttribute("tabindex", "0");
-    control.innerHTML = '<img src="icons/svg/item-bag.svg" alt="">';
+    control.innerHTML = '<i class="fa-solid fa-bag-shopping" inert></i>';
 
     const activate = async event => {
       event.preventDefault();
