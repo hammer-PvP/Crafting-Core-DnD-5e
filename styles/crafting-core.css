@@ -808,3 +808,54 @@
   .crafting-core-settings-app .cc-settings-source-card { min-height: 300px; }
   .cc-normalization-mode-row { grid-template-columns: 1fr; }
 }
+
+/* v0.0.17 — Optional normalization homebrew */
+.cc-normalization-homebrew {
+  flex: 0 0 auto;
+  margin: 2px 0 8px;
+  padding: 8px 9px;
+  border: 1px solid color-mix(in srgb, var(--cc-gold) 34%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cc-gold) 5%, rgba(0, 0, 0, .16));
+}
+.cc-normalization-homebrew-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.cc-normalization-homebrew-title > span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--cc-gold);
+}
+.cc-normalization-homebrew-title > span > i { margin-right: 5px; }
+.cc-normalization-homebrew-title > small {
+  opacity: .58;
+  font-size: 9px;
+  text-align: right;
+}
+.cc-homebrew-toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  cursor: pointer;
+}
+.cc-homebrew-toggle input { margin: 2px 0 0; }
+.cc-homebrew-toggle > span { min-width: 0; }
+.cc-homebrew-toggle strong {
+  display: block;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.cc-homebrew-toggle small {
+  display: block;
+  margin-top: 2px;
+  opacity: .68;
+  font-size: 9px;
+  line-height: 1.35;
+}

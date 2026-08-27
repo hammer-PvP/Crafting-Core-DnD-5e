@@ -20,6 +20,7 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
   selected = [];
   normalizationSelected = [];
   normalizationMode = GearNormalizationService.MODES.NORMALIZE;
+  firearmsToCrossbows = false;
   initialized = false;
 
   async _prepareContext() {
@@ -30,6 +31,7 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
       const normalization = GearNormalizationService.config();
       this.normalizationSelected = normalization.sources;
       this.normalizationMode = normalization.mode;
+      this.firearmsToCrossbows = Boolean(normalization?.homebrew?.firearmsToCrossbows);
       this.initialized = true;
     }
 
@@ -77,7 +79,8 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
         sourceKind: pack.sourceKind
       })),
       normalizationSelectedCount: this.normalizationSelected.length,
-      normalizationMaxSources: GearNormalizationService.MAX_SOURCES
+      normalizationMaxSources: GearNormalizationService.MAX_SOURCES,
+      firearmsToCrossbows: this.firearmsToCrossbows
     };
   }
 
@@ -113,6 +116,9 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
     root.querySelector('[name="normalization.mode"]')?.addEventListener("change", event => {
       this.normalizationMode = String(event.currentTarget.value || GearNormalizationService.MODES.NORMALIZE);
       this.render({ force: true });
+    });
+    root.querySelector('[name="normalization.firearmsToCrossbows"]')?.addEventListener("change", event => {
+      this.firearmsToCrossbows = Boolean(event.currentTarget.checked);
     });
     root.querySelectorAll('[name="normalization.source"]').forEach(input => input.addEventListener("change", event => {
       const id = String(event.currentTarget.value);
@@ -168,7 +174,11 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
     button.disabled = true;
     try {
       await HarvestProfileService.saveScannerSourceConfig(this.selected);
-      await GearNormalizationService.saveConfig({ mode: this.normalizationMode, sources: this.normalizationSelected });
+      await GearNormalizationService.saveConfig({
+        mode: this.normalizationMode,
+        sources: this.normalizationSelected,
+        homebrew: { firearmsToCrossbows: this.firearmsToCrossbows }
+      });
       ui.notifications.info(`Crafting Core settings saved. ${this.selected.length} Scanner source${this.selected.length === 1 ? "" : "s"}; ${this.normalizationSelected.length} Gear Normalization source${this.normalizationSelected.length === 1 ? "" : "s"}.`);
       await this.close();
     } catch (error) {

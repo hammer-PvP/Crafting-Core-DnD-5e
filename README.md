@@ -1,5 +1,17 @@
 # Crafting Core (DnD 5e)
 
+## v0.0.17 — Immersive Corpse Loot hotfix
+
+v0.0.17 keeps the user-validated v0.0.16 baseline and fixes the two immersive Existing NPC Loot modes without refactoring the stable **Remove All** or **Keep All** paths.
+
+**Keep Physical Gear / Remove Natural & Features** now trusts the physical gear that Item Piles already transferred to the corpse. Crafting Core removes only disallowed live transferable entries and appends Harvest; it does not re-add the retained gear, preventing duplicate Holy Maces, Scimitars, armor, and similar items.
+
+**Normalize from Compendiums** now performs an explicit live replacement. After Item Piles converts the corpse with `deleteWhenEmpty` temporarily disabled, Crafting Core reads the current transferable pile Items, snapshots them for rollback, removes those current pile IDs, and inserts exactly one final payload containing normalized gear plus Harvest. This avoids equivalent-item stacking such as Light Hammer x3 becoming x6 while still allowing stat-block variants such as Holy Mace to become their official base Mace.
+
+### Optional Homebrew — Firearms to Crossbows
+
+Game Settings → Crafting Core → Existing NPC Loot now includes **Convert Firearms to Random Crossbows**. It is **off by default** and only affects **Normalize from Compendiums**. When enabled, each Firearm stack is replaced by one randomly selected **Hand Crossbow**, **Light Crossbow**, or **Heavy Crossbow** from the configured normalization sources. The original stack quantity is preserved. If the first random choice is unavailable, the other crossbows are tried before the firearm is treated as unmatched.
+
 ## v0.0.16 — Stable-baseline Token Harvest rebuild
 
 This build deliberately returns to the stable v0.0.9 codebase and reapplies only the proven Token Harvest features plus a new atomic gear-normalization path. Token Harvest is always an explicit GM action; Crafting Core never generates corpse loot automatically on death.

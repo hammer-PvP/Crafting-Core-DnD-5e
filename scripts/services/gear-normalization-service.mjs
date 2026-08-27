@@ -16,6 +16,11 @@ export class GearNormalizationService {
     KEEP_ALL: "keep-all"
   });
   static PHYSICAL_ITEM_TYPES = new Set(["weapon", "equipment", "consumable", "tool", "loot", "container"]);
+  static CROSSBOW_TARGETS = Object.freeze([
+    Object.freeze({ key: "hand-crossbow", label: "Hand Crossbow", aliases: Object.freeze(["hand-crossbow", "handcrossbow"]) }),
+    Object.freeze({ key: "light-crossbow", label: "Light Crossbow", aliases: Object.freeze(["light-crossbow", "lightcrossbow"]) }),
+    Object.freeze({ key: "heavy-crossbow", label: "Heavy Crossbow", aliases: Object.freeze(["heavy-crossbow", "heavycrossbow"]) })
+  ]);
   static indexCache = new Map();
 
   static registerSettings() {
@@ -24,7 +29,7 @@ export class GearNormalizationService {
       scope: "world",
       config: false,
       type: Object,
-      default: { mode: this.MODES.NORMALIZE, sources: [] }
+      default: { mode: this.MODES.NORMALIZE, sources: [], homebrew: { firearmsToCrossbows: false } }
     });
   }
 
@@ -34,16 +39,24 @@ export class GearNormalizationService {
     const mode = validModes.has(String(raw.mode)) ? String(raw.mode) : this.MODES.NORMALIZE;
     const available = new Set(this.availableItemPacks().map(pack => pack.collection));
     const sources = [...new Set((Array.isArray(raw.sources) ? raw.sources : []).map(String).filter(id => available.has(id)))].slice(0, this.MAX_SOURCES);
-    return { mode, sources };
+    const homebrew = {
+      // Accept the short-lived top-level shape as a defensive migration path.
+      firearmsToCrossbows: Boolean(raw?.homebrew?.firearmsToCrossbows ?? raw?.firearmsToCrossbows ?? false)
+    };
+    return { mode, sources, homebrew };
   }
 
-  static async saveConfig({ mode=this.MODES.NORMALIZE, sources=[] }={}) {
+  static async saveConfig({ mode=this.MODES.NORMALIZE, sources=[], homebrew={} }={}) {
     if (!game.user?.isGM) throw new Error("Only a GM can configure loot normalization.");
     const validModes = new Set(Object.values(this.MODES));
     const normalizedMode = validModes.has(String(mode)) ? String(mode) : this.MODES.NORMALIZE;
     const available = new Set(this.availableItemPacks().map(pack => pack.collection));
     const normalizedSources = [...new Set((sources ?? []).map(String).filter(id => available.has(id)))].slice(0, this.MAX_SOURCES);
-    const value = { mode: normalizedMode, sources: normalizedSources };
+    const value = {
+      mode: normalizedMode,
+      sources: normalizedSources,
+      homebrew: { firearmsToCrossbows: Boolean(homebrew?.firearmsToCrossbows) }
+    };
     await game.settings.set(MODULE_ID, SETTINGS.GEAR_NORMALIZATION, value);
     this.indexCache.clear();
     Hooks.callAll(`${MODULE_ID}.gearNormalizationChanged`, foundry.utils.deepClone(value));
@@ -115,7 +128,7 @@ export class GearNormalizationService {
   }
 
   static async buildPlan(actor, { sourceItems=null }={}) {
-    const { mode, sources } = this.config();
+    const { mode, sources, homebrew } = this.config();
     const actorItems = [...(actor?.items?.contents ?? actor?.items ?? [])].filter(Boolean);
     const suppliedItems = Array.isArray(sourceItems)
       ? sourceItems.map(row => row?.item ?? row).filter(Boolean)
@@ -137,6 +150,7 @@ export class GearNormalizationService {
       return {
         mode,
         sources,
+        homebrew,
         sourceItemCount: sourceItems.length,
         retainedItemCount: retained.length,
         removedItemCount: removedByFilter.length,
@@ -149,9 +163,17 @@ export class GearNormalizationService {
     const normalized = [];
     const unmatched = [];
     for (const item of retained) {
-      const match = await this.resolveBaseItem(item, sources);
+      const firearmConversion = Boolean(homebrew?.firearmsToCrossbows) && this.isFirearm(item);
+      const match = firearmConversion
+        ? await this.resolveRandomCrossbow(sources)
+        : await this.resolveBaseItem(item, sources);
       if (!match) {
-        unmatched.push({ id: String(item.id ?? ""), name: String(item.name ?? ""), type: String(item.type ?? "") });
+        unmatched.push({
+          id: String(item.id ?? ""),
+          name: String(item.name ?? ""),
+          type: String(item.type ?? ""),
+          reason: firearmConversion ? "firearm-crossbow-unavailable" : "no-safe-base-match"
+        });
         continue;
       }
       const data = match.document.toObject();
@@ -168,20 +190,25 @@ export class GearNormalizationService {
         normalizedAt: Date.now(),
         normalizedFromName: String(item.name ?? ""),
         normalizedFromType: String(item.type ?? ""),
-        normalizationSource: match.collection
+        normalizationSource: match.collection,
+        homebrewFirearmConversion: firearmConversion,
+        firearmConvertedTo: firearmConversion ? String(match.target?.label ?? match.document?.name ?? "Crossbow") : ""
       };
       normalized.push({
         item: data,
         quantity: this.quantityOf(item),
         sourceItemId: String(item.id ?? ""),
         sourceItemName: String(item.name ?? ""),
-        collection: match.collection
+        collection: match.collection,
+        homebrewFirearmConversion: firearmConversion,
+        convertedTo: firearmConversion ? String(match.target?.label ?? match.document?.name ?? "Crossbow") : ""
       });
     }
 
     return {
       mode,
       sources,
+      homebrew,
       sourceItemCount: sourceItems.length,
       retainedItemCount: retained.length,
       removedItemCount: removedByFilter.length,
@@ -233,6 +260,67 @@ export class GearNormalizationService {
   static quantityOf(item) {
     const quantity = Number(foundry.utils.getProperty(item, "system.quantity"));
     return Number.isFinite(quantity) && quantity > 0 ? Math.max(1, Math.floor(quantity)) : 1;
+  }
+
+  /**
+   * Optional table homebrew: treat D&D5e Firearm weapons as abstract salvage
+   * and replace the whole stack with one randomly selected official crossbow.
+   * The Firearm property (`fir`) is the primary structured signal in D&D5e.
+   */
+  static isFirearm(item) {
+    if (String(item?.type ?? "").toLowerCase() !== "weapon") return false;
+
+    const rawProperties = foundry.utils.getProperty(item, "system.properties");
+    const properties = rawProperties instanceof Set
+      ? [...rawProperties]
+      : Array.isArray(rawProperties)
+        ? rawProperties
+        : (rawProperties && typeof rawProperties === "object" ? Object.keys(rawProperties).filter(key => rawProperties[key]) : []);
+    if (properties.map(value => String(value).toLowerCase()).includes("fir")) return true;
+
+    const typeValue = String(foundry.utils.getProperty(item, "system.type.value") ?? "");
+    const mappedType = String(globalThis.CONFIG?.DND5E?.weaponTypeMap?.[typeValue] ?? "").toLowerCase();
+    const typeLabel = String(globalThis.CONFIG?.DND5E?.weaponTypes?.[typeValue] ?? "").toLowerCase();
+    if (mappedType === "firearm" || typeLabel.includes("firearm") || this.normalizeKey(typeValue).includes("firearm")) return true;
+
+    const identity = [
+      foundry.utils.getProperty(item, "system.identifier"),
+      foundry.utils.getProperty(item, "system.type.baseItem"),
+      item?.name
+    ].map(value => this.normalizeKey(value)).filter(Boolean).join(" ");
+    return /(?:^|[- ])(?:firearm|pistol|musket|revolver|rifle|shotgun|blunderbuss)(?:$|[- ])/.test(identity);
+  }
+
+  static async resolveRandomCrossbow(sources=this.config().sources) {
+    const targets = [...this.CROSSBOW_TARGETS];
+    // Fisher-Yates gives each configured crossbow an equal first-choice chance.
+    for (let i = targets.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [targets[i], targets[j]] = [targets[j], targets[i]];
+    }
+    for (const target of targets) {
+      const match = await this.resolveSpecificWeapon(target, sources);
+      if (match) return { ...match, target };
+    }
+    return null;
+  }
+
+  static async resolveSpecificWeapon(target, sources=this.config().sources) {
+    const aliases = new Set((target?.aliases ?? []).map(value => this.normalizeKey(value)).filter(Boolean));
+    if (!aliases.size) return null;
+    for (const collection of (sources ?? []).slice(0, this.MAX_SOURCES)) {
+      const pack = game.packs.get(collection);
+      if (!pack || String(pack.documentName ?? pack.metadata?.type ?? "") !== "Item") continue;
+      const index = await this.indexForPack(pack);
+      const entry = index.find(row => row.type === "weapon" && (
+        aliases.has(row.identifier) || aliases.has(row.baseItem) || aliases.has(row.name)
+      ));
+      if (!entry) continue;
+      const document = await pack.getDocument(entry.id);
+      if (!document || this.isNaturalWeapon(document)) continue;
+      return { collection: String(collection), document, entry };
+    }
+    return null;
   }
 
   static async resolveBaseItem(item, sources=this.config().sources) {

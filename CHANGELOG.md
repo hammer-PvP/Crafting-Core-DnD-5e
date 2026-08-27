@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.17
+
+Immersive corpse-loot normalization hotfix + optional Firearm homebrew.
+
+- Kept v0.0.16 as the stable baseline and left its live-validated **Remove All Existing Items** and **Keep All Existing Items** paths unchanged.
+- Fixed duplicate physical gear in **Keep Physical Gear / Remove Natural & Features**. Crafting Core no longer re-adds gear that Item Piles already transferred; it removes only disallowed live transferable entries and appends generated Harvest.
+- Fixed duplicate equivalent gear in **Normalize from Compendiums** (for example Light Hammer, Hide Armor, Scimitar, Leather Armor, or Mace stacks). Normalize now snapshots the live transferable corpse inventory, removes those current Item Piles IDs while `deleteWhenEmpty` is temporarily disabled, and then inserts exactly one final normalized gear + Harvest payload.
+- Normalization still resolves every source Item before corpse conversion and preserves the source stack quantity. Unique/stat-block gear that resolves to a different base item continues to be replaced normally (for example Holy Mace -> Mace).
+- Added rollback protection for the two immersive mutation paths: if the post-cleanup add fails, Crafting Core attempts to restore the exact transferable corpse snapshot before invoking the existing Item Piles revert fallback.
+- Added optional **Homebrew — Convert Firearms to Random Crossbows**, disabled by default and applied only in Normalize mode. A detected Firearm stack becomes one randomly chosen Hand Crossbow, Light Crossbow, or Heavy Crossbow stack, resolved through the configured normalization compendiums in priority order.
+- Firearm detection prefers structured D&D5e weapon data (including the Firearm property) with conservative weapon-only identity fallbacks. If the first randomly selected crossbow is unavailable, the other two are tried before the firearm is discarded as unmatched.
+- The Firearm homebrew preserves the original stack quantity and marks converted loot with Crafting Core normalization metadata.
+
 ## 0.0.16
 
 Stable-baseline Token Harvest rebuild.

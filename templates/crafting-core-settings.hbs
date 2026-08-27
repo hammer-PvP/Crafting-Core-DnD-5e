@@ -59,6 +59,19 @@
         </label>
         <p class="cc-settings-hint">Normalize is the recommended mode: every physical candidate is replaced by the first safe base match found below. Unmatched items are deleted; generated Harvest, Essence and Pinpoints are always kept.</p>
       </div>
+      <div class="cc-normalization-homebrew">
+        <div class="cc-normalization-homebrew-title">
+          <span><i class="fa-solid fa-flask"></i> Optional Homebrew</span>
+          <small>Applies only to Normalize from Compendiums</small>
+        </div>
+        <label class="cc-homebrew-toggle">
+          <input type="checkbox" name="normalization.firearmsToCrossbows" {{#if firearmsToCrossbows}}checked{{/if}}>
+          <span>
+            <strong>Convert Firearms to Random Crossbows</strong>
+            <small>Any weapon identified as a Firearm is replaced by a randomly selected Hand Crossbow, Light Crossbow, or Heavy Crossbow resolved from the normalization sources. The whole stack uses one result.</small>
+          </span>
+        </label>
+      </div>
       <div class="cc-settings-source-actions">
         <button type="button" data-action="clear-normalization"><i class="fa-solid fa-xmark"></i> Clear Sources</button>
         <span class="cc-normalization-limit"><i class="fa-solid fa-arrow-down-1-9"></i> Priority is top to bottom · max {{normalizationMaxSources}}</span>

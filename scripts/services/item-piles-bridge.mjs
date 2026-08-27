@@ -5,10 +5,11 @@ import { GearNormalizationService } from "./gear-normalization-service.mjs";
 /**
  * Optional Item Piles bridge used by explicit GM Token Harvest.
  *
- * v0.0.16 deliberately keeps the known-good v0.0.10 flow: convert the existing
- * corpse Token, then use Item Piles' transactional addItems() API. Loot cleanup
- * is performed by addItems({ removeExistingActorItems: true }) so the pile is
- * never emptied in a separate removeItems() call.
+ * v0.0.17 keeps the known-good corpse conversion + addItems() flow while
+ * making the two immersive gear modes deterministic. Remove All and Keep All
+ * retain their v0.0.16 behavior. Normalize explicitly replaces the live
+ * transferable pile inventory; Keep Physical only removes disallowed live pile
+ * items and never re-adds gear that Item Piles already transferred.
  */
 export class ItemPilesBridge {
   static MODULE_ID = "item-piles";
@@ -76,7 +77,7 @@ export class ItemPilesBridge {
     // active D&D5e Item Piles integration and prevents Crafting Core from ever
     // trying to normalize stat-block-only embedded Items such as Grab.
     const transferable = typeof api.getActorItems === "function"
-      ? api.getActorItems(tokenDocument)
+      ? await api.getActorItems(tokenDocument)
       : [...(actor.items?.contents ?? actor.items ?? [])];
 
     // Resolve all normalization matches before Item Piles changes the Token.
@@ -110,37 +111,64 @@ export class ItemPilesBridge {
     if (!refreshed?.actor) throw new Error(`Item Piles converted ${actor.name}, but the corpse Token no longer has an Actor.`);
 
     const mode = gearPlan.mode;
-    let payload = harvestPayload;
-    let replaceExisting = false;
-
-    if (mode === GearNormalizationService.MODES.NORMALIZE) {
-      payload = [...GearNormalizationService.outputPayload(gearPlan), ...harvestPayload];
-      replaceExisting = true;
-    } else if (mode === GearNormalizationService.MODES.REMOVE_ALL) {
-      payload = [...harvestPayload];
-      replaceExisting = true;
-    } else if (mode === GearNormalizationService.MODES.FILTER) {
-      payload = [...GearNormalizationService.outputPayload(gearPlan), ...harvestPayload];
-      replaceExisting = true;
-    } else {
-      // KEEP_ALL intentionally leaves the Item Piles-filtered corpse inventory
-      // untouched and only appends Crafting Core materials.
-      payload = [...harvestPayload];
-      replaceExisting = false;
-    }
-
+    let payload = [];
     let added = [];
     let transactionComplete = false;
+    let inventoryStrategy = "append-harvest";
+    let rollbackPayload = null;
+    let inventoryMutated = false;
+
     try {
-      if (payload.length || replaceExisting) {
-        added = await api.addItems(refreshed, payload, { removeExistingActorItems: replaceExisting }) ?? [];
+      if (mode === GearNormalizationService.MODES.NORMALIZE) {
+        // Item Piles may stack an equivalent normalized Item onto the original
+        // corpse gear before removeExistingActorItems is applied. Avoid that
+        // ambiguity completely: snapshot the *live* transferable pile Items,
+        // remove those current IDs while deleteWhenEmpty=false, then add exactly
+        // one final payload (normalized gear + Harvest).
+        const liveItems = await this.#transferablePileItems(refreshed, api);
+        rollbackPayload = GearNormalizationService.payloadFromItems(liveItems);
+        await this.#removePileItems(refreshed, api, liveItems);
+        inventoryMutated = liveItems.length > 0;
+        payload = [...GearNormalizationService.outputPayload(gearPlan), ...harvestPayload];
+        inventoryStrategy = "replace-transferable-with-normalized";
+        if (payload.length) added = await api.addItems(refreshed, payload) ?? [];
+      } else if (mode === GearNormalizationService.MODES.REMOVE_ALL) {
+        // v0.0.16 live-validated stable path. Do not refactor it in this patch.
+        payload = [...harvestPayload];
+        inventoryStrategy = "item-piles-remove-existing";
+        added = await api.addItems(refreshed, payload, { removeExistingActorItems: true }) ?? [];
+      } else if (mode === GearNormalizationService.MODES.FILTER) {
+        // Item Piles already transferred the physical corpse gear. Re-adding the
+        // same gear is what produced Holy Mace/Scimitar/Armor duplication in
+        // v0.0.16. Only remove live transferable entries that violate the mode,
+        // then append Harvest.
+        const liveItems = await this.#transferablePileItems(refreshed, api);
+        rollbackPayload = GearNormalizationService.payloadFromItems(liveItems);
+        const disallowed = liveItems.filter(item => !GearNormalizationService.isPhysicalCandidate(item) || GearNormalizationService.isNaturalWeapon(item));
+        await this.#removePileItems(refreshed, api, disallowed);
+        inventoryMutated = disallowed.length > 0;
+        payload = [...harvestPayload];
+        inventoryStrategy = "keep-live-physical-plus-harvest";
+        if (payload.length) added = await api.addItems(refreshed, payload) ?? [];
+      } else {
+        // KEEP_ALL live-validated stable path: preserve exactly what Item Piles
+        // transferred and append only generated Crafting Core materials.
+        payload = [...harvestPayload];
+        inventoryStrategy = "keep-all-plus-harvest";
+        if (payload.length) added = await api.addItems(refreshed, payload) ?? [];
       }
       transactionComplete = true;
     } catch (error) {
-      // addItems() is the transaction boundary. If it fails after we converted
-      // the corpse, revert the Token back to a normal NPC whenever the active
-      // Item Piles version exposes the public rollback API. The source Actor
-      // inventory was never edited directly by Crafting Core.
+      // If Normalize/Keep Physical changed the live pile before addItems failed,
+      // restore the exact transferable snapshot first. This keeps the corpse
+      // recoverable even when the third-party transaction fails mid-flight.
+      if (inventoryMutated && rollbackPayload) {
+        try { await this.#restoreTransferableSnapshot(refreshed, api, rollbackPayload); }
+        catch (restoreError) {
+          console.error(`${MODULE_ID} | Could not restore the pre-normalization corpse inventory for ${actor.name}.`, restoreError);
+        }
+      }
+
       if (typeof api.revertTokensFromItemPiles === "function") {
         try {
           await api.revertTokensFromItemPiles([refreshed], { tokenSettings: foundry.utils.deepClone(originalAppearance) });
@@ -154,8 +182,8 @@ export class ItemPilesBridge {
       try { await refreshed.update(foundry.utils.deepClone(originalAppearance)); }
       catch (error) { console.warn(`${MODULE_ID} | Could not restore corpse appearance for ${actor.name}.`, error); }
 
-      // Restore the Item Piles default auto-delete behavior after the atomic
-      // inventory rewrite. Failure here is non-fatal to the generated loot.
+      // Restore the Item Piles default auto-delete behavior after the inventory
+      // operation. Failure here is non-fatal to generated loot.
       if (transactionComplete && typeof api.updateItemPile === "function" && defaultDeleteWhenEmpty !== undefined) {
         try { await api.updateItemPile(refreshed, { deleteWhenEmpty: defaultDeleteWhenEmpty }); }
         catch (error) { console.warn(`${MODULE_ID} | Could not restore Item Piles deleteWhenEmpty default for ${actor.name}.`, error); }
@@ -163,7 +191,7 @@ export class ItemPilesBridge {
     }
 
     const elapsed = Math.round((globalThis.performance?.now?.() ?? Date.now()) - startedAt);
-    console.debug(`${MODULE_ID} | Token Harvest Item Piles transaction for ${actor.name}: ${elapsed} ms; mode=${mode}; planned=${payload.length}; added=${Array.isArray(added) ? added.length : 0}.`);
+    console.debug(`${MODULE_ID} | Token Harvest Item Piles transaction for ${actor.name}: ${elapsed} ms; mode=${mode}; strategy=${inventoryStrategy}; planned=${payload.length}; added=${Array.isArray(added) ? added.length : 0}.`);
 
     return {
       converted: true,
@@ -171,9 +199,37 @@ export class ItemPilesBridge {
       empty: false,
       tokenDocument: refreshed,
       gearPlan,
-      replaceExisting,
+      inventoryStrategy,
       elapsedMs: elapsed
     };
+  }
+
+  static async #transferablePileItems(tokenDocument, api) {
+    if (typeof api.getActorItems !== "function") {
+      throw new Error("The active Item Piles version does not expose getActorItems(), which is required for safe immersive corpse gear handling.");
+    }
+    const raw = await api.getActorItems(tokenDocument);
+    if (!Array.isArray(raw)) return [];
+    return raw.map(row => row?.item ?? row).filter(item => Boolean(item) && Boolean(this.#itemId(item)));
+  }
+
+  static async #removePileItems(tokenDocument, api, items=[]) {
+    const ids = [...new Set((items ?? []).map(item => this.#itemId(item)).filter(Boolean))];
+    if (!ids.length) return [];
+    if (typeof api.removeItems !== "function") {
+      throw new Error("The active Item Piles version does not expose removeItems(), which is required for safe immersive corpse gear handling.");
+    }
+    return await api.removeItems(tokenDocument, ids) ?? [];
+  }
+
+  static async #restoreTransferableSnapshot(tokenDocument, api, snapshot=[]) {
+    const liveItems = await this.#transferablePileItems(tokenDocument, api);
+    await this.#removePileItems(tokenDocument, api, liveItems);
+    if (snapshot.length) await api.addItems(tokenDocument, snapshot);
+  }
+
+  static #itemId(item) {
+    return String(item?.id ?? item?._id ?? "").trim();
   }
 
   static #appearanceSnapshot(tokenDocument) {
