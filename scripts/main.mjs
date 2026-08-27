@@ -8,6 +8,7 @@ import { RecipeService } from "./services/recipe-service.mjs";
 import { MaterialCatalogService } from "./services/material-catalog-service.mjs";
 import { MaterialGenerationService } from "./services/material-generation-service.mjs";
 import { HarvestProfileService } from "./services/harvest-profile-service.mjs";
+import { CraftingCoreSettingsApp } from "./apps/crafting-core-settings-app.mjs";
 
 let app = null;
 let generatorApp = null;
@@ -70,6 +71,14 @@ Hooks.once("init", () => {
   runInitStep("recipe settings", () => RecipeService.registerSettings());
   runInitStep("material settings", () => MaterialCatalogService.registerSettings());
   runInitStep("harvest profile settings", () => HarvestProfileService.registerSettings());
+  runInitStep("Crafting Core settings menu", () => game.settings.registerMenu(MODULE_ID, "craftingCoreSettings", {
+    name: "Crafting Core",
+    label: "Configure Crafting Core",
+    hint: "Configure the Actor content sources used by the Crafting Core Creature Scanner.",
+    icon: "fa-solid fa-hammer",
+    type: CraftingCoreSettingsApp,
+    restricted: true
+  }));
   runInitStep("D&D5e Character Sheet patch", () => CharacterSheetService.patchDnd5eSheet());
   runInitStep("Character Sheet hooks", () => CharacterSheetService.installHooks());
   runInitStep("Knowledge Item hooks", () => KnowledgeItemService.installHooks());

@@ -231,3 +231,13 @@ The final high-tier pool is deliberately shared between Very Rare and Legendary 
 Creature source documents are read-only. `HarvestProfileService` scans Actor Compendium indexes, loads eligible NPCs in bounded batches, infers generic anatomy from D&D5e Actor data, and stores per-Actor profiles in the hidden world `harvestProfiles` setting. Profiles reference the source Actor UUID and contain up to four automatic material rows plus zero or more Pinpoint Overrides. Material IDs always point back to the shared Material Catalog.
 
 `MaterialGenerationService.generateHarvestProfile()` is the single profile-roll path reserved for the next Token HUD / Item Piles integration. Item Piles must remain an output sink only; it must not implement a separate loot RNG model.
+
+## v0.0.8 — Analyzer Evidence Hierarchy / Scanner Source Settings
+
+Actor analysis no longer uses one undifferentiated text corpus. `HarvestProfileService` separates evidence into identity, structural features, attack/activity data, equipment, and weak incidental item/spell text. Morphology is inferred from stronger layers first; weak magical language can explain context but cannot independently establish anatomy.
+
+Strong incorporeal classification is reserved for explicit identity or structural features such as `Incorporeal Movement`. Corporeal Undead fall back to physical remains unless strong contrary evidence exists; skeletal identities remain bone-focused. Construct material is likewise evidence-driven rather than defaulting blindly to metal/mechanical.
+
+Creature Scanner source selection is stored in the hidden world `scannerSources` setting and edited through the GM-only Crafting Core settings submenu. Installed module/system sources are grouped at package level and automatically resolve only compatible Actor Compendiums. World Actor Compendiums are exposed individually. Selected order is retained as source priority metadata; complex duplicate-creature reconciliation is intentionally deferred.
+
+Generic family materials may have no anatomy requirements and act as coherent fallback candidates after anatomy-specific materials. v0.0.8 adds Funerary Dust and Necrotic Essence to broaden Undead fallback coverage without introducing fake body tags.

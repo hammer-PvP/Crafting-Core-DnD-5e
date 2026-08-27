@@ -1,5 +1,64 @@
 # Crafting Core (DnD 5e)
 
+## v0.0.8 — Actor Analyzer Intelligence & Scanner Settings
+
+This development release strengthens the entire Creature Scanner inference framework before Token HUD / Item Piles integration. The scanner still never changes source Actors or source Compendiums; it only creates Crafting Core Harvest Profile metadata.
+
+### Actor Analyzer v2
+
+The Analyzer no longer treats every piece of Actor text as equally trustworthy. It now evaluates evidence in layers:
+
+1. **Identity / morphology** — creature type, name, subtype, and custom type.
+2. **Structural features** — features that describe the creature's actual form or movement.
+3. **Anatomical attacks / activities** — Bite, Claw, Talon, Beak, Horn, Tentacle, Venom delivery, and similar body evidence.
+4. **Physical equipment interaction** — weapons/equipment support corporeal interaction but do not invent anatomy.
+5. **Incidental magic / spell language** — weak context only; it cannot redefine morphology by itself.
+
+This prevents a spell such as `Spirit Shroud`, `Phantom Steed`, or another spectral-named ability from turning a physical creature into an incorporeal one. Explicit identity such as Ghost/Specter/Wraith/Banshee or a structural feature such as `Incorporeal Movement` remains strong evidence.
+
+Undead physical fallbacks are intentionally practical for harvesting. Lich, Mummy Lord, Death Knight, Undead Knight, Zombie/Ghoul/Vampire/Wight/Revenant-style sources can resolve flesh/bone remains when no strong incorporeal evidence exists. Skeleton/Demilich-style sources remain bone-focused. True incorporeal Undead continue to exclude physical anatomy.
+
+The same evidence hierarchy applies beyond Undead. Constructs no longer default blindly to metal/mechanical bodies; stone/mineral, crystal, flesh, and metal/mechanical forms require supporting Actor evidence. Amorphous and Elemental morphology likewise use stronger structural signals.
+
+When a preferred automatic slot has no exact-rarity match, the Analyzer performs a second deterministic **family fallback** pass. It may use another unused, anatomically coherent material from the same creature family at the same-or-lower tier. This is specifically intended to fill profiles more completely without fabricating anatomy or upgrading an ordinary creature into a higher rarity tier.
+
+### Undead generic fallback materials
+
+The curated Material Catalog now contains **121** built-in materials. Two generic Undead materials were added:
+
+- **Funerary Dust** — Common; no flesh/bone requirement.
+- **Necrotic Essence** — Uncommon; no flesh/bone requirement.
+
+These materials let a true incorporeal Undead have more than only Ectoplasm/Spiritual Residue without inventing a physical body. Anatomy-specific materials still score higher when their requirements are satisfied.
+
+### Crafting Core Game Settings
+
+Creature Scanner content sources are now configured through **Game Settings → Crafting Core**. The GM selects content at the source/package level instead of manually selecting every internal pack.
+
+- Selecting a module/system source automatically includes only its compatible **Actor Compendiums**.
+- Item, Journal, RollTable, and other pack types are ignored.
+- World Actor Compendiums appear as individual selectable sources.
+- Selected sources can be reordered; the order is saved as source priority for future equivalent-creature resolution.
+
+The Creature Scanner itself now shows only a compact source summary plus Scan, leaving more room for Harvest Profiles.
+
+### Search behavior
+
+Creature Scanner search no longer rerenders while each letter is typed. Type the complete query, then apply it with **Enter**, the **magnifying glass**, or by leaving the field. The explicit Clear button resets the filter.
+
+### Recipe Builder space
+
+The saved Recipe column is widened again to a 380px default and the main Crafting Core GM window opens wider, giving the Recipe list a dedicated readable area rather than a narrow utility strip.
+
+### Deliberately not included yet
+
+- Item Piles integration
+- Token HUD Harvest action
+- corpse conversion / automatic death handling
+- Region or Vendor generation
+- Knowledge Codex
+- general-purpose migration support during the current single-tester development phase
+
 Crafting Core is a D&D5e crafting framework for Foundry VTT 14.
 
 ## v0.0.7 — Creature Scanner & Actor Analyzer

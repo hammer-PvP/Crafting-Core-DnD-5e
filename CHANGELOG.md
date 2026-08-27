@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.0.8
+
+Actor Analyzer Intelligence & Scanner Settings development release.
+
+- Rebuilt the Actor Analyzer around evidence strength rather than one flat text corpus. Identity/type data, structural features, attack/body signals, equipment, and incidental spell text now have distinct roles.
+- Weak spell/item language such as `spirit`, `spectral`, `phantom`, or `incorporeal` no longer classifies a creature's morphology by itself.
+- Strong incorporeal classification now requires explicit identity (Ghost/Specter/Wraith/Banshee/Phantom/etc.) or a structural feature such as `Incorporeal Movement`.
+- Corporeal Undead fallback was strengthened so Lich, Mummy Lord, Death Knight, Undead Knight, Zombie, Ghoul, Vampire, Wight, Revenant, and similar sources can resolve physical remains instead of being reduced to spirit-only loot by incidental spell names.
+- Skeleton/Demilich-style identities remain bone-focused; true incorporeal Undead continue to exclude physical anatomy.
+- Generalized the same evidence hierarchy to all creature families. Constructs no longer invent metal/mechanical anatomy when their material is unknown; stone, crystal, flesh, and metal/mechanical forms require supporting evidence. Elemental and amorphous structural signals were tightened similarly.
+- Added a deterministic second-pass family fallback for empty automatic slots: after preferred rarity/anatomy selection, an empty slot may use another unused coherent material from the same creature family at the same-or-lower tier. This improves four-slot completion without inventing anatomy or promoting ordinary sources into higher rarities.
+- Added generic Undead fallback materials `Funerary Dust` (Common) and `Necrotic Essence` (Uncommon). This raises the built-in curated catalog from 119 to 121 materials and gives incorporeal Undead at least one additional coherent loot path without fake flesh/bone tags.
+- Bumped the built-in Material Catalog schema to version 3 for the internal test line. No general migration layer is included yet.
+- Added a dedicated GM-only `Game Settings → Crafting Core` submenu for Creature Scanner source configuration.
+- Scanner sources are selected at the package/source level: selecting a module/system automatically includes only its compatible Actor Compendiums. World Actor Compendiums remain individually selectable.
+- Added ordered source priority. The saved order is retained in Scanner metadata for future equivalent-creature resolution without introducing premature complex deduplication.
+- Removed Compendium selection from the Creature Scanner itself. The Scanner now shows a compact configured-source summary and devotes the main window to profiles/results.
+- Fixed Scanner search focus loss: typing no longer rerenders on every keystroke. Search applies on Enter, the magnifying-glass button, or blur; Clear is explicit.
+- Expanded the Recipe Builder's dedicated Recipes column again (380px default) and increased the default GM window width so saved Recipes have substantially more readable space.
+- Item Piles, Token HUD, corpse conversion, automatic death handling, Region/Vendor generation, and Knowledge Codex remain outside this release.
+
 ## 0.0.7
 
 Creature Scanner & Actor Analyzer development release.

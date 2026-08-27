@@ -19,7 +19,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     id: "crafting-core-gm",
     classes: ["crafting-core", "crafting-core-gm-app", "standard-form"],
     tag: "form",
-    position: { width: 1120, height: 780 },
+    position: { width: 1200, height: 780 },
     window: { title: "Crafting Core", resizable: true }
   };
 

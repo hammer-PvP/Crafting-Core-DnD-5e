@@ -593,3 +593,95 @@
 .cc-anatomy-edit > span { font-size: 9px !important; text-transform: uppercase; font-weight: 800; opacity: .68; }
 .crafting-core.crafting-core-profile-editor-app { min-width: 720px; }
 .crafting-core.crafting-core-scanner-app { min-width: 760px; }
+
+/* v0.0.8 — Actor Analyzer Intelligence & Scanner Settings */
+.crafting-core-gm-app .cc-shell { grid-template-columns: 380px minmax(0, 1fr); }
+.crafting-core-gm-app .cc-recipe-list { flex: 1 1 auto; min-height: 230px; }
+
+.crafting-core-scanner-app .cc-scanner-shell { min-height: 0; }
+.cc-scanner-toolbar {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--cc-border);
+  background: rgba(255,255,255,.018);
+}
+.cc-scanner-source-summary {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 32px minmax(0,1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid rgba(141,233,1,.22);
+  border-radius: 5px;
+  background: rgba(141,233,1,.045);
+}
+.cc-scanner-source-summary.empty { border-color: rgba(214,107,107,.30); background: rgba(142,43,49,.08); }
+.cc-scanner-source-summary > i { color: #8de901; text-align: center; font-size: 18px; }
+.cc-scanner-source-summary.empty > i { color: #d66b6b; }
+.cc-scanner-source-summary strong,
+.cc-scanner-source-summary small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-scanner-source-summary small { margin-top: 1px; opacity: .58; font-size: 9px; }
+.cc-scanner-toolbar > button { margin: 0; min-height: 34px; }
+.cc-scanner-toolbar .cc-scan-progress { grid-column: 1 / -1; margin: 0; }
+.cc-scanner-profiles { flex: 1 1 auto; min-height: 0; margin: 10px !important; }
+.cc-scanner-filters { grid-template-columns: minmax(0,1fr) 210px; }
+.cc-scanner-search { display: grid; grid-template-columns: minmax(0,1fr) 34px 34px; gap: 5px; }
+.cc-scanner-search input { min-width: 0; }
+.cc-scanner-search button { width: 34px; min-width: 34px; margin: 0; padding: 0; display: grid; place-items: center; }
+
+.crafting-core-settings-app .window-content { padding: 0; overflow: hidden; background: #111113; color: #eee; }
+.crafting-core.crafting-core-settings-app { min-width: 620px; }
+.cc-settings-shell { height: 100%; min-height: 0; display: flex; flex-direction: column; background: #111113; }
+.cc-settings-header {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 42px minmax(0,1fr);
+  gap: 11px;
+  align-items: center;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--cc-border);
+  background: #17171a;
+}
+.cc-settings-header > i { color: var(--cc-gold); font-size: 29px; text-align: center; }
+.cc-settings-header h1 { margin: 1px 0 0; font-family: var(--dnd5e-font-roboto-slab, serif); }
+.cc-settings-header p { margin: 3px 0 0; opacity: .66; font-size: 11px; }
+.cc-settings-body { flex: 1 1 auto; min-height: 0; padding: 10px; overflow: hidden; }
+.cc-settings-source-card { height: 100%; margin: 0; display: flex; flex-direction: column; overflow: hidden; }
+.cc-settings-hint { flex: 0 0 auto; margin: 0 0 8px; opacity: .68; font-size: 11px; }
+.cc-settings-source-actions { flex: 0 0 auto; display: flex; gap: 6px; margin-bottom: 7px; }
+.cc-settings-source-actions button { margin: 0; min-height: 30px; }
+.cc-settings-source-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 5px; padding-right: 3px; }
+.cc-settings-source-row {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 112px;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 8px;
+  border: 1px solid rgba(255,255,255,.065);
+  border-radius: 4px;
+  background: rgba(255,255,255,.025);
+}
+.cc-settings-source-row.selected { border-color: rgba(141,233,1,.23); background: rgba(141,233,1,.04); }
+.cc-settings-source-row > label { display: grid !important; grid-template-columns: 18px minmax(0,1fr); gap: 8px; align-items: center; min-width: 0; }
+.cc-settings-source-row input { margin: 0; }
+.cc-settings-source-row strong,
+.cc-settings-source-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-settings-source-row small { opacity: .58; margin-top: 1px; font-size: 9px; }
+.cc-settings-pack-summary { opacity: .42 !important; }
+.cc-settings-source-priority { display: grid; grid-template-columns: 34px 30px 30px; gap: 4px; align-items: center; justify-content: end; }
+.cc-settings-source-priority > strong { color: #8de901; text-align: center; }
+.cc-settings-source-priority > span { opacity: .4; text-align: center; }
+.cc-settings-source-priority button { width: 30px; height: 30px; margin: 0; padding: 0; display: grid; place-items: center; }
+.cc-settings-footer { flex: 0 0 auto; display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--cc-border); background: #17171a; }
+.cc-settings-footer .cc-note { margin: 0; font-size: 10px; }
+
+@media (max-width: 900px) {
+  .crafting-core-gm-app .cc-shell { grid-template-columns: 320px minmax(0,1fr); }
+  .cc-scanner-toolbar { grid-template-columns: minmax(0,1fr) auto; }
+  .cc-scanner-toolbar > .cc-primary-action { grid-column: 2; }
+}

@@ -1,6 +1,7 @@
 import { MODULE_ID } from "../constants.mjs";
 import { HarvestProfileService } from "../services/harvest-profile-service.mjs";
 import { HarvestProfileEditorApp } from "./harvest-profile-editor-app.mjs";
+import { CraftingCoreSettingsApp } from "./crafting-core-settings-app.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -17,20 +18,22 @@ export class CreatureScannerApp extends HandlebarsApplicationMixin(ApplicationV2
     main: { template: `modules/${MODULE_ID}/templates/creature-scanner.hbs` }
   };
 
-  selectedPacks = new Set();
   filters = { search: "", type: "all" };
+  searchDraft = "";
   scanning = false;
 
   async _prepareContext() {
-    const packs = HarvestProfileService.availableActorPacks();
     const profiles = HarvestProfileService.list();
+    const summary = HarvestProfileService.scannerSourceSummary();
     const types = [...new Set(profiles.map(profile => profile.creatureType).filter(Boolean))]
       .sort((a, b) => HarvestProfileService.creatureTypeLabel(a).localeCompare(HarvestProfileService.creatureTypeLabel(b), game.i18n.lang));
     const filtered = profiles.filter(profile => this.#matches(profile));
 
     return {
-      packs: packs.map(pack => ({ ...pack, selected: this.selectedPacks.has(pack.collection) })),
-      selectedPackCount: this.selectedPacks.size,
+      sourceCount: summary.sourceCount,
+      sourcePackCount: summary.packCount,
+      sourceLabels: summary.labels,
+      sourcesConfigured: summary.sourceCount > 0 && summary.packCount > 0,
       profiles: filtered.map(profile => ({
         ...profile,
         anatomyLabel: profile.analysis?.anatomy?.join(", ") || "No anatomy tags",
@@ -39,7 +42,7 @@ export class CreatureScannerApp extends HandlebarsApplicationMixin(ApplicationV2
       })),
       profileCount: profiles.length,
       visibleProfileCount: filtered.length,
-      filterSearch: this.filters.search,
+      filterSearch: this.searchDraft || this.filters.search,
       typeOptions: [
         { value: "all", label: "All Creature Types", selected: this.filters.type === "all" },
         ...types.map(value => ({ value, label: HarvestProfileService.creatureTypeLabel(value), selected: this.filters.type === value }))
@@ -50,30 +53,38 @@ export class CreatureScannerApp extends HandlebarsApplicationMixin(ApplicationV2
 
   _onRender() {
     const root = this.element;
+    const search = root.querySelector('[name="profile.search"]');
 
-    root.querySelectorAll('[name="scan.pack"]').forEach(input => input.addEventListener("change", event => {
-      if (event.currentTarget.checked) this.selectedPacks.add(event.currentTarget.value);
-      else this.selectedPacks.delete(event.currentTarget.value);
-      this.#updateSelectedCount();
-    }));
-
-    root.querySelector('[data-action="select-all-packs"]')?.addEventListener("click", event => {
+    root.querySelector('[data-action="configure-sources"]')?.addEventListener("click", event => {
       event.preventDefault();
-      root.querySelectorAll('[name="scan.pack"]').forEach(input => { input.checked = true; this.selectedPacks.add(input.value); });
-      this.#updateSelectedCount();
-    });
-    root.querySelector('[data-action="clear-packs"]')?.addEventListener("click", event => {
-      event.preventDefault();
-      root.querySelectorAll('[name="scan.pack"]').forEach(input => { input.checked = false; });
-      this.selectedPacks.clear();
-      this.#updateSelectedCount();
+      new CraftingCoreSettingsApp().render({ force: true });
     });
     root.querySelector('[data-action="scan-packs"]')?.addEventListener("click", event => this.#scan(event));
 
-    root.querySelector('[name="profile.search"]')?.addEventListener("input", event => {
-      this.filters.search = event.currentTarget.value;
-      clearTimeout(this._ccSearchTimer);
-      this._ccSearchTimer = setTimeout(() => this.render({ force: true }), 180);
+    search?.addEventListener("input", event => {
+      // Keep typing local. Do not rerender the Application on each keystroke.
+      this.searchDraft = event.currentTarget.value;
+    });
+    search?.addEventListener("keydown", event => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      this.#applySearch(event.currentTarget.value);
+    });
+    search?.addEventListener("blur", event => {
+      const related = event.relatedTarget;
+      if (related?.matches?.('[data-action="apply-search"], [data-action="clear-search"]')) return;
+      const value = event.currentTarget.value;
+      setTimeout(() => this.#applySearch(value), 0);
+    });
+    root.querySelector('[data-action="apply-search"]')?.addEventListener("click", event => {
+      event.preventDefault();
+      this.#applySearch(search?.value ?? this.searchDraft);
+    });
+    root.querySelector('[data-action="clear-search"]')?.addEventListener("click", event => {
+      event.preventDefault();
+      this.searchDraft = "";
+      this.filters.search = "";
+      this.render({ force: true });
     });
     root.querySelector('[name="profile.type"]')?.addEventListener("change", event => {
       this.filters.type = event.currentTarget.value;
@@ -90,12 +101,25 @@ export class CreatureScannerApp extends HandlebarsApplicationMixin(ApplicationV2
     this._ccProfileHook ??= Hooks.on(`${MODULE_ID}.harvestProfilesChanged`, () => {
       if (!this.scanning) this.render({ force: true });
     });
+    this._ccSourceHook ??= Hooks.on(`${MODULE_ID}.scannerSourcesChanged`, () => {
+      if (!this.scanning) this.render({ force: true });
+    });
   }
 
   async close(options={}) {
     if (this._ccProfileHook) Hooks.off(`${MODULE_ID}.harvestProfilesChanged`, this._ccProfileHook);
+    if (this._ccSourceHook) Hooks.off(`${MODULE_ID}.scannerSourcesChanged`, this._ccSourceHook);
     this._ccProfileHook = null;
+    this._ccSourceHook = null;
     return super.close(options);
+  }
+
+  #applySearch(value) {
+    const next = String(value ?? "");
+    this.searchDraft = next;
+    if (this.filters.search === next) return;
+    this.filters.search = next;
+    this.render({ force: true });
   }
 
   #matches(profile) {
@@ -104,11 +128,6 @@ export class CreatureScannerApp extends HandlebarsApplicationMixin(ApplicationV2
     if (!search) return true;
     return [profile.name, profile.creatureTypeLabel, profile.subtype, profile.sourcePackLabel, ...(profile.analysis?.anatomy ?? [])]
       .join(" ").toLowerCase().includes(search);
-  }
-
-  #updateSelectedCount() {
-    const node = this.element?.querySelector?.("[data-selected-pack-count]");
-    if (node) node.textContent = String(this.selectedPacks.size);
   }
 
   #progress(data) {
@@ -130,19 +149,20 @@ export class CreatureScannerApp extends HandlebarsApplicationMixin(ApplicationV2
   async #scan(event) {
     event.preventDefault();
     if (this.scanning) return;
-    if (!this.selectedPacks.size) return ui.notifications.warn("Choose at least one Actor Compendium to scan.");
+    const packs = HarvestProfileService.configuredActorPacks();
+    if (!packs.length) return ui.notifications.warn("Configure at least one Actor source in Game Settings → Crafting Core.");
     const button = event.currentTarget;
     button.disabled = true;
     this.scanning = true;
     try {
-      const result = await HarvestProfileService.scanPacks([...this.selectedPacks], { onProgress: data => this.#progress(data) });
+      const result = await HarvestProfileService.scanPacks(packs.map(pack => pack.collection), { onProgress: data => this.#progress(data) });
       const message = result.failed
         ? `Creature scan complete: ${result.scanned} profiles, ${result.failed} failures.`
         : `Creature scan complete: ${result.scanned} Harvest Profiles.`;
       result.failed ? ui.notifications.warn(message) : ui.notifications.info(message);
     } catch (error) {
       console.error(`${MODULE_ID} | Creature scan failed.`, error);
-      ui.notifications.error(error.message ?? "Crafting Core could not scan those Compendiums.");
+      ui.notifications.error(error.message ?? "Crafting Core could not scan the configured sources.");
     } finally {
       this.scanning = false;
       button.disabled = false;

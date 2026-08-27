@@ -38,6 +38,13 @@ export class HarvestProfileService {
       type: Object,
       default: {}
     });
+    game.settings.register(MODULE_ID, SETTINGS.SCANNER_SOURCES, {
+      name: "Crafting Core Creature Scanner Sources",
+      scope: "world",
+      config: false,
+      type: Object,
+      default: { selected: [] }
+    });
   }
 
   static raw() {
@@ -92,14 +99,112 @@ export class HarvestProfileService {
         const system = String(pack.metadata?.system ?? "");
         return !system || system === game.system?.id;
       })
-      .map(pack => ({
-        collection: String(pack.collection),
-        label: String(pack.title ?? pack.metadata?.label ?? pack.collection),
-        packageType: String(pack.metadata?.packageType ?? "world"),
-        packageName: String(pack.metadata?.packageName ?? pack.metadata?.package ?? ""),
-        locked: Boolean(pack.locked)
-      }))
+      .map(pack => {
+        const collection = String(pack.collection);
+        const prefix = collection.split(".")[0] ?? "";
+        let packageType = String(pack.metadata?.packageType ?? "");
+        let packageName = String(pack.metadata?.packageName ?? pack.metadata?.package ?? "");
+        if (!packageType) {
+          if (prefix && prefix === String(game.system?.id ?? "")) packageType = "system";
+          else if (prefix && game.modules?.has?.(prefix)) packageType = "module";
+          else packageType = "world";
+        }
+        if (!packageName && packageType !== "world") packageName = prefix;
+        return {
+          collection,
+          label: String(pack.title ?? pack.metadata?.label ?? collection),
+          packageType,
+          packageName,
+          locked: Boolean(pack.locked)
+        };
+      })
       .sort((a, b) => a.label.localeCompare(b.label, game.i18n.lang));
+  }
+
+  /** Group compatible Actor Compendiums by their owning content source.
+   * Module/system sources are selected once; world Actor Compendiums remain individual sources.
+   */
+  static availableScannerSources() {
+    const groups = new Map();
+    for (const pack of this.availableActorPacks()) {
+      const packageType = String(pack.packageType || "world");
+      const packageName = String(pack.packageName || "");
+      const worldLike = packageType === "world" || !packageName;
+      const id = worldLike ? `world:${pack.collection}` : `${packageType}:${packageName}`;
+      const source = groups.get(id) ?? {
+        id,
+        packageType: worldLike ? "world" : packageType,
+        packageName: worldLike ? "" : packageName,
+        label: worldLike ? pack.label : this.#packageLabel(packageType, packageName),
+        detail: worldLike ? "World Actor Compendium" : this.title(packageType),
+        collections: [],
+        packLabels: []
+      };
+      source.collections.push(pack.collection);
+      source.packLabels.push(pack.label);
+      groups.set(id, source);
+    }
+    return [...groups.values()]
+      .map(source => ({ ...source, collections: [...new Set(source.collections)], packLabels: [...new Set(source.packLabels)] }))
+      .sort((a, b) => a.label.localeCompare(b.label, game.i18n.lang));
+  }
+
+  static scannerSourceConfig() {
+    const raw = game.settings.get(MODULE_ID, SETTINGS.SCANNER_SOURCES);
+    const selected = Array.isArray(raw?.selected) ? raw.selected.map(String).filter(Boolean) : [];
+    return { selected: [...new Set(selected)] };
+  }
+
+  static async saveScannerSourceConfig(selected=[]) {
+    if (!game.user?.isGM) throw new Error("Only a GM can configure Creature Scanner sources.");
+    const available = new Set(this.availableScannerSources().map(source => source.id));
+    const normalized = [...new Set((selected ?? []).map(String).filter(id => available.has(id)))];
+    await game.settings.set(MODULE_ID, SETTINGS.SCANNER_SOURCES, { selected: normalized });
+    Hooks.callAll(`${MODULE_ID}.scannerSourcesChanged`, normalized);
+    return { selected: normalized };
+  }
+
+  static configuredScannerSources() {
+    const sources = new Map(this.availableScannerSources().map(source => [source.id, source]));
+    return this.scannerSourceConfig().selected.map(id => sources.get(id)).filter(Boolean);
+  }
+
+  static configuredActorPacks() {
+    const available = new Map(this.availableActorPacks().map(pack => [pack.collection, pack]));
+    const result = [];
+    const used = new Set();
+    const sources = this.configuredScannerSources();
+    for (let sourcePriority = 0; sourcePriority < sources.length; sourcePriority += 1) {
+      const source = sources[sourcePriority];
+      for (let packPriority = 0; packPriority < source.collections.length; packPriority += 1) {
+        const collection = source.collections[packPriority];
+        if (used.has(collection)) continue;
+        const pack = available.get(collection);
+        if (!pack) continue;
+        used.add(collection);
+        result.push({ ...pack, sourceId: source.id, sourceLabel: source.label, sourcePriority, packPriority });
+      }
+    }
+    return result;
+  }
+
+  static scannerSourceSummary() {
+    const sources = this.configuredScannerSources();
+    const packs = this.configuredActorPacks();
+    return {
+      sourceCount: sources.length,
+      packCount: packs.length,
+      labels: sources.map(source => source.label)
+    };
+  }
+
+  static #packageLabel(packageType, packageName) {
+    if (packageType === "module") return String(game.modules?.get?.(packageName)?.title ?? packageName);
+    if (packageType === "system") {
+      if (String(game.system?.id ?? "") === packageName) return String(game.system?.title ?? packageName);
+      return packageName;
+    }
+    return packageName || this.title(packageType);
   }
 
   /**
@@ -115,6 +220,7 @@ export class HarvestProfileService {
     const creatureNatures = new Set(materials.filter(m => m.family === "creature").map(m => m.nature));
     const existing = this.raw();
     const existingByUuid = new Map(Object.values(existing).map(profile => [String(profile.sourceUuid), profile]));
+    const configuredPackMeta = new Map(this.configuredActorPacks().map(pack => [pack.collection, pack]));
     const candidates = [];
     const skippedPacks = [];
 
@@ -159,6 +265,10 @@ export class HarvestProfileService {
           const profile = await this.analyzeActor(actor, { materials, previous });
           profile.sourcePack = candidate.pack.collection;
           profile.sourcePackLabel = String(candidate.pack.title ?? candidate.pack.metadata?.label ?? candidate.pack.collection);
+          const sourceMeta = configuredPackMeta.get(candidate.pack.collection);
+          profile.sourceId = String(sourceMeta?.sourceId ?? "");
+          profile.sourceLabel = String(sourceMeta?.sourceLabel ?? profile.sourcePackLabel);
+          profile.sourcePriority = Number(sourceMeta?.sourcePriority ?? 9999);
           return { status: "scanned", profile };
         } catch (error) {
           return { status: "failed", error, candidate };
@@ -197,6 +307,9 @@ export class HarvestProfileService {
     const profile = await this.analyzeActor(actor, { previous: current });
     profile.sourcePack = current.sourcePack;
     profile.sourcePackLabel = current.sourcePackLabel;
+    profile.sourceId = current.sourceId;
+    profile.sourceLabel = current.sourceLabel;
+    profile.sourcePriority = current.sourcePriority;
     return this.save(profile);
   }
 
@@ -222,6 +335,9 @@ export class HarvestProfileService {
       sourceUuid: String(actor.uuid),
       sourcePack: previous?.sourcePack ?? String(actor.pack ?? ""),
       sourcePackLabel: previous?.sourcePackLabel ?? "",
+      sourceId: previous?.sourceId ?? "",
+      sourceLabel: previous?.sourceLabel ?? "",
+      sourcePriority: previous?.sourcePriority ?? 9999,
       name: String(actor.name ?? "Creature"),
       img: String(actor.img ?? "icons/svg/mystery-man.svg"),
       actorType: String(actor.type ?? "npc"),
@@ -300,14 +416,15 @@ export class HarvestProfileService {
     const anatomySet = new Set(anatomy);
     const used = new Set();
     const highTier = legendarySource ? "legendary" : "veryRare";
+    const rarityIndex = new Map(MaterialCatalogService.RARITIES.map((rarity, index) => [rarity, index]));
     const specs = [
-      { id: "common", label: "Common", rarities: ["common"] },
-      { id: "secondary", label: "Common / Uncommon", rarities: ["uncommon", "common"] },
-      { id: "rare", label: "Rare", rarities: ["rare"] },
-      { id: "high", label: legendarySource ? "Legendary" : "Very Rare", rarities: [highTier] }
+      { id: "common", label: "Common", rarities: ["common"], fallbackMax: "common" },
+      { id: "secondary", label: "Common / Uncommon", rarities: ["uncommon", "common"], fallbackMax: "uncommon" },
+      { id: "rare", label: "Rare", rarities: ["rare"], fallbackMax: "rare" },
+      { id: "high", label: legendarySource ? "Legendary" : "Very Rare", rarities: [highTier], fallbackMax: legendarySource ? "legendary" : "veryRare" }
     ];
 
-    return specs.map((spec, index) => {
+    const rows = specs.map((spec, index) => {
       const candidates = materials
         .filter(material => spec.rarities.includes(material.rarity))
         .filter(material => !used.has(material.id))
@@ -324,9 +441,47 @@ export class HarvestProfileService {
         rarity: material?.rarity ?? spec.rarities[0],
         chance: material?.chance ?? 0,
         quantity: material?.quantity ?? "1",
-        generated: true
+        generated: true,
+        fallback: false
       };
     });
+
+    // Second pass: if a preferred rarity has no coherent candidate, backfill from another
+    // unused material in the same creature family at the same-or-lower tier. Anatomy-specific
+    // materials still outrank generic family materials. This improves profile completeness without
+    // inventing body tags or promoting ordinary sources into higher rarities.
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      if (row.materialId) continue;
+      const spec = specs[index];
+      const maxIndex = rarityIndex.get(spec.fallbackMax) ?? 0;
+      const targetIndex = Math.max(...spec.rarities.map(rarity => rarityIndex.get(rarity) ?? 0));
+      const candidates = materials
+        .filter(material => !used.has(material.id))
+        .filter(material => (rarityIndex.get(material.rarity) ?? 99) <= maxIndex)
+        .filter(material => material.rarity !== "legendary" || (spec.id === "high" && legendarySource))
+        .filter(material => this.#requirementsSatisfied(material.requires, anatomySet))
+        .sort((a, b) => {
+          const aReq = (a.requires ?? []).length ? this.#materialScore(a, anatomySet, [a.rarity]) : 0;
+          const bReq = (b.requires ?? []).length ? this.#materialScore(b, anatomySet, [b.rarity]) : 0;
+          if (aReq !== bReq) return bReq - aReq;
+          const aDistance = Math.abs(targetIndex - (rarityIndex.get(a.rarity) ?? 0));
+          const bDistance = Math.abs(targetIndex - (rarityIndex.get(b.rarity) ?? 0));
+          if (aDistance !== bDistance) return aDistance - bDistance;
+          return a.id.localeCompare(b.id);
+        });
+      const material = candidates[0] ?? null;
+      if (!material) continue;
+      used.add(material.id);
+      row.materialId = material.id;
+      row.rarity = material.rarity;
+      row.chance = material.chance ?? 0;
+      row.quantity = material.quantity ?? "1";
+      row.label = `${spec.label} / Family Fallback`;
+      row.fallback = true;
+    }
+
+    return rows;
   }
 
   static #requirementsSatisfied(requires, anatomySet) {
@@ -345,20 +500,24 @@ export class HarvestProfileService {
     const anatomy = new Set(this.BASE_ANATOMY[nature] ?? []);
     const reasons = [];
     const add = (tag, reason) => {
-      if (!anatomy.has(tag)) reasons.push(reason);
+      if (!anatomy.has(tag) && reason) reasons.push(reason);
       anatomy.add(tag);
     };
     const remove = (...tags) => tags.forEach(tag => anatomy.delete(tag));
 
-    if (anatomy.size) reasons.push(`${this.creatureTypeLabel(nature)} baseline anatomy.`);
-    if (nature === "ooze") reasons.push("Ooze creature type implies amorphous anatomy.");
-    if (nature === "plant") reasons.push("Plant creature type implies plant anatomy.");
+    if (anatomy.size) reasons.push(`${this.creatureTypeLabel(nature)} family baseline anatomy.`);
+    if (nature === "ooze") reasons.push("Ooze creature type provides a strong amorphous baseline.");
+    if (nature === "plant") reasons.push("Plant creature type provides a strong plant-body baseline.");
 
     const corpus = this.#actorCorpus(actor);
-    const has = patterns => patterns.some(pattern => corpus.all.includes(pattern));
-    const attackHas = patterns => patterns.some(pattern => corpus.attacks.includes(pattern));
+    const contains = (text, patterns) => patterns.some(pattern => text.includes(pattern));
+    const identityHas = patterns => contains(corpus.identity, patterns);
+    const structuralHas = patterns => contains(corpus.structural, patterns);
+    const attackHas = patterns => contains(corpus.attacks, patterns);
+    const bodyHas = patterns => identityHas(patterns) || structuralHas(patterns) || attackHas(patterns);
 
-    // Structural / body-part signals from names, subtype, attacks and features.
+    // Anatomy signals only use identity, structural features, and actual attack/activity data.
+    // Spell names and other incidental text live in corpus.weak and never establish anatomy by themselves.
     const signals = [
       ["claw", ["claw", "talon", "garra", "garras"]],
       ["fang", ["fang", "bite", "teeth", "jaws", "mordida", "presa", "presas", "mandibula", "mandibulas"]],
@@ -368,58 +527,105 @@ export class HarvestProfileService {
       ["horn", ["horn", "horns", "gore", "antler", "antlers", "chifre", "chifres", "galhada"]],
       ["wing", ["wing", "wings", "asa", "asas"]],
       ["shell", ["shell", "carapace", "exoskeleton", "casco", "carapaca"]],
-      ["eye", ["eye", "eyes", "eyestalk", "gaze", "olho", "olhos"]],
+      ["eye", ["eye", "eyes", "eyestalk", "olho", "olhos"]],
       ["tentacle", ["tentacle", "tentacles", "tentaculo", "tentaculos"]]
     ];
     for (const [tag, patterns] of signals) {
-      if (has(patterns)) add(tag, `${this.title(tag)} anatomy detected from Actor data.`);
+      if (bodyHas(patterns)) add(tag, `${this.title(tag)} anatomy detected from identity, structural features, or attack data.`);
     }
 
     if (attackHas(["venom", "poison", "sting", "stinger", "veneno", "venenoso", "ferrao"])) {
       add("venom", "Venom/poison delivery detected in an attack or activity.");
     }
 
-    // Undead must be split carefully so skeletal and incorporeal sources do not inherit flesh.
-    if (nature === "undead") {
-      const incorporeal = has(["incorporeal", "ghost", "specter", "spectre", "wraith", "banshee", "spirit", "phantom", "fantasma", "espectro", "espirito", "aparicao"]);
-      const skeletal = has(["skeleton", "skeletal", "bone", "bones", "skull", "esqueleto", "esqueletico", "osseo"]);
-      const fleshy = has(["zombie", "ghoul", "ghast", "mummy", "vampire", "wight", "zumbi", "carnical", "mumia", "vampiro"]);
-      if (incorporeal) {
-        remove(...this.PHYSICAL_TAGS);
-        add("incorporeal", "Incorporeal undead indicators detected.");
-      } else if (skeletal) {
+    const hardIncorporealIdentity = identityHas([
+      "ghost", "specter", "spectre", "wraith", "banshee", "phantom", "apparition",
+      "fantasma", "espectro", "aparicao", "espirito desencarnado"
+    ]);
+    const hardIncorporealFeature = structuralHas([
+      "incorporeal movement", "incorporeal form", "incorporeal", "movimento incorporeo", "forma incorporea"
+    ]);
+    const hardIncorporeal = hardIncorporealIdentity || hardIncorporealFeature;
+    const physicalEquipment = corpus.equipment.length > 0;
+    if (physicalEquipment) reasons.push("Physical weapon/equipment data supports a corporeal interaction model, but does not define anatomy by itself.");
+
+    // Apply a structural incorporeal classification across creature families only when evidence is strong.
+    // Weak words in spells such as spirit/spectral/phantom never trigger this branch.
+    if (hardIncorporeal) {
+      remove(...this.PHYSICAL_TAGS, "mechanical", "metal", "mineral", "crystal", "plant", "amorphous");
+      add("incorporeal", hardIncorporealFeature
+        ? "A structural incorporeal feature was detected."
+        : "The Actor identity explicitly describes an incorporeal creature.");
+    }
+
+    if (nature === "undead" && !hardIncorporeal) {
+      const skeletalIdentity = identityHas([
+        "skeleton", "skeletal", "bone", "bones", "skull", "demilich", "demi-lich",
+        "esqueleto", "esqueletico", "osseo", "cranio"
+      ]);
+      const physicalUndeadIdentity = identityHas([
+        "zombie", "ghoul", "ghast", "mummy", "mummy lord", "lich", "death knight", "undead knight",
+        "vampire", "wight", "revenant", "deathlock", "zumbi", "carnical", "mumia", "vampiro", "cavaleiro morto"
+      ]);
+
+      if (skeletalIdentity) {
         remove("flesh", "blood", "hide", "venom");
-        add("bone", "Skeletal undead indicators detected.");
-      } else if (fleshy) {
-        add("flesh", "Fleshy undead indicators detected.");
-        add("blood", "Fleshy undead indicators detected.");
-        add("bone", "Fleshy undead indicators detected.");
+        add("bone", "Skeletal identity detected; flesh and blood were excluded.");
       } else {
-        add("flesh", "Physical undead fallback anatomy.");
-        add("blood", "Physical undead fallback anatomy.");
-        add("bone", "Physical undead fallback anatomy.");
+        // Corporeal undead fallback is intentional: if an undead is not strongly identified as incorporeal
+        // or skeletal, a physical remains model is safer than treating incidental spell language as morphology.
+        add("flesh", physicalUndeadIdentity ? "Corporeal undead identity supports preserved/decayed flesh." : "Corporeal undead family fallback.");
+        add("blood", physicalUndeadIdentity ? "Corporeal undead identity supports physical remains." : "Corporeal undead family fallback.");
+        add("bone", physicalUndeadIdentity ? "Corporeal undead identity supports a skeletal structure." : "Corporeal undead family fallback.");
       }
     }
 
-    if (nature === "construct") {
-      const fleshConstruct = has(["flesh golem", "flesh construct", "golem de carne"]);
-      const stoneConstruct = has(["stone", "rock", "granite", "stone golem", "pedra", "rocha"]);
-      const crystalConstruct = has(["crystal", "crystalline", "cristal"]);
-      const metalConstruct = has(["iron", "steel", "metal", "clockwork", "automaton", "mechanical", "ferro", "aco", "metalico", "mecanico", "automato"]);
+    if (nature === "construct" && !hardIncorporeal) {
+      const fleshConstruct = identityHas(["flesh golem", "flesh construct", "golem de carne"])
+        || structuralHas(["flesh construct", "flesh body"]);
+      const stoneConstruct = bodyHas(["stone golem", "stone", "rock", "granite", "pedra", "rocha"]);
+      const crystalConstruct = bodyHas(["crystal", "crystalline", "cristal"]);
+      const metalConstruct = bodyHas(["iron golem", "iron", "steel", "metal", "clockwork", "automaton", "mechanical", "ferro", "aco", "metalico", "mecanico", "automato"]);
       if (fleshConstruct) {
-        add("flesh", "Flesh-construct material detected."); add("blood", "Flesh-construct material detected."); add("bone", "Flesh-construct material detected.");
-      } else if (stoneConstruct) add("mineral", "Stone/mineral construct detected.");
-      else if (crystalConstruct) { add("crystal", "Crystal construct detected."); add("mineral", "Crystal construct detected."); }
-      else if (metalConstruct) { add("metal", "Metal construct detected."); add("mechanical", "Mechanical construct detected."); }
-      else add("mechanical", "Generic construct fallback anatomy.");
+        add("flesh", "Flesh-construct morphology detected.");
+        add("blood", "Flesh-construct morphology detected.");
+        add("bone", "Flesh-construct morphology detected.");
+      } else if (crystalConstruct) {
+        add("crystal", "Crystal construct morphology detected.");
+        add("mineral", "Crystal construct morphology detected.");
+      } else if (stoneConstruct) {
+        add("mineral", "Stone/mineral construct morphology detected.");
+      } else if (metalConstruct) {
+        add("metal", "Metal construct morphology detected.");
+        add("mechanical", "Mechanical/automaton morphology detected.");
+      } else {
+        // No invented metal body: generic construct materials in the catalog have no anatomy requirement.
+        reasons.push("Construct material was not explicit; no metal/stone/flesh anatomy was invented.");
+      }
     }
 
-    if (nature === "elemental" && has(["stone", "earth", "rock", "pedra", "terra", "rocha"])) add("mineral", "Earth/stone elemental indicators detected.");
-    if (nature !== "construct" && has(["hide", "pelt", "fur", "pele", "couro", "pelagem"])) add("hide", "Hide/pelt indicators detected.");
+    if (nature === "elemental" && !hardIncorporeal) {
+      if (bodyHas(["earth", "stone", "rock", "crystal", "terra", "pedra", "rocha", "cristal"])) add("mineral", "Earth/stone elemental morphology detected.");
+      if (bodyHas(["water", "liquid", "agua", "liquido"])) add("amorphous", "Liquid elemental morphology detected.");
+    }
 
-    // Fly speed is supporting evidence only; it never creates a harvesting requirement by itself.
+    if (nature !== "construct" && !hardIncorporeal && bodyHas(["hide", "pelt", "fur", "pele", "couro", "pelagem"])) {
+      add("hide", "Hide/pelt morphology detected.");
+    }
+
+    // A structural Amorphous trait can override ordinary physical assumptions outside the Ooze family.
+    if (!hardIncorporeal && structuralHas(["amorphous", "amorphous form", "forma amorfa"])) {
+      remove("bone", "hide", "claw", "fang", "beak", "feather", "scale", "horn", "wing", "shell");
+      add("amorphous", "A structural amorphous feature was detected.");
+    }
+
     const fly = Number(actor.system?.attributes?.movement?.fly ?? 0) || 0;
-    if (fly > 0 && anatomy.has("feather")) add("wing", "Flying movement supports detected feathered anatomy.");
+    if (fly > 0 && anatomy.has("feather")) add("wing", "Flying movement supports explicit feathered anatomy.");
+
+    // Record that weak magical text was observed but intentionally did not drive morphology.
+    if (contains(corpus.weak, ["spirit", "spectral", "phantom", "ghost", "incorporeal", "espirito", "espectral"])) {
+      reasons.push("Spectral/spirit language exists in incidental spell or item text; it was treated as weak evidence and did not define morphology.");
+    }
 
     return {
       anatomy: [...anatomy].sort(),
@@ -428,41 +634,63 @@ export class HarvestProfileService {
   }
 
   static #actorCorpus(actor) {
-    const general = [
+    const identityTerms = [
       actor.name,
       actor.system?.details?.type?.subtype,
       actor.system?.details?.type?.custom
     ];
-    const attacks = [];
-    const items = [];
+    const structuralTerms = [];
+    const attackTerms = [];
+    const equipmentTerms = [];
+    const weakTerms = [];
 
     for (const item of actor.items ?? []) {
-      items.push(item.name);
+      const itemType = String(item.type ?? "").toLowerCase();
+      const itemName = String(item.name ?? "");
       const activities = item.system?.activities;
+
+      if (["weapon", "equipment"].includes(itemType)) equipmentTerms.push(itemName);
+      else if (itemType === "feat") structuralTerms.push(itemName);
+      else weakTerms.push(itemName);
+
       if (activities) {
         for (const activity of activities) {
-          const activityName = activity?.name ?? item.name;
-          const activityType = String(activity?.type ?? "");
-          items.push(activityName);
-          if (activityType === "attack" || activityType === "save" || activityType === "damage") {
-            attacks.push(activityName, item.name);
+          const activityName = String(activity?.name ?? itemName);
+          const activityType = String(activity?.type ?? "").toLowerCase();
+          if (itemType === "feat") structuralTerms.push(activityName);
+          else if (itemType === "spell") weakTerms.push(activityName);
+          else weakTerms.push(activityName);
+
+          if (["attack", "save", "damage"].includes(activityType)) {
             try {
               const source = activity.toObject?.() ?? activity;
               const compact = JSON.stringify(source?.damage ?? source?.attack ?? source?.save ?? {});
-              attacks.push(compact);
-            } catch (_) { /* best-effort signal extraction */ }
+              if (itemType === "spell") weakTerms.push(activityName, itemName, compact);
+              else attackTerms.push(activityName, itemName, compact);
+            } catch (_) {
+              if (itemType === "spell") weakTerms.push(activityName, itemName);
+              else attackTerms.push(activityName, itemName);
+            }
           }
         }
       }
     }
 
-    const normalize = value => this.#normalizeText((value ?? []).filter(Boolean).join(" | "));
-    const all = normalize([...general, ...items, ...attacks]);
+    const normalize = values => this.#normalizeText((values ?? []).filter(Boolean).join(" | "));
+    const identity = normalize(identityTerms);
+    const structural = normalize(structuralTerms);
+    const attacks = normalize(attackTerms);
+    const equipment = normalize(equipmentTerms);
+    const weak = normalize(weakTerms);
     return {
-      all,
-      attacks: normalize(attacks),
-      attackTerms: attacks.filter(Boolean).map(String),
-      itemTerms: items.filter(Boolean).map(String)
+      identity,
+      structural,
+      attacks,
+      equipment,
+      weak,
+      all: normalize([...identityTerms, ...structuralTerms, ...attackTerms, ...equipmentTerms, ...weakTerms]),
+      attackTerms: attackTerms.filter(Boolean).map(String),
+      itemTerms: [...structuralTerms, ...equipmentTerms, ...weakTerms].filter(Boolean).map(String)
     };
   }
 
@@ -482,6 +710,9 @@ export class HarvestProfileService {
       sourceUuid: String(profile?.sourceUuid ?? ""),
       sourcePack: String(profile?.sourcePack ?? ""),
       sourcePackLabel: String(profile?.sourcePackLabel ?? ""),
+      sourceId: String(profile?.sourceId ?? ""),
+      sourceLabel: String(profile?.sourceLabel ?? ""),
+      sourcePriority: Math.max(0, Number(profile?.sourcePriority ?? 9999) || 0),
       name: String(profile?.name ?? "Creature"),
       img: String(profile?.img ?? "icons/svg/mystery-man.svg"),
       actorType: String(profile?.actorType ?? "npc"),
@@ -502,7 +733,8 @@ export class HarvestProfileService {
         rarity: String(slot?.rarity ?? "common"),
         chance: Math.clamp(Number(slot?.chance ?? 0) || 0, 0, 100),
         quantity: String(slot?.quantity || "1"),
-        generated: slot?.generated !== false
+        generated: slot?.generated !== false,
+        fallback: Boolean(slot?.fallback)
       })),
       pinpointOverrides: (Array.isArray(profile?.pinpointOverrides) ? profile.pinpointOverrides : []).map((row, index) => ({
         id: String(row?.id ?? foundry.utils.randomID(12)),

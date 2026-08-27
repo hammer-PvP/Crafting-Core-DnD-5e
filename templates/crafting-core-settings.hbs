@@ -1,0 +1,50 @@
+<section class="cc-settings-shell">
+  <header class="cc-settings-header">
+    <i class="fa-solid fa-hammer"></i>
+    <div>
+      <span class="cc-kicker">Game Settings</span>
+      <h1>Crafting Core</h1>
+      <p>Choose which installed content sources the Creature Scanner is allowed to read. Crafting Core automatically discovers Actor Compendiums inside each selected source.</p>
+    </div>
+  </header>
+
+  <div class="cc-settings-body">
+    <section class="cc-form-card cc-settings-source-card">
+      <div class="cc-card-heading">
+        <div><span class="cc-kicker">Creature Scanner</span><h3>Actor Sources & Priority</h3></div>
+        <small><strong>{{selectedCount}}</strong> sources · <strong>{{selectedPackCount}}</strong> Actor packs</small>
+      </div>
+      <p class="cc-settings-hint">Select a module/system source once; Crafting Core only scans its Actor Compendiums. World Actor Compendiums appear as individual sources. Higher entries have higher source priority.</p>
+      <div class="cc-settings-source-actions">
+        <button type="button" data-action="select-all-sources"><i class="fa-solid fa-check-double"></i> Select All</button>
+        <button type="button" data-action="clear-sources"><i class="fa-solid fa-xmark"></i> Clear</button>
+      </div>
+      <div class="cc-settings-source-list">
+        {{#each sources}}
+        <article class="cc-settings-source-row {{#if selected}}selected{{/if}}">
+          <label>
+            <input type="checkbox" name="scanner.source" value="{{id}}" {{#if selected}}checked{{/if}}>
+            <span>
+              <strong>{{label}}</strong>
+              <small>{{detail}} · {{packCount}} Actor pack{{#unless (eq packCount 1)}}s{{/unless}}</small>
+              <small class="cc-settings-pack-summary">{{packSummary}}</small>
+            </span>
+          </label>
+          <div class="cc-settings-source-priority">
+            {{#if selected}}<strong>#{{priority}}</strong>{{else}}<span>—</span>{{/if}}
+            <button type="button" data-action="source-up" data-source-id="{{id}}" {{#unless selected}}disabled{{/unless}} data-tooltip="Higher priority"><i class="fa-solid fa-chevron-up"></i></button>
+            <button type="button" data-action="source-down" data-source-id="{{id}}" {{#unless selected}}disabled{{/unless}} data-tooltip="Lower priority"><i class="fa-solid fa-chevron-down"></i></button>
+          </div>
+        </article>
+        {{else}}
+        <div class="cc-scanner-empty"><i class="fa-solid fa-book"></i><strong>No compatible Actor sources found.</strong><span>Install or create an Actor Compendium, then reopen this menu.</span></div>
+        {{/each}}
+      </div>
+    </section>
+  </div>
+
+  <footer class="cc-settings-footer">
+    <span class="cc-note"><i class="fa-solid fa-circle-info"></i> Source priority is stored now and can be used when equivalent creatures exist in multiple content sources.</span>
+    <button type="button" class="cc-primary-action" data-action="save-settings"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+  </footer>
+</section>

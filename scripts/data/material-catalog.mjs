@@ -16,7 +16,7 @@ const profession = (id, name, nature, rarity, {tags=[], quantity="1", chance=nul
   id, name, family: "profession", nature, rarity, tags, quantity, chance
 });
 
-export const MATERIAL_CATALOG_VERSION = 2;
+export const MATERIAL_CATALOG_VERSION = 3;
 
 export const DEFAULT_MATERIALS = Object.freeze([
   // Aberration
@@ -126,7 +126,9 @@ export const DEFAULT_MATERIALS = Object.freeze([
   // Undead
   creature("undead-profane-bone", "Profane Bone", "undead", "common", {requires:["bone"], tags:["necrotic"]}),
   creature("undead-flesh", "Undead Flesh", "undead", "common", {requires:["flesh"], tags:["necrotic"]}),
+  creature("undead-funerary-dust", "Funerary Dust", "undead", "common", {tags:["necrotic","funerary"]}),
   creature("undead-ectoplasm", "Ectoplasm", "undead", "uncommon", {requires:["incorporeal"], tags:["spirit"]}),
+  creature("undead-necrotic-essence", "Necrotic Essence", "undead", "uncommon", {tags:["necrotic","essence"]}),
   creature("undead-corrupted-marrow", "Corrupted Marrow", "undead", "rare", {requires:["bone"], tags:["necrotic"]}),
   creature("undead-spiritual-residue", "Spiritual Residue", "undead", "veryRare", {tags:["spirit","necrotic"]}),
   creature("undead-death-essence", "Death Essence", "undead", "legendary", {tags:["necrotic","soul"]}),
