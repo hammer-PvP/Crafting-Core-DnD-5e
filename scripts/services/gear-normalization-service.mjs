@@ -61,14 +61,57 @@ export class GearNormalizationService {
         const system = String(pack.metadata?.system ?? "");
         return !system || system === game.system?.id;
       })
-      .map(pack => ({
-        collection: String(pack.collection),
-        label: String(pack.title ?? pack.metadata?.label ?? pack.collection),
-        packageType: String(pack.metadata?.packageType ?? "world"),
-        packageName: String(pack.metadata?.packageName ?? pack.metadata?.package ?? ""),
-        locked: Boolean(pack.locked)
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label, game.i18n.lang));
+      .map(pack => {
+        const packageType = String(pack.metadata?.packageType ?? "world");
+        const packageName = String(pack.metadata?.packageName ?? pack.metadata?.package ?? "");
+        const packLabel = String(pack.title ?? pack.metadata?.label ?? pack.collection);
+        return {
+          collection: String(pack.collection),
+          label: packLabel,
+          packLabel,
+          sourceLabel: this.sourceDisplayName(packageType, packageName),
+          sourceKind: this.sourceKindLabel(packageType),
+          packageType,
+          packageName,
+          locked: Boolean(pack.locked)
+        };
+      })
+      .sort((a, b) => {
+        const source = a.sourceLabel.localeCompare(b.sourceLabel, game.i18n.lang);
+        return source || a.packLabel.localeCompare(b.packLabel, game.i18n.lang);
+      });
+  }
+
+
+  static sourceDisplayName(packageType, packageName) {
+    const type = String(packageType ?? "world");
+    const name = String(packageName ?? "");
+    if (type === "system") {
+      if (name === "dnd5e" || name === String(game.system?.id ?? "")) return "Dungeons & Dragons 5e";
+      return this.cleanSourceTitle(game.system?.title ?? name ?? "System");
+    }
+    if (type === "module") {
+      const title = String(game.modules?.get?.(name)?.title ?? name ?? "Module");
+      return this.cleanSourceTitle(title);
+    }
+    return "World";
+  }
+
+  static cleanSourceTitle(value) {
+    const title = String(value ?? "").trim();
+    if (!title) return "Unknown Source";
+    return title
+      .replace(/^Dungeons\s*&\s*Dragons\s+/i, "")
+      .replace(/^Dungeons\s+and\s+Dragons\s+/i, "")
+      .replace(/^D&D\s+/i, "")
+      .trim() || title;
+  }
+
+  static sourceKindLabel(packageType) {
+    const type = String(packageType ?? "world");
+    if (type === "system") return "System";
+    if (type === "module") return "Module";
+    return "World";
   }
 
   static async buildPlan(actor, { sourceItems=null }={}) {

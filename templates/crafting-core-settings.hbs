@@ -68,10 +68,9 @@
         <article class="cc-settings-source-row {{#if selected}}selected{{/if}}">
           <label>
             <input type="checkbox" name="normalization.source" value="{{collection}}" {{#if selected}}checked{{/if}} {{#if disabled}}disabled{{/if}}>
-            <span>
-              <strong>{{label}}</strong>
-              <small>{{detail}}</small>
-              <small class="cc-settings-pack-summary">{{collection}}</small>
+            <span title="{{collection}}">
+              <strong>{{sourceLabel}}</strong>
+              <small>{{packLabel}}</small>
             </span>
           </label>
           <div class="cc-settings-source-priority">

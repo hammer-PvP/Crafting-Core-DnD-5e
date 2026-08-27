@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.0.14
+- Fixed Item Piles `createItemPile()` result handling for current builds which return `{ tokenUuid, actorUuid }` instead of a direct Token UUID/document.
+- Added robust Token-pile resolution with short post-create retries, actor fallback, and direct-UUID rollback support.
+- Improved Gear Normalization Compendium UX: normalization sources now display the human-readable source first (for example `Player's Handbook`, `SRD 5.2`, `Dungeons & Dragons 5e`) and the specific pack second (`Equipment`, `Items`, etc.).
+- Normalization source priority, four-pack limit, matching rules, Harvest generation, and loot modes are otherwise unchanged.
+
+
 ## 0.0.13
 
 - Reworked Token Harvest → Item Piles into a transactional create-first pipeline.

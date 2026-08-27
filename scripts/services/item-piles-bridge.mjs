@@ -88,7 +88,7 @@ export class ItemPilesBridge {
     }
 
     const sourceSnapshot = this.#tokenSnapshot(tokenDocument);
-    const createdUuid = await api.createItemPile({
+    const created = await api.createItemPile({
       position: { x: Number(tokenDocument.x) || 0, y: Number(tokenDocument.y) || 0 },
       sceneId: String(tokenDocument.parent?.id ?? canvas?.scene?.id ?? game.user?.viewedScene ?? ""),
       tokenOverrides: sourceSnapshot.tokenOverrides,
@@ -96,9 +96,15 @@ export class ItemPilesBridge {
       items: finalPayload
     });
 
-    const pileDocument = await this.#resolveCreatedPile(createdUuid);
+    // Item Piles versions in the wild have returned more than one shape here:
+    // a UUID string, a TokenDocument, or an object such as
+    // { tokenUuid, actorUuid }. Normalize that public-API result before the
+    // transaction commits so Crafting Core never mistakes a successfully
+    // created pile for a failed creation.
+    const createdPile = await this.#resolveCreatedPile(created, { sceneId: tokenDocument.parent?.id });
+    const pileDocument = createdPile.tokenDocument;
     if (!pileDocument?.actor) {
-      await this.#rollbackPile(pileDocument);
+      await this.#rollbackCreatedPile(createdPile);
       throw new Error(`Item Piles created a corpse pile for ${tokenDocument.name ?? tokenDocument.id}, but Crafting Core could not resolve its Token/Actor.`);
     }
 
@@ -107,7 +113,7 @@ export class ItemPilesBridge {
     try {
       await tokenDocument.delete();
     } catch (error) {
-      await this.#rollbackPile(pileDocument);
+      await this.#rollbackCreatedPile(createdPile);
       throw new Error(`The loot pile was created, but the original corpse could not be removed. The new pile was rolled back. ${error?.message ?? error}`);
     }
 
@@ -155,26 +161,112 @@ export class ItemPilesBridge {
     return { tokenOverrides, actorOverrides };
   }
 
-  static async #resolveCreatedPile(created) {
-    const candidates = Array.isArray(created) ? created : [created];
-    for (const candidate of candidates) {
+  static async #resolveCreatedPile(created, { sceneId="" }={}) {
+    const tokenCandidates = [];
+    const actorCandidates = [];
+    const documentCandidates = [];
+    const queue = Array.isArray(created) ? [...created] : [created];
+
+    for (const candidate of queue) {
       if (!candidate) continue;
-      if (candidate.documentName === "Token") return candidate;
-      if (candidate.document?.documentName === "Token") return candidate.document;
+      if (candidate.documentName === "Token") {
+        documentCandidates.push(candidate);
+        continue;
+      }
+      if (candidate.document?.documentName === "Token") {
+        documentCandidates.push(candidate.document);
+        continue;
+      }
+      if (candidate.documentName === "Actor") {
+        actorCandidates.push(candidate.uuid ?? candidate.id);
+        continue;
+      }
       if (typeof candidate === "string") {
-        try {
-          const document = await foundry.utils.fromUuid(candidate);
-          if (document?.documentName === "Token") return document;
-        } catch (_) {}
+        tokenCandidates.push(candidate);
+        continue;
+      }
+      if (typeof candidate === "object") {
+        if (candidate.tokenDocument?.documentName === "Token") documentCandidates.push(candidate.tokenDocument);
+        if (candidate.token?.documentName === "Token") documentCandidates.push(candidate.token);
+        if (candidate.token?.document?.documentName === "Token") documentCandidates.push(candidate.token.document);
+        if (candidate.tokenUuid) tokenCandidates.push(String(candidate.tokenUuid));
+        if (candidate.uuid && String(candidate.uuid).includes(".Token.")) tokenCandidates.push(String(candidate.uuid));
+        if (candidate.actorUuid) actorCandidates.push(String(candidate.actorUuid));
+        if (candidate.actor?.uuid) actorCandidates.push(String(candidate.actor.uuid));
       }
     }
-    return null;
+
+    for (const tokenDocument of documentCandidates) {
+      if (tokenDocument?.actor) {
+        return { tokenDocument, actorDocument: tokenDocument.actor, tokenUuid: tokenDocument.uuid ?? "", actorUuid: tokenDocument.actor.uuid ?? "" };
+      }
+    }
+
+    // A newly-created embedded Token may become locally resolvable one tick
+    // after createItemPile() returns. Retry briefly without creating any
+    // user-visible delay.
+    const delays = [0, 0, 25, 75];
+    for (const delay of delays) {
+      if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+      for (const uuid of [...new Set(tokenCandidates.filter(Boolean))]) {
+        const document = await this.#fromUuidSafe(uuid);
+        if (document?.documentName === "Token" && document.actor) {
+          return { tokenDocument: document, actorDocument: document.actor, tokenUuid: document.uuid ?? uuid, actorUuid: document.actor.uuid ?? "" };
+        }
+      }
+    }
+
+    // Fallback for Item Piles variants that only provide actorUuid. The pile is
+    // a synthetic/unlinked Token in the requested Scene, so resolve the Actor
+    // and then locate the unique Token which represents it.
+    for (const uuid of [...new Set(actorCandidates.filter(Boolean))]) {
+      const actorDocument = await this.#fromUuidSafe(uuid);
+      if (!actorDocument || actorDocument.documentName !== "Actor") continue;
+      const scene = game.scenes?.get?.(String(sceneId || "")) ?? canvas?.scene ?? null;
+      const matches = [...(scene?.tokens?.contents ?? scene?.tokens ?? [])].filter(token => token?.actor?.id === actorDocument.id || token?.actor?.uuid === actorDocument.uuid);
+      if (matches.length === 1) {
+        const tokenDocument = matches[0];
+        return { tokenDocument, actorDocument: tokenDocument.actor ?? actorDocument, tokenUuid: tokenDocument.uuid ?? "", actorUuid: actorDocument.uuid ?? uuid };
+      }
+    }
+
+    return {
+      tokenDocument: null,
+      actorDocument: null,
+      tokenUuid: String(tokenCandidates[0] ?? ""),
+      actorUuid: String(actorCandidates[0] ?? "")
+    };
   }
 
-  static async #rollbackPile(pileDocument) {
-    if (!pileDocument) return;
+  static async #fromUuidSafe(uuid) {
+    if (!uuid) return null;
     try {
-      await pileDocument.delete?.();
+      const resolver = foundry.utils?.fromUuid ?? globalThis.fromUuid;
+      if (typeof resolver !== "function") return null;
+      return await resolver(uuid);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static async #rollbackCreatedPile(createdPile) {
+    const tokenDocument = createdPile?.tokenDocument ?? null;
+    if (tokenDocument) {
+      try {
+        await tokenDocument.delete?.();
+        return;
+      } catch (error) {
+        console.error(`${MODULE_ID} | Failed to roll back a newly-created corpse pile Token after Token Harvest failure.`, error);
+      }
+    }
+
+    // Even when local resolution failed, Item Piles may already have created
+    // the Token. Use its returned tokenUuid directly as a best-effort rollback.
+    const tokenUuid = String(createdPile?.tokenUuid ?? "");
+    const resolved = await this.#fromUuidSafe(tokenUuid);
+    if (!resolved) return;
+    try {
+      await resolved.delete?.();
     } catch (error) {
       console.error(`${MODULE_ID} | Failed to roll back a newly-created corpse pile after Token Harvest failure.`, error);
     }

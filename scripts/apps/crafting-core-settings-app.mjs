@@ -72,7 +72,9 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
         selected: normalizationSet.has(pack.collection),
         priority: normalizationSet.has(pack.collection) ? this.normalizationSelected.indexOf(pack.collection) + 1 : null,
         disabled: atNormalizationLimit && !normalizationSet.has(pack.collection),
-        detail: this.#packDetail(pack)
+        sourceLabel: pack.sourceLabel,
+        packLabel: pack.packLabel ?? pack.label,
+        sourceKind: pack.sourceKind
       })),
       normalizationSelectedCount: this.normalizationSelected.length,
       normalizationMaxSources: GearNormalizationService.MAX_SOURCES
@@ -158,14 +160,6 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
     if (target < 0 || target >= this.normalizationSelected.length) return;
     [this.normalizationSelected[index], this.normalizationSelected[target]] = [this.normalizationSelected[target], this.normalizationSelected[index]];
     this.render({ force: true });
-  }
-
-  #packDetail(pack) {
-    const type = String(pack.packageType ?? "world");
-    const name = String(pack.packageName ?? "");
-    if (type === "system") return name ? `System · ${name}` : "System Item Compendium";
-    if (type === "module") return name ? `Module · ${name}` : "Module Item Compendium";
-    return "World Item Compendium";
   }
 
   async #save(event) {
