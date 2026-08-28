@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.19f1
+- Fixed generated Item Piles created from Generate Materials so **every preview Item is transferred**, not only the last row.
+- Corrected the Item Piles `createItemPile()` payload to use the module API's `{ item, quantity }` entry shape for each generated material instead of passing raw Item data objects directly.
+- Generated source Item data now stays at quantity 1 while the requested stack size is supplied through the Item Piles payload, matching the already-stable Token Harvest `addItems()` integration and avoiding system quantity transformation issues.
+- The fix is shared by drag-to-scene and the secondary center-of-scene fallback, so Creature Harvest, Environment Gathering, and Game Hunt all use the same corrected multi-item path.
+- No generation probabilities, multi-select UX, hidden-pile behavior, Crafting Projects, Harvest rarity pools, or catalog data were changed.
+
 ## 0.0.19f
 - Converted Generate Materials checkbox multi-selects into true anchored **popover/dropdown controls**. Biomes, Resources, Abundance, Creature Types, Harvest Profiles, and Essence Affinities now open over the Application instead of expanding/reflowing the window.
 - Applied the same popover interaction to Harvest Profile rarity-pool material selection, establishing the shared rule that selector dropdowns must not distort Application layout.

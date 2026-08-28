@@ -135,7 +135,12 @@ export class ItemPilesBridge {
       delete data.folder;
       data.sort = 0;
       data.system ??= {};
-      data.system.quantity = Math.max(1, Math.floor(Number(row.quantity) || 1));
+      // Item Piles createItemPile() expects each generated entry in the same
+      // { item, quantity } shape used by addItems(). Keep the cloned source Item
+      // at quantity 1 and pass the requested stack separately; passing raw Item
+      // data here can be interpreted as one transformed entry and collapse a
+      // multi-item preview down to the final row in D&D5e.
+      data.system.quantity = 1;
       data.flags ??= {};
       data.flags[MODULE_ID] = {
         ...(data.flags[MODULE_ID] ?? {}),
@@ -143,7 +148,10 @@ export class ItemPilesBridge {
         generatedAt: Date.now(),
         generationSource: String(result.source ?? "manual-generation")
       };
-      items.push(data);
+      items.push({
+        item: data,
+        quantity: Math.max(1, Math.floor(Number(row.quantity) || 1))
+      });
     }
     if (missing.length) throw new Error(`Crafting Core material Items are missing (${missing.join(", ")}). Run Materials → Sync Catalog and retry.`);
     if (!items.length) throw new Error("No generated material Items could be resolved.");

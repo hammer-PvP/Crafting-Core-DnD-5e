@@ -1295,7 +1295,7 @@
   .cc-generator-affinity-options { grid-template-columns: 1fr; }
 }
 
-/* v0.0.19f — true anchored popovers + drag-to-scene generated loot */
+/* v0.0.19f1 — true anchored popovers + drag-to-scene generated loot */
 .cc-popover-field { position: relative; min-width: 0; }
 .cc-select-popover {
   position: fixed;
