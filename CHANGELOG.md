@@ -1,13 +1,14 @@
 # Changelog
 
-## 0.0.19f1
-- Rebuilt the generated Item Pile fix from the user-supplied stable **v0.0.19f** baseline; the previous f1 attempt is not part of this build.
-- Changed Generate Materials Item Pile creation to a two-stage transaction: create the hidden pile empty first, then populate its inventory through Item Piles `addItems()` using `{ item, quantity }` entries, matching the already-live-validated Token Harvest integration.
-- Added a unique generated-loot batch/material marker to cloned Items and post-transaction verification that every Preview material and quantity exists in the created pile.
-- If Item Piles creation succeeds but population or verification fails, Crafting Core removes the newly created Token instead of silently leaving a partial pile.
-- Temporarily disables `deleteWhenEmpty` only while the empty pile is being populated, then restores the Item Piles default when available.
-- Drag-to-scene and **Create Hidden at Scene Center** share the same corrected population path, so Creature Harvest manual, Environment Gathering, and Game Hunt receive the same fix.
-- No generation probabilities, yield, dropdown UX, Harvest pools, Essence rules, Game Hunt behavior, or Crafting Project mechanics changed.
+## 0.0.19f2
+- Rebuilt the generated Item Pile population fix **from the clean v0.0.19f baseline**; no code from the unsuccessful f1 attempts was reused.
+- Updated the generated-loot bridge for the current Item Piles `createItemPile()` return shape, which provides `{ tokenUuid, actorUuid }` rather than the older documented string-only result.
+- Generated loot now uses a two-step transaction: create an empty hidden Item Pile, resolve the created Token via `tokenUuid`, then populate its synthetic Actor through the already-proven `game.itempiles.API.addItems()` path.
+- Every generated material is passed to `addItems()` as `{ item, quantity }`, with the cloned D&D5e Item held at quantity 1 so Item Piles owns stack quantity.
+- Added post-population validation against the generated Preview using stable Crafting Core material IDs and quantities. An incomplete pile is treated as a failure instead of a successful partial result.
+- Failed or incomplete generated piles are removed through Item Piles `deleteItemPile()` when available, preventing empty/partial loot tokens from being left on the Scene.
+- The same shared fix applies to drag-to-scene and the hidden Scene-center fallback for Creature Harvest, Environment Gathering, and Game Hunt.
+- No changes to generation chances, Attempts, Game Hunt yield, dropdown UX, Harvest rarity pools, Essence rules, or Crafting Projects.
 
 ## 0.0.19f
 - Converted Generate Materials checkbox multi-selects into true anchored **popover/dropdown controls**. Biomes, Resources, Abundance, Creature Types, Harvest Profiles, and Essence Affinities now open over the Application instead of expanding/reflowing the window.

@@ -1,8 +1,12 @@
 # Crafting Core (DnD 5e)
 
-## v0.0.19f1 — Transactional Generated Item Pile Population
+## v0.0.19f2 — Generated Item Pile Population Hotfix
 
-v0.0.19f1 is a narrow hotfix rebuilt directly from the user-supplied stable v0.0.19f baseline. Generated Loot no longer asks `createItemPile()` to create a pile and a multi-item inventory in the same operation. Crafting Core now creates the hidden pile first, resolves that pile, then uses the same Item Piles `addItems()` transaction pattern already proven by Token Harvest. The result is verified against the Preview before Crafting Core reports success; incomplete generated piles are removed rather than left silently on the Scene.
+v0.0.19f2 is rebuilt directly from the clean v0.0.19f baseline. It keeps the approved popover UX and hidden drag-to-scene workflow unchanged while correcting the shared generated-loot Item Piles transaction.
+
+The current Item Piles API returns an object containing `tokenUuid` and `actorUuid` when a pile is created on a Scene. Crafting Core now creates the pile empty, resolves that exact Token, and then populates its synthetic Actor through `game.itempiles.API.addItems()` using one `{ item, quantity }` entry per generated material. After population, Crafting Core verifies that every Preview material and quantity exists on the resulting pile. If population is incomplete, the pile is removed instead of leaving an empty or partial result on the Scene.
+
+This hotfix does not retune gathering, Game Hunt, Attempts, rarity pools, Essence, or Crafting Projects.
 
 ## v0.0.19f — Popover UX & Hidden Drag-to-Scene Loot
 
