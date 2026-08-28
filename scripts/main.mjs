@@ -96,6 +96,8 @@ Hooks.once("init", () => {
 
 Hooks.once("ready", async () => {
   exposeApi();
+  try { await RecipeService.prepareSystemLabels(); }
+  catch (error) { console.warn(`${MODULE_TITLE} | Could not preload D&D5e proficiency labels.`, error); }
   try { CraftingService.ready(); }
   catch (error) { console.error(`${MODULE_TITLE} | Crafting runtime failed to become ready.`, error); }
 

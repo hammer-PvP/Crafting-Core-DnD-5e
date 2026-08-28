@@ -1,12 +1,16 @@
 # Crafting Core (DnD 5e)
 
-## v0.0.18 — Recipe Crafting Resolution
+## v0.0.18a — Crafting Resolution polish
 
-This release adds an optional resolution layer to Recipes while leaving the validated v0.0.17 Harvest pipeline unchanged. A Recipe may define one or two relevant native D&D5e Skill/Tool proficiencies, choose whether anyone can attempt it or proficiency is mandatory, and choose whether a qualifying crafter rolls normally or succeeds automatically.
+v0.0.18a keeps the v0.0.18 Crafting Resolution scope and deliberately does **not** introduce the rest-based Crafting Projects reserved for v0.0.19. The validated v0.0.17 Harvest pipeline remains unchanged.
 
-Recipes can also require a native D&D5e Ability Check, Skill Check, Tool Check, or Saving Throw with a GM-configured DC. When a roll is required it is made by the crafting player; the active GM validates the Crafting Core-tagged chat roll before any inventory transaction is committed. On failure, the Recipe can lose no materials or a configurable 0–100% share of every required ingredient. Failure never creates the output.
+Recipes may define one or two relevant native D&D5e Skill/Tool proficiencies, Any/All matching, Anyone/Requires Proficiency access, and Roll Normally/Automatic Success behavior. An optional native Ability Check, Skill Check, Tool Check, or Saving Throw can use a GM-configured DC, with configurable 0–100% material loss on failure. A failed Crafting Check never creates the output.
 
-Recipes created before v0.0.18 remain automatic-success recipes unless the GM explicitly enables these new rules. Existing seconds-based Crafting Time is unchanged; rest-based Crafting Projects are planned for the next development step.
+The GM now also controls **Player Visibility** for output, ingredients, ingredient quantities, proficiencies, attempt rules, Crafting Check, DC, failure consequences, exact loss percentage, crafting time, and optional descriptive text. Published Recipe/Formula/Blueprint/Manual Items automatically build their visible Description from the Recipe snapshot. Skill and Tool IDs are never intentionally presented as raw internal keys; standard tool references resolve to their D&D5e Item names such as **Smith's Tools**.
+
+Knowledge Sources can use **Follow Crafting Eligibility** or **Anyone Can Learn**. When eligibility is required, Crafting Core validates the Character before the Knowledge Activity is used; an ineligible attempt does not consume the source. The scoped D&D5e usage button reads **Learn** for Crafting Core Knowledge Activities.
+
+The Recipe Builder also preserves its scroll position when Ingredients/Output are dropped, and the Recipe sidebar selection layout is tightened to match the selected row. Existing Recipes remain backward compatible. Existing seconds-based Crafting Time is unchanged; rest-based Crafting Projects are still the next development step.
 
 ## v0.0.17 — Immersive Corpse Loot hotfix
 

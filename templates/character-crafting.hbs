@@ -9,7 +9,7 @@
       <header class="cc-sheet-header">
         <label><span>Recipe</span>
           <select data-action="select-recipe">
-            {{#each craftingCore.recipes}}<option value="{{id}}" {{#if selected}}selected{{/if}}>{{craftCount}}× {{name}}</option>{{/each}}
+            {{#each craftingCore.recipes}}<option value="{{id}}" {{#if selected}}selected{{/if}}>{{name}}</option>{{/each}}
           </select>
         </label>
       </header>
@@ -17,45 +17,93 @@
       {{#with craftingCore.selectedRecipe}}
       <article class="cc-sheet-recipe">
         <div class="cc-sheet-result">
-          <img src="{{result.img}}" alt="">
-          <div><strong>{{name}}</strong><small>{{result.name}}{{#if result.quantity}} ×{{result.quantity}}{{/if}}</small></div>
+          <img src="{{img}}" alt="">
+          <div><strong>{{name}}</strong></div>
         </div>
+
+        {{#if playerVisibility.description}}
+          {{#if description}}
+          <div class="cc-sheet-description">{{description}}</div>
+          {{/if}}
+        {{/if}}
+
+        {{#if playerVisibility.ingredients}}
         <div class="cc-sheet-ingredients">
           {{#each ingredientRows}}
-          <div class="cc-sheet-ingredient {{#unless sufficient}}missing{{/unless}}">
+          <div class="cc-sheet-ingredient {{#unless sufficient}}missing{{/unless}} {{#unless ../playerVisibility.ingredientQuantities}}quantities-hidden{{/unless}}">
             <img src="{{img}}" alt="">
             <span>{{name}}</span>
-            <strong>{{available}} / {{quantity}}</strong>
+            <strong>
+              {{#if ../playerVisibility.ingredientQuantities}}{{available}} / {{quantity}}{{else}}{{#if sufficient}}Available{{else}}Missing{{/if}}{{/if}}
+            </strong>
             <i class="fa-solid {{#if sufficient}}fa-check{{else}}fa-xmark{{/if}}"></i>
           </div>
           {{/each}}
         </div>
+        {{/if}}
 
         <div class="cc-sheet-resolution {{#unless resolution.eligible}}blocked{{/unless}}">
-          {{#if resolution.proficiencyRows.length}}
+          {{#if playerVisibility.output}}
           <div class="cc-sheet-resolution-row">
-            <i class="fa-solid fa-screwdriver-wrench"></i>
-            <span>Relevant proficiency</span>
-            <strong>
-              {{#each resolution.proficiencyRows}}{{label}}{{#unless @last}}{{#if (eq ../resolution.proficiencyMatch "all")}} + {{else}} or {{/if}}{{/unless}}{{/each}}
-            </strong>
+            <i class="fa-solid fa-box-open"></i>
+            <span>Output</span>
+            <strong>{{result.name}}{{#if result.quantity}} ×{{result.quantity}}{{/if}}</strong>
           </div>
           {{/if}}
-          {{#if resolution.check.required}}
+
+          {{#if playerVisibility.craftingTime}}
           <div class="cc-sheet-resolution-row">
-            <i class="fa-solid fa-dice-d20"></i>
-            <span>Crafting Check</span>
-            <strong>{{#if resolution.automaticSuccess}}Automatic Success{{else}}{{resolution.checkLabel}} · DC {{resolution.check.dc}}{{/if}}</strong>
+            <i class="fa-solid fa-clock"></i>
+            <span>Crafting Time</span>
+            <strong>{{craftingTime}} sec</strong>
           </div>
           {{/if}}
-          {{#if resolution.rollRequired}}
+
+          {{#if playerVisibility.proficiencies}}
+            {{#if resolution.proficiencyRows.length}}
+            <div class="cc-sheet-resolution-row">
+              <i class="fa-solid fa-screwdriver-wrench"></i>
+              <span>Relevant Proficiency</span>
+              <strong>
+                {{#each resolution.proficiencyRows}}{{label}}{{#unless @last}}{{#if (eq ../resolution.proficiencyMatch "all")}} + {{else}} or {{/if}}{{/unless}}{{/each}}
+              </strong>
+            </div>
+            {{/if}}
+          {{/if}}
+
+          {{#if playerVisibility.attemptPolicy}}
           <div class="cc-sheet-resolution-row">
-            <i class="fa-solid fa-triangle-exclamation"></i>
-            <span>Failure</span>
-            <strong>{{#if resolution.failure.loseMaterials}}{{resolution.failure.lossPercent}}% materials lost{{else}}No materials lost{{/if}}</strong>
+            <i class="fa-solid fa-user-check"></i>
+            <span>Who Can Attempt</span>
+            <strong>{{#if (eq resolution.attemptPolicy "requiresProficiency")}}Requires relevant proficiency{{else}}Anyone{{/if}}</strong>
           </div>
           {{/if}}
-          {{#unless resolution.eligible}}<p class="cc-sheet-resolution-block"><i class="fa-solid fa-lock"></i> {{resolution.blockReason}}</p>{{/unless}}
+
+          {{#if playerVisibility.craftingCheck}}
+            {{#if resolution.check.required}}
+            <div class="cc-sheet-resolution-row">
+              <i class="fa-solid fa-dice-d20"></i>
+              <span>Crafting Check</span>
+              <strong>{{#if resolution.automaticSuccess}}Automatic Success{{else}}{{resolution.checkLabel}}{{#if playerVisibility.craftingDC}} · DC {{resolution.check.dc}}{{/if}}{{/if}}</strong>
+            </div>
+            {{/if}}
+          {{/if}}
+
+          {{#if playerVisibility.failure}}
+            {{#if resolution.rollRequired}}
+            <div class="cc-sheet-resolution-row">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              <span>Failure</span>
+              <strong>
+                {{#if resolution.failure.loseMaterials}}
+                  {{#if playerVisibility.failurePercent}}{{resolution.failure.lossPercent}}% materials lost{{else}}Materials may be lost{{/if}}
+                {{else}}No materials lost{{/if}}
+              </strong>
+            </div>
+            {{/if}}
+          {{/if}}
+
+          {{#unless resolution.eligible}}<p class="cc-sheet-resolution-block"><i class="fa-solid fa-lock"></i> {{resolution.publicBlockReason}}</p>{{/unless}}
         </div>
 
         <button type="button" class="cc-sheet-craft" data-action="craft" data-recipe-id="{{id}}" {{#unless canCraft}}disabled{{/unless}}><i class="fa-solid {{#if resolution.rollRequired}}fa-dice-d20{{else}}fa-hammer{{/if}}"></i> {{#if resolution.rollRequired}}Attempt Craft{{else}}Craft{{/if}}</button>

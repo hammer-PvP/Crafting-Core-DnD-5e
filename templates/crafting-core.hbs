@@ -52,6 +52,7 @@
           <label><span>Crafting Time (seconds)</span><input type="number" min="0" step="1" name="craftingTime" value="{{draft.craftingTime}}"></label>
         </div>
         <label class="cc-file-field"><span>Recipe Image</span><span><input type="text" name="img" value="{{draft.img}}"><button type="button" data-action="browse-image" data-target="img"><i class="fa-solid fa-folder-open"></i></button></span></label>
+        <label class="cc-description-field"><span>Additional Description (optional)</span><textarea name="description" rows="4" placeholder="Optional lore, instructions, flavor, or crafting notes for this recipe.">{{draft.description}}</textarea><small>This text can be revealed to players independently through Player Visibility.</small></label>
       </section>
 
       <section class="cc-form-card cc-crafting-resolution-card">
@@ -111,6 +112,23 @@
         </div>
       </section>
 
+      <section class="cc-form-card cc-player-visibility-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Player Visibility</span><h3>What the Player Can See</h3></div><small>Hidden information remains stored and enforced by Crafting Core. These controls affect the Character Crafting tab and published Knowledge Source.</small></div>
+        <div class="cc-visibility-grid">
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.output" {{#if draft.playerVisibility.output}}checked{{/if}}><span><strong>Output</strong><small>Reveal the crafted Item.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.ingredients" {{#if draft.playerVisibility.ingredients}}checked{{/if}}><span><strong>Ingredients</strong><small>Reveal required Item names.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.ingredientQuantities" {{#if draft.playerVisibility.ingredientQuantities}}checked{{/if}}><span><strong>Ingredient Quantities</strong><small>Reveal required and available amounts when ingredients are visible.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.proficiencies" {{#if draft.playerVisibility.proficiencies}}checked{{/if}}><span><strong>Relevant Proficiencies</strong><small>Reveal Skill/Tool requirements.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.attemptPolicy" {{#if draft.playerVisibility.attemptPolicy}}checked{{/if}}><span><strong>Who Can Attempt</strong><small>Reveal whether proficiency is required.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingCheck" {{#if draft.playerVisibility.craftingCheck}}checked{{/if}}><span><strong>Crafting Check</strong><small>Reveal the configured roll type.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingDC" {{#if draft.playerVisibility.craftingDC}}checked{{/if}}><span><strong>Crafting DC</strong><small>Reveal the target DC with the check.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.failure" {{#if draft.playerVisibility.failure}}checked{{/if}}><span><strong>Failure Consequence</strong><small>Reveal whether materials can be lost.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.failurePercent" {{#if draft.playerVisibility.failurePercent}}checked{{/if}}><span><strong>Failure Percentage</strong><small>Reveal the exact material-loss percentage.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingTime" {{#if draft.playerVisibility.craftingTime}}checked{{/if}}><span><strong>Crafting Time</strong><small>Reveal the current crafting duration.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.description" {{#if draft.playerVisibility.description}}checked{{/if}}><span><strong>Additional Description</strong><small>Reveal the optional GM-written description.</small></span></label>
+        </div>
+      </section>
+
       <section class="cc-form-card">
         <div class="cc-card-heading"><div><span class="cc-kicker">Requirements</span><h3>Items Consumed</h3></div><small>Any D&D5e Item can be an input. Materials from Crafting Core — Materials are only the organized automatic source.</small></div>
         <div class="cc-drop-zone" data-drop-kind="ingredient"><i class="fa-solid fa-arrow-down-to-line"></i><strong>Drop required Items here</strong></div>
@@ -149,6 +167,13 @@
           <label><span>Custom Item Name (optional)</span><input type="text" name="knowledgeName" value="{{draft.knowledge.name}}" placeholder="Recipe — {{draft.name}}"></label>
         </div>
         <label class="cc-file-field"><span>Knowledge Source Image</span><span><input type="text" name="knowledgeImg" value="{{draft.knowledge.img}}"><button type="button" data-action="browse-image" data-target="knowledgeImg"><i class="fa-solid fa-folder-open"></i></button></span></label>
+        <div class="cc-learning-access">
+          <label><span>Learning Access</span><select name="learningAccess">
+            <option value="followCraftingEligibility" {{#if (eq draft.learning.access "followCraftingEligibility")}}selected{{/if}}>Follow Crafting Eligibility</option>
+            <option value="anyone" {{#if (eq draft.learning.access "anyone")}}selected{{/if}}>Anyone Can Learn</option>
+          </select></label>
+          <small><strong>Follow Crafting Eligibility</strong> prevents a Character from learning when the Recipe requires proficiencies they do not satisfy. A rejected attempt does not consume the Knowledge Source.</small>
+        </div>
         <div class="cc-knowledge-economy">
           <span><strong>Rarity</strong>{{outputRarity}}</span>
           <span><strong>Knowledge Price</strong>{{knowledgePrice}} gp</span>

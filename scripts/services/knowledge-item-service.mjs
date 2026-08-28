@@ -34,6 +34,7 @@ export class KnowledgeItemService {
     if (!game.user.isGM) throw new Error("Only a GM can publish Crafting Core knowledge sources.");
     let recipe = RecipeService.get(recipeId);
     if (!recipe) throw new Error("The selected Crafting Core draft no longer exists.");
+    await RecipeService.prepareSystemLabels();
     if (!recipe.result?.uuid && !recipe.result?.snapshot) throw new Error("The recipe has no result Item configured.");
 
     // Refresh a missing legacy output snapshot before publication so the source is autonomous.
@@ -99,6 +100,7 @@ export class KnowledgeItemService {
     if (!game.user.isGM) throw new Error("Only a GM can create Recipe/Blueprint Items.");
     const recipe = RecipeService.get(recipeId);
     if (!recipe) throw new Error("The selected Crafting Core recipe no longer exists.");
+    await RecipeService.prepareSystemLabels();
     const data = this.#knowledgeItemData(recipe, { published: false });
     const item = await Item.create(data, { renderSheet: false });
     if (!item) throw new Error("D&D5e did not create the Recipe/Blueprint Item.");
@@ -132,7 +134,7 @@ export class KnowledgeItemService {
       folder: folderId,
       system: {
         description: {
-          value: `<p>This ${foundry.utils.escapeHTML(label.toLowerCase())} teaches <strong>${foundry.utils.escapeHTML(recipe.name)}</strong>.</p>`,
+          value: this.#knowledgeDescription(recipe, label),
           chat: ""
         },
         quantity: 1,
@@ -183,6 +185,64 @@ export class KnowledgeItemService {
       ownership: { default: 0 }
     };
     return data;
+  }
+
+
+  static #knowledgeDescription(recipe, label) {
+    const visibility = RecipeService.normalizePlayerVisibility(recipe?.playerVisibility);
+    const escape = value => foundry.utils.escapeHTML(String(value ?? ""));
+    const lines = [`<p>This ${escape(String(label || "Recipe").toLowerCase())} teaches <strong>${escape(recipe?.name || "Recipe")}</strong>.</p>`];
+
+    if (visibility.description && String(recipe?.description || "").trim()) {
+      const description = escape(String(recipe.description).trim()).replace(/\r?\n/g, "<br>");
+      lines.push(`<section class="crafting-core-knowledge-description"><h3>Description</h3><p>${description}</p></section>`);
+    }
+
+    if (visibility.ingredients && Array.isArray(recipe?.ingredients) && recipe.ingredients.length) {
+      const ingredients = recipe.ingredients.map(row => {
+        const qty = visibility.ingredientQuantities ? ` ×${Math.max(1, Number(row.quantity) || 1)}` : "";
+        return `<li>${escape(row.name || "Item")}${qty}</li>`;
+      }).join("");
+      lines.push(`<section class="crafting-core-knowledge-ingredients"><h3>Ingredients</h3><ul>${ingredients}</ul></section>`);
+    }
+
+    if (visibility.output && recipe?.result) {
+      const qty = Math.max(1, Number(recipe.result.quantity) || 1);
+      lines.push(`<section class="crafting-core-knowledge-output"><h3>Output</h3><p>${escape(recipe.result.name || "Item")} ×${qty}</p></section>`);
+    }
+
+    const resolution = RecipeService.normalizeCraftingResolution(recipe?.craftingResolution);
+    if (visibility.proficiencies && resolution.proficiencies.length) {
+      const joiner = resolution.proficiencyMatch === "all" ? " + " : " or ";
+      const labels = resolution.proficiencies.map(row => RecipeService.proficiencyLabel(row)).join(joiner);
+      lines.push(`<p><strong>Relevant Proficiency:</strong> ${escape(labels)}</p>`);
+    }
+
+    if (visibility.attemptPolicy) {
+      const access = resolution.attemptPolicy === "requiresProficiency" ? "Requires relevant proficiency" : "Anyone";
+      lines.push(`<p><strong>Who Can Attempt:</strong> ${escape(access)}</p>`);
+    }
+
+    if (visibility.craftingCheck && resolution.check.required) {
+      const dc = visibility.craftingDC ? ` — DC ${resolution.check.dc}` : "";
+      lines.push(`<p><strong>Crafting Check:</strong> ${escape(RecipeService.checkLabel(resolution.check))}${dc}</p>`);
+    }
+
+    if (visibility.failure && resolution.check.required) {
+      let text = "No materials are lost on failure.";
+      if (resolution.failure.loseMaterials) {
+        text = visibility.failurePercent
+          ? `${resolution.failure.lossPercent}% of the required materials are lost on failure.`
+          : "Some required materials are lost on failure.";
+      }
+      lines.push(`<p><strong>Failure:</strong> ${escape(text)}</p>`);
+    }
+
+    if (visibility.craftingTime) {
+      lines.push(`<p><strong>Crafting Time:</strong> ${Math.max(0, Number(recipe?.craftingTime) || 0)} seconds</p>`);
+    }
+
+    return lines.join("\n");
   }
 
   static isKnowledgeActivity(activity) {
@@ -326,7 +386,7 @@ export class KnowledgeItemService {
   }
 
   static installHooks() {
-    Hooks.on("dnd5e.preUseActivity", (activity, _usageConfig, _dialogConfig, messageConfig) => {
+    Hooks.on("dnd5e.preUseActivity", (activity, _usageConfig, dialogConfig, messageConfig) => {
       if (!this.isKnowledgeActivity(activity)) return;
       const actor = activity.actor;
       const recipe = this.recipeSnapshotFromActivity(activity);
@@ -341,6 +401,26 @@ export class KnowledgeItemService {
       if (this.knows(actor, recipe.id)) {
         ui.notifications.info(`${actor.name} already knows this recipe.`);
         return false;
+      }
+
+      const eligibility = RecipeService.learningEligibility(actor, recipe);
+      if (!eligibility.eligible) {
+        const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
+        const reason = visibility.proficiencies
+          ? eligibility.reason
+          : `${actor.name} does not meet the requirements to learn this recipe.`;
+        ui.notifications.warn(reason);
+        return false;
+      }
+
+      // Scope the native D&D5e Activity Usage button to Crafting Core Knowledge Sources only.
+      if (dialogConfig) {
+        dialogConfig.options ??= {};
+        dialogConfig.options.button = {
+          ...(dialogConfig.options.button ?? {}),
+          icon: "fa-solid fa-book-open",
+          label: "Learn"
+        };
       }
       // Learning is intentionally quiet: no utility chat card is needed for this role-play action.
       if (messageConfig) messageConfig.create = false;

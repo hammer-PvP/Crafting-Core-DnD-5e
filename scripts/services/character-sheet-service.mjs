@@ -1,6 +1,7 @@
 import { MODULE_ID } from "../constants.mjs";
 import { CraftingService } from "./crafting-service.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
+import { RecipeService } from "./recipe-service.mjs";
 
 export class CharacterSheetService {
   static #selection = new Map();
@@ -99,8 +100,17 @@ export class CharacterSheetService {
         try {
           const result = await CraftingService.requestCraft(actor, recipeId);
           if (result?.outcome === "failure") {
+            const recipe = KnowledgeItemService.recipeForActor(actor, recipeId);
+            const visibility = RecipeService.normalizePlayerVisibility(recipe?.playerVisibility);
             const loss = Number(result.lossPercent) || 0;
-            ui.notifications.warn(`Crafting failed.${loss > 0 ? ` ${loss}% of the required materials were lost.` : " No materials were lost."}`);
+            let message = "Crafting failed.";
+            if (visibility.failure) {
+              if (loss > 0) message += visibility.failurePercent
+                ? ` ${loss}% of the required materials were lost.`
+                : " Some required materials were lost.";
+              else message += " No materials were lost.";
+            }
+            ui.notifications.warn(message);
           }
           app.render({ force: true });
         } catch (error) {

@@ -43,7 +43,7 @@ export class CraftingService {
     const recipe = KnowledgeItemService.recipeForActor(actor, String(recipeId));
     if (!recipe) throw new Error(`${actor.name} has not learned this recipe.`);
     const evaluation = this.evaluateResolution(actor, recipe);
-    if (!evaluation.eligible) throw new Error(evaluation.blockReason || `${actor.name} does not meet this recipe's proficiency requirements.`);
+    if (!evaluation.eligible) throw new Error(evaluation.publicBlockReason || `${actor.name} does not meet this recipe's requirements.`);
 
     const payload = {
       action: REQUEST,
@@ -97,25 +97,30 @@ export class CraftingService {
   }
 
   static evaluateResolution(actor, recipe) {
-    const resolution = RecipeService.normalizeCraftingResolution(recipe?.craftingResolution);
+    const proficiency = RecipeService.proficiencyEvaluation(actor, recipe?.craftingResolution);
+    const resolution = proficiency.resolution;
     const configured = resolution.proficiencies;
-    const proficiencyRows = configured.map(entry => ({
-      ...entry,
-      label: this.#proficiencyLabel(entry),
-      proficient: this.#hasProficiency(actor, entry)
-    }));
-    const qualifies = configured.length > 0 && (resolution.proficiencyMatch === "all"
-      ? proficiencyRows.every(row => row.proficient)
-      : proficiencyRows.some(row => row.proficient));
-    const eligible = resolution.attemptPolicy !== "requiresProficiency" || qualifies;
+    const proficiencyRows = proficiency.rows;
+    const qualifies = proficiency.qualifies;
+    const eligible = proficiency.eligible;
     const automaticByProficiency = configured.length > 0 && qualifies
       && resolution.proficientPolicy === "automaticSuccess";
     const automaticSuccess = eligible && (!resolution.check.required || automaticByProficiency);
     const rollRequired = eligible && resolution.check.required && !automaticByProficiency;
-    const checkLabel = this.#checkLabel(resolution.check);
-    const blockReason = eligible ? "" : configured.length
-      ? `${actor?.name ?? "This character"} requires ${resolution.proficiencyMatch === "all" ? "all" : "one"} of: ${proficiencyRows.map(row => row.label).join(", ")}.`
-      : "This recipe requires a relevant proficiency, but none is configured.";
+    const checkLabel = RecipeService.checkLabel(resolution.check, actor);
+    let blockReason = "";
+    if (!eligible) {
+      if (!configured.length) blockReason = "This recipe requires a relevant proficiency, but none is configured.";
+      else if (proficiencyRows.length === 1) blockReason = `${actor?.name ?? "This character"} requires proficiency in ${proficiencyRows[0].label}.`;
+      else {
+        const qualifier = resolution.proficiencyMatch === "all" ? "all of" : "one of";
+        blockReason = `${actor?.name ?? "This character"} requires ${qualifier}: ${proficiencyRows.map(row => row.label).join(", ")}.`;
+      }
+    }
+    const visibility = RecipeService.normalizePlayerVisibility(recipe?.playerVisibility);
+    const publicBlockReason = eligible ? "" : visibility.proficiencies
+      ? blockReason
+      : "You do not meet the requirements to craft this recipe.";
 
     return {
       ...resolution,
@@ -126,6 +131,8 @@ export class CraftingService {
       rollRequired,
       checkLabel,
       blockReason,
+      publicBlockReason,
+      visibility,
       summary: this.#resolutionSummary(resolution, proficiencyRows, qualifies, checkLabel)
     };
   }
@@ -197,8 +204,13 @@ export class CraftingService {
 
     const prepared = this.prepareRecipeForActor(actor, recipe);
     const missing = prepared.ingredientRows.filter(row => !row.sufficient);
-    if (missing.length) throw new Error(`Missing materials: ${missing.map(row => row.name).join(", ")}.`);
-    if (!prepared.resolution.eligible) throw new Error(prepared.resolution.blockReason);
+    if (missing.length) {
+      const message = prepared.playerVisibility?.ingredients
+        ? `Missing materials: ${missing.map(row => row.name).join(", ")}.`
+        : "Required crafting materials are missing.";
+      throw new Error(message);
+    }
+    if (!prepared.resolution.eligible) throw new Error(prepared.resolution.publicBlockReason);
 
     const rollResult = prepared.resolution.rollRequired
       ? await this.#validateCraftingRoll(actor, recipe, requester, request)
@@ -208,7 +220,7 @@ export class CraftingService {
       const failure = prepared.resolution.failure;
       const lossPercent = failure.loseMaterials ? failure.lossPercent : 0;
       const lostRequirements = this.#scaledRequirements(recipe.ingredients, lossPercent);
-      if (lostRequirements.length) await this.#consumeIngredients(actor, lostRequirements);
+      if (lostRequirements.length) await this.#consumeIngredients(actor, lostRequirements, { revealNames: prepared.playerVisibility?.ingredients });
       await this.#postOutcome(actor, recipe, {
         success: false,
         total: rollResult.total,
@@ -233,7 +245,7 @@ export class CraftingService {
       resultData = resultSource.toObject();
     }
 
-    await this.#consumeIngredients(actor, recipe.ingredients);
+    await this.#consumeIngredients(actor, recipe.ingredients, { revealNames: prepared.playerVisibility?.ingredients });
 
     const startedAt = this.serverTime();
     const endsAt = startedAt + Math.max(0, Number(recipe.craftingTime) || 0) * 1000;
@@ -276,13 +288,16 @@ export class CraftingService {
       createdAt: Date.now(),
       consumedAt: 0
     };
+    const visibility = evaluation.visibility;
+    const revealedCheck = visibility.craftingCheck ? ` · ${foundry.utils.escapeHTML(evaluation.checkLabel)}` : "";
+    const revealedDc = visibility.craftingCheck && visibility.craftingDC ? ` DC ${check.dc}` : "";
     const message = {
       data: {
         flags: { [MODULE_ID]: { [FLAGS.CRAFTING_ROLL]: flagData } },
-        flavor: `Crafting Check — ${foundry.utils.escapeHTML(recipe.name)} · ${foundry.utils.escapeHTML(evaluation.checkLabel)} DC ${check.dc}`
+        flavor: `Crafting Check — ${foundry.utils.escapeHTML(recipe.name)}${revealedCheck}${revealedDc}`
       }
     };
-    const config = { target: check.dc };
+    const config = visibility.craftingDC ? { target: check.dc } : {};
     let rolls;
     switch (check.type) {
       case "ability": rolls = await actor.rollAbilityCheck({ ...config, ability: check.id }, {}, message); break;
@@ -355,7 +370,7 @@ export class CraftingService {
     })).filter(requirement => requirement.quantity > 0);
   }
 
-  static async #consumeIngredients(actor, requirements) {
+  static async #consumeIngredients(actor, requirements, { revealNames=true }={}) {
     const state = new Map(actor.items.map(item => [item.id, {
       item,
       quantity: this.#itemQuantity(item),
@@ -372,7 +387,7 @@ export class CraftingService {
         row.remaining -= used;
         need -= used;
       }
-      if (need > 0) throw new Error(`Not enough ${requirement.name}.`);
+      if (need > 0) throw new Error(revealNames ? `Not enough ${requirement.name}.` : "Not enough required crafting materials.");
     }
 
     const updates = [];
@@ -390,9 +405,21 @@ export class CraftingService {
 
   static async #postOutcome(actor, recipe, { success, total=null, dc=null, lossPercent=0 }={}) {
     if (!globalThis.ChatMessage?.create) return;
-    const content = success
+    const visibility = RecipeService.normalizePlayerVisibility(recipe?.playerVisibility);
+    let content = success
       ? `<p><strong>${foundry.utils.escapeHTML(recipe.name)}</strong> was crafted successfully.</p>`
-      : `<p><strong>${foundry.utils.escapeHTML(recipe.name)}</strong> failed.</p><p>Crafting Check: <strong>${total}</strong> vs DC <strong>${dc}</strong>.</p><p>${lossPercent > 0 ? `${lossPercent}% of the required materials were lost.` : "No materials were lost."}</p>`;
+      : `<p><strong>${foundry.utils.escapeHTML(recipe.name)}</strong> failed.</p>`;
+    if (!success && visibility.craftingCheck && Number.isFinite(Number(total))) {
+      content += visibility.craftingDC
+        ? `<p>Crafting Check: <strong>${total}</strong> vs DC <strong>${dc}</strong>.</p>`
+        : `<p>Crafting Check result: <strong>${total}</strong>.</p>`;
+    }
+    if (!success && visibility.failure) {
+      if (lossPercent > 0) content += visibility.failurePercent
+        ? `<p>${lossPercent}% of the required materials were lost.</p>`
+        : `<p>Some required materials were lost.</p>`;
+      else content += `<p>No materials were lost.</p>`;
+    }
     await ChatMessage.create({
       speaker: ChatMessage.getSpeaker({ actor }),
       content,
@@ -443,35 +470,6 @@ export class CraftingService {
 
     const docs = Array.from({ length: quantity }, () => foundry.utils.deepClone(data));
     await actor.createEmbeddedDocuments("Item", docs);
-  }
-
-  static #hasProficiency(actor, requirement) {
-    if (!actor || !requirement?.id) return false;
-    const data = requirement.type === "tool"
-      ? actor.system?.tools?.[requirement.id]
-      : actor.system?.skills?.[requirement.id];
-    if (!data) return false;
-    if (typeof data.prof?.hasProficiency === "boolean") return data.prof.hasProficiency;
-    if (typeof data.hasProficiency === "boolean") return data.hasProficiency;
-    return Number(data.value ?? data.proficient ?? 0) > 0;
-  }
-
-  static #proficiencyLabel(requirement) {
-    const config = requirement?.type === "tool" ? CONFIG.DND5E?.tools : CONFIG.DND5E?.skills;
-    const data = config?.[requirement?.id];
-    const raw = (typeof data === "string" ? data : data?.label) ?? requirement?.id ?? "Proficiency";
-    return game.i18n.localize(raw);
-  }
-
-  static #checkLabel(check) {
-    const type = String(check?.type || "skill");
-    const id = String(check?.id || "");
-    if (type === "skill") return this.#proficiencyLabel({ type: "skill", id });
-    if (type === "tool") return this.#proficiencyLabel({ type: "tool", id });
-    const data = CONFIG.DND5E?.abilities?.[id];
-    const rawLabel = (typeof data === "string" ? data : data?.label) ?? id ?? "Ability";
-    const label = game.i18n.localize(rawLabel);
-    return type === "save" ? `${label} Saving Throw` : `${label} Check`;
   }
 
   static #resolutionSummary(resolution, proficiencyRows, qualifies, checkLabel) {

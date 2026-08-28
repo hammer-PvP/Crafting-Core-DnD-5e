@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.18a
+
+Crafting Resolution polish release. No v0.0.19 Crafting Projects behavior is included.
+
+- Added **Player Visibility** controls to the Recipe Builder so the GM decides whether players see output, ingredients, ingredient quantities, relevant proficiencies, attempt policy, Crafting Check, DC, failure consequence, exact failure percentage, seconds-based crafting time, and the optional Recipe description. Hidden mechanics remain enforced internally.
+- Added an optional GM-authored **Additional Description** field. Published Knowledge Sources now build their Description automatically from the Recipe snapshot, including visible ingredients and other mechanics rather than requiring the GM to duplicate recipe data manually.
+- Added **Learning Access** with **Follow Crafting Eligibility** and **Anyone Can Learn**. Follow Crafting Eligibility blocks a Character before the native activity is used when the Recipe requires proficiencies the Character does not satisfy, so a rejected Manual/Recipe is not consumed or destroyed.
+- Scoped the native D&D5e Knowledge Source usage button from **Use Ability** to **Learn** for Crafting Core learning Activities only.
+- Resolved Skill/Tool presentation through D&D5e display labels. Internal IDs such as `smith` remain stored for logic but player/GM UI now displays names such as **Smith's Tools**.
+- Cleaned the Character Crafting tab: removed the redundant tiny output line under the Recipe name, removed craft-count prefixes from the Recipe selector, and made all detail rows obey Player Visibility.
+- Crafting failure chat/notifications now honor hidden DC and material-loss settings, and hidden ingredient names are not exposed by missing-material transaction errors.
+- Preserved the Recipe Builder content scroll position across Item drops and other local rerenders so adding Ingredients or Output no longer jumps the workbench to the top.
+- Tightened Recipe sidebar row sizing/highlight layout so the active selection follows the actual Recipe row instead of a displaced button box.
+- Existing v0.0.18 Recipes remain compatible. Older Recipes without visibility metadata default to their previous visible behavior, while proficiency-gated Recipes without explicit Learning Access default to following crafting eligibility.
+- Harvest, Creature Scanner, Essence, Item Piles corpse loot, and normalization remain untouched from the validated v0.0.17 baseline. Rest-based Crafting Projects remain reserved for v0.0.19.
+
 ## 0.0.18
 
 Recipe Crafting Resolution development release.

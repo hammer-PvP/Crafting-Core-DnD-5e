@@ -29,6 +29,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   selectedId = null;
   draft = null;
+  pendingContentScroll = null;
 
   constructor(options={}) {
     super(options);
@@ -36,6 +37,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   async _prepareContext() {
+    await RecipeService.prepareSystemLabels();
     const recipes = RecipeService.list();
     if (this.selectedId && !recipes.some(recipe => recipe.id === this.selectedId)) this.#newDraft();
     const rarity = String(this.draft?.result?.snapshot?.system?.rarity ?? "");
@@ -44,8 +46,8 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const skillOptions = Object.entries(CONFIG.DND5E?.skills ?? {}).map(([id, data]) => ({
       value: `skill:${id}`, label: localizeLabel(data) || id
     })).sort((a, b) => a.label.localeCompare(b.label, game.i18n.lang));
-    const toolOptions = Object.entries(CONFIG.DND5E?.tools ?? {}).map(([id, data]) => ({
-      value: `tool:${id}`, label: localizeLabel(data) || id
+    const toolOptions = Object.keys(CONFIG.DND5E?.tools ?? {}).map(id => ({
+      value: `tool:${id}`, label: RecipeService.proficiencyLabel({ type: "tool", id })
     })).sort((a, b) => a.label.localeCompare(b.label, game.i18n.lang));
     const abilityOptions = Object.entries(CONFIG.DND5E?.abilities ?? {}).map(([id, data]) => ({
       value: `ability:${id}`, label: localizeLabel(data) || id
@@ -113,10 +115,10 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       event.preventDefault();
       this.#syncDraftFromForm();
       this.draft.ingredients.splice(Number(button.dataset.index), 1);
-      this.render({ force: true });
+      this.#rerenderPreservingScroll();
     }));
     root.querySelector('[data-action="clear-result"]')?.addEventListener("click", event => {
-      event.preventDefault(); this.#syncDraftFromForm(); this.draft.result = null; this.render({ force: true });
+      event.preventDefault(); this.#syncDraftFromForm(); this.draft.result = null; this.#rerenderPreservingScroll();
     });
     root.querySelectorAll('[data-drop-kind]').forEach(zone => {
       zone.addEventListener("dragover", event => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; zone.classList.add("drag-over"); });
@@ -129,15 +131,29 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       const oldDefaults = new Set(["icons/svg/book.svg", DEFAULT_KNOWLEDGE_ICON, ...Object.values(KNOWLEDGE_ICONS)]);
       const current = String(this.draft.knowledge?.img || "");
       if (!current || oldDefaults.has(current)) this.draft.knowledge.img = KNOWLEDGE_ICONS[event.currentTarget.value] ?? DEFAULT_KNOWLEDGE_ICON;
-      this.render({ force: true });
+      this.#rerenderPreservingScroll();
     });
     root.querySelectorAll('[data-resolution-rerender]').forEach(input => input.addEventListener("change", () => {
       this.#syncDraftFromForm();
-      this.render({ force: true });
+      this.#rerenderPreservingScroll();
     }));
     const lossSlider = root.querySelector('[name="failureLossPercent"]');
     const lossOutput = root.querySelector('[data-failure-loss-output]');
     if (lossSlider && lossOutput) lossSlider.addEventListener("input", () => { lossOutput.textContent = `${lossSlider.value}%`; });
+
+    if (this.pendingContentScroll !== null) {
+      const scrollTop = this.pendingContentScroll;
+      this.pendingContentScroll = null;
+      requestAnimationFrame(() => {
+        const content = this.element?.querySelector?.(".cc-content");
+        if (content) content.scrollTop = scrollTop;
+      });
+    }
+  }
+
+  #rerenderPreservingScroll() {
+    this.pendingContentScroll = this.element?.querySelector?.(".cc-content")?.scrollTop ?? 0;
+    this.render({ force: true });
   }
 
   #newDraft() {
@@ -145,6 +161,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this.draft = RecipeService.normalize({
       id: foundry.utils.randomID(20),
       name: "New Recipe",
+      description: "",
       craftingTime: 10,
       craftingResolution: {
         proficiencies: [],
@@ -153,6 +170,11 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
         proficientPolicy: "rollNormally",
         check: { required: false, type: "skill", id: "arc", dc: 15 },
         failure: { loseMaterials: false, lossPercent: 50 }
+      },
+      learning: { access: "followCraftingEligibility" },
+      playerVisibility: {
+        output: true, ingredients: true, ingredientQuantities: true, proficiencies: true, attemptPolicy: true,
+        craftingCheck: true, craftingDC: true, failure: true, failurePercent: true, craftingTime: true, description: true
       },
       ingredients: [],
       result: null,
@@ -164,7 +186,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const recipe = RecipeService.get(id);
     if (!recipe) return;
     this.selectedId = recipe.id;
-    this.draft = foundry.utils.deepClone(recipe);
+    this.draft = RecipeService.normalize(foundry.utils.deepClone(recipe));
   }
 
   #syncDraftFromForm() {
@@ -172,6 +194,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (!root || !this.draft) return;
     this.draft.name = root.querySelector('[name="name"]')?.value ?? this.draft.name;
     this.draft.img = root.querySelector('[name="img"]')?.value ?? this.draft.img;
+    this.draft.description = root.querySelector('[name="description"]')?.value ?? this.draft.description ?? "";
     this.draft.craftingTime = Math.max(0, Math.floor(Number(root.querySelector('[name="craftingTime"]')?.value) || 0));
     const resolution = foundry.utils.deepClone(this.draft.craftingResolution ?? {});
     const parseProficiency = value => {
@@ -195,6 +218,19 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     resolution.failure.loseMaterials = Boolean(root.querySelector('[name="loseMaterialsOnFailure"]')?.checked);
     resolution.failure.lossPercent = Math.clamp(Math.round(Number(root.querySelector('[name="failureLossPercent"]')?.value) || 0), 0, 100);
     this.draft.craftingResolution = RecipeService.normalizeCraftingResolution(resolution);
+    this.draft.learning = {
+      access: root.querySelector('[name="learningAccess"]')?.value ?? this.draft.learning?.access ?? "followCraftingEligibility"
+    };
+    const currentVisibility = RecipeService.normalizePlayerVisibility(this.draft.playerVisibility);
+    const visibility = {};
+    for (const key of [
+      "output", "ingredients", "ingredientQuantities", "proficiencies", "attemptPolicy", "craftingCheck",
+      "craftingDC", "failure", "failurePercent", "craftingTime", "description"
+    ]) {
+      const input = root.querySelector(`[name="visibility.${key}"]`);
+      visibility[key] = input ? Boolean(input.checked) : currentVisibility[key];
+    }
+    this.draft.playerVisibility = RecipeService.normalizePlayerVisibility(visibility);
     this.draft.knowledge ??= {};
     this.draft.knowledge.label = root.querySelector('[name="knowledgeLabel"]')?.value ?? "Recipe";
     this.draft.knowledge.name = root.querySelector('[name="knowledgeName"]')?.value ?? "";
@@ -232,7 +268,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
         else this.draft.ingredients.push(ref);
       }
       if (!this.draft.img || this.draft.img === "icons/svg/item-bag.svg") this.draft.img = this.draft.result?.img ?? this.draft.img;
-      this.render({ force: true });
+      this.#rerenderPreservingScroll();
     } catch (error) {
       console.error(`${MODULE_ID} | Item drop failed.`, error);
       ui.notifications.error("Crafting Core could not read the dropped Item.");
@@ -252,7 +288,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       callback: path => {
         if (targetName === "img") this.draft.img = path;
         if (targetName === "knowledgeImg") this.draft.knowledge.img = path;
-        this.render({ force: true });
+        this.#rerenderPreservingScroll();
       }
     });
     await picker.render({ force: true });

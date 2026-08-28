@@ -1,6 +1,21 @@
 import { DEFAULT_KNOWLEDGE_ICON, KNOWLEDGE_ICONS, MODULE_ID, SETTINGS } from "../constants.mjs";
 
 export class RecipeService {
+  static #toolLabels = new Map();
+  static #toolLabelsReady = false;
+  static #toolFallbackLabels = Object.freeze({
+    alchemist: "Alchemist's Supplies", bagpipes: "Bagpipes", brewer: "Brewer's Supplies",
+    calligrapher: "Calligrapher's Supplies", card: "Playing Cards Set", carpenter: "Carpenter's Tools",
+    cartographer: "Cartographer's Tools", chess: "Chess Set", cobbler: "Cobbler's Tools",
+    cook: "Cook's Utensils", dice: "Dice Set", disg: "Disguise Kit", drum: "Drum", dulcimer: "Dulcimer",
+    flute: "Flute", forg: "Forgery Kit", glassblower: "Glassblower's Tools", herb: "Herbalism Kit", horn: "Horn",
+    jeweler: "Jeweler's Tools", leatherworker: "Leatherworker's Tools", lute: "Lute", lyre: "Lyre",
+    mason: "Mason's Tools", navg: "Navigator's Tools", painter: "Painter's Supplies", panflute: "Pan Flute",
+    pois: "Poisoner's Kit", potter: "Potter's Tools", shawm: "Shawm", smith: "Smith's Tools",
+    thief: "Thieves' Tools", tinker: "Tinker's Tools", viol: "Viol", weaver: "Weaver's Tools",
+    woodcarver: "Woodcarver's Tools"
+  });
+
   static registerSettings() {
     game.settings.register(MODULE_ID, SETTINGS.RECIPES, {
       name: "Crafting Core Recipes",
@@ -49,12 +64,20 @@ export class RecipeService {
   static normalize(recipe={}) {
     const id = String(recipe.id || foundry.utils.randomID(20));
     const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+    const craftingResolution = this.normalizeCraftingResolution(recipe.craftingResolution);
+    const requestedLearningAccess = String(recipe.learning?.access || "");
+    const learningAccess = ["anyone", "followCraftingEligibility"].includes(requestedLearningAccess)
+      ? requestedLearningAccess
+      : (craftingResolution.attemptPolicy === "requiresProficiency" ? "followCraftingEligibility" : "anyone");
     return {
       id,
       name: String(recipe.name || "New Recipe").trim() || "New Recipe",
       img: String(recipe.img || recipe.result?.img || "icons/svg/item-bag.svg"),
+      description: String(recipe.description || ""),
       craftingTime: Math.max(0, Math.floor(Number(recipe.craftingTime) || 0)),
-      craftingResolution: this.normalizeCraftingResolution(recipe.craftingResolution),
+      craftingResolution,
+      learning: { access: learningAccess },
+      playerVisibility: this.normalizePlayerVisibility(recipe.playerVisibility),
       ingredients: ingredients
         .filter(row => row?.uuid)
         .map(row => ({
@@ -132,6 +155,114 @@ export class RecipeService {
         lossPercent: Math.clamp(Math.round(Number(failure.lossPercent) || 0), 0, 100)
       }
     };
+  }
+
+  static normalizePlayerVisibility(value={}) {
+    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const visibleByDefault = key => !(key in source) || Boolean(source[key]);
+    return {
+      output: visibleByDefault("output"),
+      ingredients: visibleByDefault("ingredients"),
+      ingredientQuantities: visibleByDefault("ingredientQuantities"),
+      proficiencies: visibleByDefault("proficiencies"),
+      attemptPolicy: visibleByDefault("attemptPolicy"),
+      craftingCheck: visibleByDefault("craftingCheck"),
+      craftingDC: visibleByDefault("craftingDC"),
+      failure: visibleByDefault("failure"),
+      failurePercent: visibleByDefault("failurePercent"),
+      craftingTime: visibleByDefault("craftingTime"),
+      description: visibleByDefault("description")
+    };
+  }
+
+  static async prepareSystemLabels() {
+    if (this.#toolLabelsReady) return;
+    const entries = Object.entries(CONFIG.DND5E?.tools ?? {});
+    const resolved = await Promise.all(entries.map(async ([id, config]) => {
+      const uuid = typeof config === "object" ? String(config?.id || "") : "";
+      if (!uuid) return [id, ""];
+      try {
+        const item = await fromUuid(uuid);
+        return [id, item instanceof Item ? String(item.name || "") : ""];
+      } catch (_) {
+        return [id, ""];
+      }
+    }));
+    for (const [id, label] of resolved) if (label) this.#toolLabels.set(id, label);
+    this.#toolLabelsReady = true;
+  }
+
+  static proficiencyLabel(requirement, actor=null) {
+    const type = String(requirement?.type || "skill");
+    const id = String(requirement?.id || "");
+    if (type === "skill") {
+      const data = CONFIG.DND5E?.skills?.[id];
+      const raw = ((typeof data === "string" ? data : data?.label) ?? id) || "Proficiency";
+      return game.i18n.localize(raw);
+    }
+
+    const actorTool = actor?.system?.tools?.[id];
+    const actorLabel = actorTool?.label ?? actorTool?.name;
+    if (actorLabel) return game.i18n.localize(String(actorLabel));
+    const cached = this.#toolLabels.get(id);
+    if (cached) return cached;
+    const config = CONFIG.DND5E?.tools?.[id];
+    const raw = (typeof config === "string" ? config : config?.label ?? config?.name);
+    if (raw) return game.i18n.localize(String(raw));
+    if (this.#toolFallbackLabels[id]) return this.#toolFallbackLabels[id];
+    return id ? id.replace(/[-_]+/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "Tool";
+  }
+
+  static checkLabel(check, actor=null) {
+    const type = String(check?.type || "skill");
+    const id = String(check?.id || "");
+    if (type === "skill" || type === "tool") return this.proficiencyLabel({ type, id }, actor);
+    const data = CONFIG.DND5E?.abilities?.[id];
+    const raw = ((typeof data === "string" ? data : data?.label) ?? id) || "Ability";
+    const label = game.i18n.localize(raw);
+    return type === "save" ? `${label} Saving Throw` : `${label} Check`;
+  }
+
+  static hasProficiency(actor, requirement) {
+    if (!actor || !requirement?.id) return false;
+    const data = requirement.type === "tool"
+      ? actor.system?.tools?.[requirement.id]
+      : actor.system?.skills?.[requirement.id];
+    if (!data) return false;
+    if (typeof data.prof?.hasProficiency === "boolean") return data.prof.hasProficiency;
+    if (typeof data.hasProficiency === "boolean") return data.hasProficiency;
+    return Number(data.value ?? data.proficient ?? 0) > 0;
+  }
+
+  static proficiencyEvaluation(actor, craftingResolution) {
+    const resolution = this.normalizeCraftingResolution(craftingResolution);
+    const rows = resolution.proficiencies.map(entry => ({
+      ...entry,
+      label: this.proficiencyLabel(entry, actor),
+      proficient: this.hasProficiency(actor, entry)
+    }));
+    const qualifies = rows.length > 0 && (resolution.proficiencyMatch === "all"
+      ? rows.every(row => row.proficient)
+      : rows.some(row => row.proficient));
+    const eligible = resolution.attemptPolicy !== "requiresProficiency" || qualifies;
+    return { resolution, rows, qualifies, eligible };
+  }
+
+  static learningEligibility(actor, recipe) {
+    const normalized = this.normalize(recipe ?? {});
+    if (normalized.learning.access !== "followCraftingEligibility") {
+      return { eligible: true, rows: [], qualifies: true, reason: "" };
+    }
+    const evaluation = this.proficiencyEvaluation(actor, normalized.craftingResolution);
+    if (evaluation.eligible) return { ...evaluation, reason: "" };
+    let reason = "This recipe requires a relevant proficiency, but none is configured.";
+    if (evaluation.rows.length === 1) {
+      reason = `${actor?.name ?? "This character"} requires proficiency in ${evaluation.rows[0].label} to learn this recipe.`;
+    } else if (evaluation.rows.length > 1) {
+      const qualifier = evaluation.resolution.proficiencyMatch === "all" ? "all of" : "one of";
+      reason = `${actor?.name ?? "This character"} requires ${qualifier}: ${evaluation.rows.map(row => row.label).join(", ")} to learn this recipe.`;
+    }
+    return { ...evaluation, reason };
   }
 
   static snapshot(recipe) {
