@@ -90,6 +90,7 @@ Hooks.once("init", () => {
   runInitStep("Character Sheet hooks", () => CharacterSheetService.installHooks());
   runInitStep("Knowledge Item hooks", () => KnowledgeItemService.installHooks());
   runInitStep("Token Harvest hooks", () => TokenHarvestService.installHooks());
+  runInitStep("Generated loot drag/drop", () => ItemPilesBridge.installGeneratedLootDropHook());
 
   console.info(`${MODULE_TITLE} | Initialized.`);
 });

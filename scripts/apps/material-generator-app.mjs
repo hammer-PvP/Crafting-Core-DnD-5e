@@ -2,6 +2,7 @@ import { MODULE_ID } from "../constants.mjs";
 import { MaterialCatalogService } from "../services/material-catalog-service.mjs";
 import { MaterialGenerationService } from "../services/material-generation-service.mjs";
 import { ItemPilesBridge } from "../services/item-piles-bridge.mjs";
+import { PopoverSelect } from "../ui/popover-select.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -93,7 +94,8 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
         created: Boolean(this.lastResult.folder),
         pileCreated: Boolean(this.lastResult.itemPile?.uuid),
         folderLabel: this.lastResult.folder?.name ?? "",
-        pileLabel: this.lastResult.itemPile?.uuid ? "Item Pile created on the viewed Scene" : ""
+        pileLabel: this.lastResult.itemPile?.uuid ? "Hidden Item Pile created on the viewed Scene" : "",
+        dragIcon: this.#dominantIcon(this.lastResult)
       } : null
     };
   }
@@ -117,6 +119,8 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
     }));
 
     this.#wireMultiSelects(root);
+    PopoverSelect.wire(root);
+    this.#wireGeneratedLootDrag(root);
 
     root.querySelector('[data-action="generate"]')?.addEventListener("click", event => this.#generate(event));
     root.querySelector('[data-action="generate-again"]')?.addEventListener("click", event => this.#generate(event));
@@ -155,6 +159,33 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
     if (!labels.length) return emptyLabel;
     if (labels.length <= 2) return labels.join(" + ");
     return `${labels.slice(0, 2).join(" + ")} +${labels.length - 2}`;
+  }
+
+
+  #dominantIcon(result) {
+    const rows = Array.isArray(result?.items) ? result.items : [];
+    const dominant = [...rows].sort((a, b) => (Number(b.quantity) || 0) - (Number(a.quantity) || 0))[0];
+    return String(dominant?.img || "icons/svg/item-bag.svg");
+  }
+
+  #wireGeneratedLootDrag(root) {
+    const handle = root.querySelector("[data-generated-loot-drag]");
+    if (!handle || !this.lastResult?.items?.length || !ItemPilesBridge.isAvailable()) return;
+    handle.addEventListener("dragstart", event => {
+      try {
+        const payload = ItemPilesBridge.generatedLootDragData(this.lastResult);
+        const json = JSON.stringify(payload);
+        event.dataTransfer?.setData("text/plain", json);
+        event.dataTransfer?.setData("application/json", json);
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy";
+        handle.classList.add("is-dragging");
+      } catch (error) {
+        console.error(`${MODULE_ID} | Could not start generated-loot drag.`, error);
+        event.preventDefault();
+        ui.notifications.error(error.message ?? "Crafting Core could not prepare that Item Pile drag.");
+      }
+    });
+    handle.addEventListener("dragend", () => handle.classList.remove("is-dragging"));
   }
 
   #wireMultiSelects(root) {
@@ -317,9 +348,9 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
     const button = event.currentTarget;
     button.disabled = true;
     try {
-      const itemPile = await ItemPilesBridge.createGeneratedLootPile(this.lastResult);
+      const itemPile = await ItemPilesBridge.createGeneratedLootPile(this.lastResult, { hidden: true });
       this.lastResult = { ...this.lastResult, itemPile };
-      ui.notifications.info("Generated loot Item Pile at the center of the viewed Scene.");
+      ui.notifications.info("Created a hidden generated-loot Item Pile at the center of the viewed Scene.");
       this.render({ force: true });
     } catch (error) {
       console.error(`${MODULE_ID} | Generated Item Pile creation failed.`, error);

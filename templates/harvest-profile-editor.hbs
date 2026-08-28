@@ -31,9 +31,11 @@
             <div class="cc-slot-label"><strong>{{label}}</strong><small><span data-pool-count>{{selectedCount}}</span> possible material{{#unless (eq selectedCount 1)}}s{{/unless}}</small></div>
             <label class="cc-pool-chance"><span>Pool Chance %</span><input type="number" min="0" max="100" step="1" name="slot.chance" value="{{chance}}"></label>
           </div>
-          <details class="cc-pool-selector">
-            <summary><i class="fa-solid fa-list-check"></i><span data-pool-summary>{{selectionSummary}}</span><i class="fa-solid fa-chevron-down"></i></summary>
-            <div class="cc-pool-options">
+          <div class="cc-pool-selector cc-popover-field">
+            <button type="button" class="cc-pool-selector-trigger" data-cc-popover-trigger data-cc-popover-target="cc-harvest-pool-popover-{{@index}}" aria-expanded="false">
+              <i class="fa-solid fa-list-check"></i><span data-pool-summary>{{selectionSummary}}</span><i class="fa-solid fa-chevron-down"></i>
+            </button>
+            <div id="cc-harvest-pool-popover-{{@index}}" class="cc-select-popover cc-pool-options" data-cc-popover-panel data-popover-min-width="420" popover="auto">
               {{#each options}}
               <label class="cc-pool-option">
                 <input type="checkbox" data-pool-material value="{{value}}" data-material-name="{{name}}" {{#if selected}}checked{{/if}}>
@@ -44,7 +46,7 @@
               <div class="cc-empty-row">No curated materials exist for this rarity and creature type.</div>
               {{/each}}
             </div>
-          </details>
+          </div>
         </div>
         {{/each}}
       </div>

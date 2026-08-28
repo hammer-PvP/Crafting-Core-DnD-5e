@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.19f
+- Converted Generate Materials checkbox multi-selects into true anchored **popover/dropdown controls**. Biomes, Resources, Abundance, Creature Types, Harvest Profiles, and Essence Affinities now open over the Application instead of expanding/reflowing the window.
+- Applied the same popover interaction to Harvest Profile rarity-pool material selection, establishing the shared rule that selector dropdowns must not distort Application layout.
+- Added a draggable **Generated Loot** card to non-empty Generate Materials previews when Item Piles is active. Dragging the card onto the viewed Scene creates the Item Pile at the exact drop coordinates.
+- Generated Item Piles now spawn **Hidden** by default so the GM can prepare gathering/hunting results during RP and reveal them later.
+- Kept **Create Hidden at Scene Center** only as a secondary fallback; drag-to-scene is the primary Item Piles workflow.
+- Preserved all v0.0.19e generation mathematics, mixed-biome/resource behavior, abundance handling, attempts, Game Hunt yield, Harvest pools, and Crafting Project mechanics.
+- Test checklist remains a separate validation artifact and is not bundled in the GitHub/Foundry runtime ZIP.
+
 ## 0.0.19e
 - Reworked **Generate Materials** into a shared multi-selection gathering tool for manual Creature Harvest, Environment Gathering, and Game Hunt.
 - Added checkbox multi-select fields using the same compact interaction language as Harvest Profile rarity pools.

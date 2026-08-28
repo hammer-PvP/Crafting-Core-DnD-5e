@@ -1,5 +1,6 @@
 import { MODULE_ID } from "../constants.mjs";
 import { HarvestProfileService } from "../services/harvest-profile-service.mjs";
+import { PopoverSelect } from "../ui/popover-select.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -66,6 +67,7 @@ export class HarvestProfileEditorApp extends HandlebarsApplicationMixin(Applicat
 
   _onRender() {
     const root = this.element;
+    PopoverSelect.wire(root);
     root.querySelector('[data-action="save-profile"]')?.addEventListener("click", event => this.#save(event));
     root.querySelector('[data-action="reanalyze-profile"]')?.addEventListener("click", event => this.#reanalyze(event));
     root.querySelector('[data-action="add-pinpoint"]')?.addEventListener("click", event => this.#addPinpoint(event));

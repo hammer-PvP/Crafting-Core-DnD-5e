@@ -1,5 +1,13 @@
 # Crafting Core (DnD 5e)
 
+## v0.0.19f — Popover UX & Hidden Drag-to-Scene Loot
+
+v0.0.19f keeps the approved Generate Materials 2.0 mathematics intact and polishes the session workflow. Multi-select selectors now behave like real dropdowns: the closed field stays compact and its checkbox list opens in an anchored top-layer popover, so choosing Biomes, Resources, Abundance, Creature Types, Harvest Profiles, Essence Affinities, or rarity-pool materials no longer stretches the Application.
+
+When Item Piles is active, a successful Generate Materials preview now exposes a **draggable Generated Loot card**. Drag it onto the Scene and Crafting Core creates the pile at the exact drop location. Generated piles are **Hidden by default**, allowing the GM to prepare gathering or hunting results while players are roleplaying and reveal them only when appropriate. A secondary `Create Hidden at Scene Center` action remains available as a fallback.
+
+No yield or generation tuning is included in this patch: Game Hunt, mixed-biome Environment Gathering, Attempts, rarity pools, Essence rules, and Crafting Projects behave as in v0.0.19e. Extra Effort remains reserved for **v0.0.20** after further live validation of normal Project crafting.
+
 ## v0.0.19e — Generate Materials 2.0
 
 v0.0.19e turns **Generate Materials** into the GM-facing Resource Gathering tool for situations that are not handled directly on a corpse Token. Creature Harvest, Environment Gathering, and Game Hunt now share compact checkbox multi-select controls. Mixed biomes and mixed resource categories expand the candidate pool, while explicit Attempts remain the main control over how many gathering opportunities are resolved.

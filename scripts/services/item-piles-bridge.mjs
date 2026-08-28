@@ -13,6 +13,8 @@ import { GearNormalizationService } from "./gear-normalization-service.mjs";
  */
 export class ItemPilesBridge {
   static MODULE_ID = "item-piles";
+  static GENERATED_LOOT_DRAG_TYPE = `${MODULE_ID}.generated-loot`;
+  static #generatedLootDropHookInstalled = false;
 
   static isAvailable() {
     return game.modules?.get?.(this.MODULE_ID)?.active === true
@@ -25,6 +27,50 @@ export class ItemPilesBridge {
     if (typeof api.turnTokensIntoItemPiles !== "function") throw new Error("The active Item Piles version does not expose turnTokensIntoItemPiles().");
     if (typeof api.addItems !== "function") throw new Error("The active Item Piles version does not expose addItems().");
     return api;
+  }
+
+  static generatedLootDragData(result) {
+    const rows = Array.isArray(result?.items) ? result.items : [];
+    if (!rows.length) throw new Error("Generate at least one material before dragging an Item Pile.");
+    return {
+      type: this.GENERATED_LOOT_DRAG_TYPE,
+      result: {
+        source: String(result?.source ?? "manual-generation"),
+        sourceLabel: String(result?.sourceLabel ?? "Generated Materials"),
+        items: rows.map(row => ({
+          materialId: String(row?.materialId ?? ""),
+          name: String(row?.name ?? "Material"),
+          img: String(row?.img ?? "icons/svg/item-bag.svg"),
+          quantity: Math.max(1, Math.floor(Number(row?.quantity) || 1)),
+          rarity: String(row?.rarity ?? "common"),
+          rarityLabel: String(row?.rarityLabel ?? "Common")
+        })).filter(row => row.materialId)
+      }
+    };
+  }
+
+  static installGeneratedLootDropHook() {
+    if (this.#generatedLootDropHookInstalled) return;
+    this.#generatedLootDropHookInstalled = true;
+    Hooks.on("dropCanvasData", (canvasView, data) => {
+      if (String(data?.type ?? "") !== this.GENERATED_LOOT_DRAG_TYPE) return true;
+      if (!game.user?.isGM) return false;
+      const result = data?.result;
+      const x = Number(data?.x);
+      const y = Number(data?.y);
+      const sceneId = String(canvasView?.scene?.id ?? canvas?.scene?.id ?? game.user?.viewedScene ?? "");
+      if (!result?.items?.length || !Number.isFinite(x) || !Number.isFinite(y) || !sceneId) {
+        ui.notifications.error("Crafting Core could not resolve that generated-loot drop position.");
+        return false;
+      }
+      void this.createGeneratedLootPile(result, { position: { x, y }, sceneId, hidden: true })
+        .then(() => ui.notifications.info("Created a hidden generated-loot Item Pile at the drop position."))
+        .catch(error => {
+          console.error(`${MODULE_ID} | Dragged generated Item Pile creation failed.`, error);
+          ui.notifications.error(error.message ?? "Crafting Core could not create the dropped Item Pile.");
+        });
+      return false;
+    });
   }
 
   static async buildHarvestPayload(result) {
@@ -64,7 +110,7 @@ export class ItemPilesBridge {
     return payload;
   }
 
-  static async createGeneratedLootPile(result, { position=null }={}) {
+  static async createGeneratedLootPile(result, { position=null, sceneId=null, hidden=true }={}) {
     if (!game.user?.isGM) throw new Error("Only a GM can create generated Item Piles.");
     if (!this.isAvailable()) throw new Error("Item Piles is not active.");
     if (!Array.isArray(result?.items) || !result.items.length) throw new Error("Generate at least one material before creating an Item Pile.");
@@ -104,12 +150,12 @@ export class ItemPilesBridge {
 
     const dominant = [...result.items].sort((a, b) => (Number(b.quantity) || 0) - (Number(a.quantity) || 0))[0] ?? null;
     const icon = String(dominant?.img || "icons/svg/item-bag.svg");
-    const sceneId = String(canvas?.scene?.id ?? game.user?.viewedScene ?? "");
-    if (!sceneId) throw new Error("Open a Scene before creating an Item Pile.");
+    const targetSceneId = String(sceneId ?? canvas?.scene?.id ?? game.user?.viewedScene ?? "");
+    if (!targetSceneId) throw new Error("Open a Scene before creating an Item Pile.");
 
     let pilePosition = position;
     if (!pilePosition) {
-      const scene = canvas?.scene ?? game.scenes?.get?.(sceneId);
+      const scene = game.scenes?.get?.(targetSceneId) ?? canvas?.scene;
       const width = Number(scene?.width ?? canvas?.dimensions?.sceneWidth ?? canvas?.dimensions?.width ?? 0) || 0;
       const height = Number(scene?.height ?? canvas?.dimensions?.sceneHeight ?? canvas?.dimensions?.height ?? 0) || 0;
       const offsetX = Number(canvas?.dimensions?.sceneX ?? 0) || 0;
@@ -119,14 +165,14 @@ export class ItemPilesBridge {
 
     const name = String(result.sourceLabel || "Generated Materials");
     const uuid = await api.createItemPile({
-      sceneId,
+      sceneId: targetSceneId,
       position: pilePosition,
       items,
-      tokenOverrides: { name, texture: { src: icon } },
+      tokenOverrides: { name, hidden: Boolean(hidden), texture: { src: icon } },
       actorOverrides: { name, img: icon },
       itemPileFlags: { displayOne: false, showItemName: false }
     });
-    return { uuid, icon, position: pilePosition, itemCount: items.length };
+    return { uuid, icon, position: pilePosition, itemCount: items.length, hidden: Boolean(hidden), sceneId: targetSceneId };
   }
 
   static async turnTokenIntoLootPile(tokenDocument, result) {
