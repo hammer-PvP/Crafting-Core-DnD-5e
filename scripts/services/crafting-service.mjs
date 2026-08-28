@@ -40,13 +40,25 @@ export class CraftingService {
     const gm = this.#activeGM();
     if (!gm) throw new Error("A connected GM is required to begin crafting.");
 
+    const recipe = KnowledgeItemService.recipeForActor(actor, String(recipeId));
+    if (!recipe) throw new Error(`${actor.name} has not learned this recipe.`);
+    const evaluation = this.evaluateResolution(actor, recipe);
+    if (!evaluation.eligible) throw new Error(evaluation.blockReason || `${actor.name} does not meet this recipe's proficiency requirements.`);
+
     const payload = {
       action: REQUEST,
       requestId: foundry.utils.randomID(24),
       requesterId: game.user.id,
       actorId: actor.id,
-      recipeId: String(recipeId)
+      recipeId: String(recipeId),
+      rollMessageId: null
     };
+
+    if (evaluation.rollRequired) {
+      const roll = await this.#performCraftingRoll(actor, recipe, payload.requestId);
+      if (!roll) throw new Error("The Crafting Check was cancelled.");
+      payload.rollMessageId = roll.messageId;
+    }
 
     if (gm.id === game.user.id) return this.#executeCraft(payload);
 
@@ -74,11 +86,47 @@ export class CraftingService {
     const craftCount = rows.length
       ? Math.max(0, Math.min(...rows.map(row => Math.floor(row.available / Math.max(1, Number(row.quantity) || 1)))))
       : 0;
+    const resolution = this.evaluateResolution(actor, recipe);
     return {
       ...recipe,
       ingredientRows: rows,
       craftCount,
-      canCraft: Boolean(recipe.result?.uuid || recipe.result?.snapshot) && craftCount > 0
+      resolution,
+      canCraft: Boolean(recipe.result?.uuid || recipe.result?.snapshot) && craftCount > 0 && resolution.eligible
+    };
+  }
+
+  static evaluateResolution(actor, recipe) {
+    const resolution = RecipeService.normalizeCraftingResolution(recipe?.craftingResolution);
+    const configured = resolution.proficiencies;
+    const proficiencyRows = configured.map(entry => ({
+      ...entry,
+      label: this.#proficiencyLabel(entry),
+      proficient: this.#hasProficiency(actor, entry)
+    }));
+    const qualifies = configured.length > 0 && (resolution.proficiencyMatch === "all"
+      ? proficiencyRows.every(row => row.proficient)
+      : proficiencyRows.some(row => row.proficient));
+    const eligible = resolution.attemptPolicy !== "requiresProficiency" || qualifies;
+    const automaticByProficiency = configured.length > 0 && qualifies
+      && resolution.proficientPolicy === "automaticSuccess";
+    const automaticSuccess = eligible && (!resolution.check.required || automaticByProficiency);
+    const rollRequired = eligible && resolution.check.required && !automaticByProficiency;
+    const checkLabel = this.#checkLabel(resolution.check);
+    const blockReason = eligible ? "" : configured.length
+      ? `${actor?.name ?? "This character"} requires ${resolution.proficiencyMatch === "all" ? "all" : "one"} of: ${proficiencyRows.map(row => row.label).join(", ")}.`
+      : "This recipe requires a relevant proficiency, but none is configured.";
+
+    return {
+      ...resolution,
+      proficiencyRows,
+      qualifies,
+      eligible,
+      automaticSuccess,
+      rollRequired,
+      checkLabel,
+      blockReason,
+      summary: this.#resolutionSummary(resolution, proficiencyRows, qualifies, checkLabel)
     };
   }
 
@@ -145,6 +193,38 @@ export class CraftingService {
     const recipe = KnowledgeItemService.recipeForActor(actor, String(request.recipeId ?? ""));
     if (!recipe) throw new Error(`${actor.name} has not learned this recipe.`);
     if (!recipe.result?.uuid && !recipe.result?.snapshot) throw new Error("The recipe has no result Item configured.");
+    if (this.job(actor)?.status === "active") throw new Error(`${actor.name} is already crafting something.`);
+
+    const prepared = this.prepareRecipeForActor(actor, recipe);
+    const missing = prepared.ingredientRows.filter(row => !row.sufficient);
+    if (missing.length) throw new Error(`Missing materials: ${missing.map(row => row.name).join(", ")}.`);
+    if (!prepared.resolution.eligible) throw new Error(prepared.resolution.blockReason);
+
+    const rollResult = prepared.resolution.rollRequired
+      ? await this.#validateCraftingRoll(actor, recipe, requester, request)
+      : { success: true, total: null, message: null };
+
+    if (!rollResult.success) {
+      const failure = prepared.resolution.failure;
+      const lossPercent = failure.loseMaterials ? failure.lossPercent : 0;
+      const lostRequirements = this.#scaledRequirements(recipe.ingredients, lossPercent);
+      if (lostRequirements.length) await this.#consumeIngredients(actor, lostRequirements);
+      await this.#postOutcome(actor, recipe, {
+        success: false,
+        total: rollResult.total,
+        dc: prepared.resolution.check.dc,
+        lossPercent
+      });
+      return {
+        actorId: actor.id,
+        recipeId: recipe.id,
+        outcome: "failure",
+        total: rollResult.total,
+        dc: prepared.resolution.check.dc,
+        lossPercent
+      };
+    }
+
     let resultData = recipe.result?.snapshot ? foundry.utils.deepClone(recipe.result.snapshot) : null;
     let resultSource = null;
     if (!resultData && recipe.result?.uuid) {
@@ -152,11 +232,6 @@ export class CraftingService {
       if (!(resultSource instanceof Item)) throw new Error(`Result Item not found: ${recipe.result.uuid}`);
       resultData = resultSource.toObject();
     }
-    if (this.job(actor)?.status === "active") throw new Error(`${actor.name} is already crafting something.`);
-
-    const prepared = this.prepareRecipeForActor(actor, recipe);
-    const missing = prepared.ingredientRows.filter(row => !row.sufficient);
-    if (missing.length) throw new Error(`Missing materials: ${missing.map(row => row.name).join(", ")}.`);
 
     await this.#consumeIngredients(actor, recipe.ingredients);
 
@@ -172,12 +247,112 @@ export class CraftingService {
       startedAt,
       endsAt,
       status: "active",
-      requesterId: requester.id
+      requesterId: requester.id,
+      resolution: {
+        automaticSuccess: prepared.resolution.automaticSuccess,
+        checkLabel: prepared.resolution.checkLabel,
+        dc: prepared.resolution.check.dc,
+        total: rollResult.total
+      }
     };
     await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, job);
 
     if (endsAt <= this.serverTime()) await this.#finalize(actor, job);
-    return { actorId: actor.id, recipeId: recipe.id, job };
+    return { actorId: actor.id, recipeId: recipe.id, outcome: "success", job };
+  }
+
+  static async #performCraftingRoll(actor, recipe, requestId) {
+    const evaluation = this.evaluateResolution(actor, recipe);
+    const check = evaluation.check;
+    if (!evaluation.rollRequired) return null;
+    if (!check.id) throw new Error("This recipe does not have a valid Crafting Check configured.");
+
+    const flagData = {
+      requestId,
+      requesterId: game.user.id,
+      actorId: actor.id,
+      recipeId: recipe.id,
+      check: { type: check.type, id: check.id, dc: check.dc },
+      createdAt: Date.now(),
+      consumedAt: 0
+    };
+    const message = {
+      data: {
+        flags: { [MODULE_ID]: { [FLAGS.CRAFTING_ROLL]: flagData } },
+        flavor: `Crafting Check — ${foundry.utils.escapeHTML(recipe.name)} · ${foundry.utils.escapeHTML(evaluation.checkLabel)} DC ${check.dc}`
+      }
+    };
+    const config = { target: check.dc };
+    let rolls;
+    switch (check.type) {
+      case "ability": rolls = await actor.rollAbilityCheck({ ...config, ability: check.id }, {}, message); break;
+      case "save": rolls = await actor.rollSavingThrow({ ...config, ability: check.id }, {}, message); break;
+      case "tool": rolls = await actor.rollToolCheck({ ...config, tool: check.id }, {}, message); break;
+      case "skill":
+      default: rolls = await actor.rollSkill({ ...config, skill: check.id }, {}, message); break;
+    }
+    const roll = Array.isArray(rolls) ? rolls[0] : rolls;
+    if (!roll) return null;
+    const messageId = roll.parent?.id ?? roll.message?.id ?? null;
+    if (!messageId) throw new Error("Crafting Core could not validate the D&D5e roll message.");
+    return { messageId, total: Number(roll.total) };
+  }
+
+  static async #validateCraftingRoll(actor, recipe, requester, request) {
+    const messageId = String(request.rollMessageId || "");
+    if (!messageId) throw new Error("A validated Crafting Check is required for this recipe.");
+    const message = await this.#waitForMessage(messageId);
+    if (!message) throw new Error("The Crafting Check chat message could not be found.");
+
+    const authorId = String(message.author?.id ?? message.user?.id ?? message.user ?? "");
+    if (authorId && authorId !== requester.id) throw new Error("The Crafting Check was not rolled by the requesting user.");
+    const speakerActor = String(message.speaker?.actor ?? "");
+    if (speakerActor && speakerActor !== actor.id) throw new Error("The Crafting Check was rolled for a different Actor.");
+
+    const flag = message.getFlag?.(MODULE_ID, FLAGS.CRAFTING_ROLL)
+      ?? message.flags?.[MODULE_ID]?.[FLAGS.CRAFTING_ROLL];
+    if (!flag || typeof flag !== "object") throw new Error("This roll is not a Crafting Core Crafting Check.");
+    if (Number(flag.consumedAt) > 0) throw new Error("This Crafting Check has already been used.");
+    if (String(flag.requestId) !== String(request.requestId)
+      || String(flag.requesterId) !== requester.id
+      || String(flag.actorId) !== actor.id
+      || String(flag.recipeId) !== recipe.id) {
+      throw new Error("The Crafting Check does not match this crafting request.");
+    }
+
+    const evaluation = this.evaluateResolution(actor, recipe);
+    const expected = evaluation.check;
+    if (String(flag.check?.type) !== expected.type || String(flag.check?.id) !== expected.id
+      || Number(flag.check?.dc) !== expected.dc) {
+      throw new Error("The recipe's Crafting Check changed after this roll was made.");
+    }
+
+    const roll = message.rolls?.[0] ?? message.roll ?? null;
+    const total = Number(roll?.total);
+    if (!Number.isFinite(total)) throw new Error("Crafting Core could not read the Crafting Check total.");
+    const target = Number(roll?.options?.target ?? expected.dc);
+    if (Number.isFinite(target) && target !== expected.dc) throw new Error("The Crafting Check DC does not match the recipe.");
+
+    await message.setFlag?.(MODULE_ID, FLAGS.CRAFTING_ROLL, { ...flag, consumedAt: Date.now() });
+    return { success: total >= expected.dc, total, message };
+  }
+
+  static async #waitForMessage(messageId) {
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const message = game.messages?.get?.(messageId);
+      if (message) return message;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return null;
+  }
+
+  static #scaledRequirements(requirements, percent) {
+    const pct = Math.clamp(Number(percent) || 0, 0, 100);
+    if (pct <= 0) return [];
+    return (requirements ?? []).map(requirement => ({
+      ...requirement,
+      quantity: Math.ceil(Math.max(1, Number(requirement.quantity) || 1) * pct / 100)
+    })).filter(requirement => requirement.quantity > 0);
   }
 
   static async #consumeIngredients(actor, requirements) {
@@ -211,6 +386,18 @@ export class CraftingService {
     }
     if (updates.length) await actor.updateEmbeddedDocuments("Item", updates);
     if (deletes.length) await actor.deleteEmbeddedDocuments("Item", deletes);
+  }
+
+  static async #postOutcome(actor, recipe, { success, total=null, dc=null, lossPercent=0 }={}) {
+    if (!globalThis.ChatMessage?.create) return;
+    const content = success
+      ? `<p><strong>${foundry.utils.escapeHTML(recipe.name)}</strong> was crafted successfully.</p>`
+      : `<p><strong>${foundry.utils.escapeHTML(recipe.name)}</strong> failed.</p><p>Crafting Check: <strong>${total}</strong> vs DC <strong>${dc}</strong>.</p><p>${lossPercent > 0 ? `${lossPercent}% of the required materials were lost.` : "No materials were lost."}</p>`;
+    await ChatMessage.create({
+      speaker: ChatMessage.getSpeaker({ actor }),
+      content,
+      flags: { [MODULE_ID]: { craftingOutcome: { recipeId: recipe.id, success, total, dc, lossPercent } } }
+    });
   }
 
   static async #finalize(actor, expectedJob) {
@@ -256,6 +443,51 @@ export class CraftingService {
 
     const docs = Array.from({ length: quantity }, () => foundry.utils.deepClone(data));
     await actor.createEmbeddedDocuments("Item", docs);
+  }
+
+  static #hasProficiency(actor, requirement) {
+    if (!actor || !requirement?.id) return false;
+    const data = requirement.type === "tool"
+      ? actor.system?.tools?.[requirement.id]
+      : actor.system?.skills?.[requirement.id];
+    if (!data) return false;
+    if (typeof data.prof?.hasProficiency === "boolean") return data.prof.hasProficiency;
+    if (typeof data.hasProficiency === "boolean") return data.hasProficiency;
+    return Number(data.value ?? data.proficient ?? 0) > 0;
+  }
+
+  static #proficiencyLabel(requirement) {
+    const config = requirement?.type === "tool" ? CONFIG.DND5E?.tools : CONFIG.DND5E?.skills;
+    const data = config?.[requirement?.id];
+    const raw = (typeof data === "string" ? data : data?.label) ?? requirement?.id ?? "Proficiency";
+    return game.i18n.localize(raw);
+  }
+
+  static #checkLabel(check) {
+    const type = String(check?.type || "skill");
+    const id = String(check?.id || "");
+    if (type === "skill") return this.#proficiencyLabel({ type: "skill", id });
+    if (type === "tool") return this.#proficiencyLabel({ type: "tool", id });
+    const data = CONFIG.DND5E?.abilities?.[id];
+    const rawLabel = (typeof data === "string" ? data : data?.label) ?? id ?? "Ability";
+    const label = game.i18n.localize(rawLabel);
+    return type === "save" ? `${label} Saving Throw` : `${label} Check`;
+  }
+
+  static #resolutionSummary(resolution, proficiencyRows, qualifies, checkLabel) {
+    const parts = [];
+    if (proficiencyRows.length) {
+      const joiner = resolution.proficiencyMatch === "all" ? " + " : " or ";
+      parts.push(`${proficiencyRows.map(row => row.label).join(joiner)}${qualifies ? " ✓" : ""}`);
+    }
+    if (resolution.check.required) parts.push(`${checkLabel} DC ${resolution.check.dc}`);
+    else parts.push("No check required");
+    if (resolution.check.required) {
+      parts.push(resolution.failure.loseMaterials
+        ? `Failure loses ${resolution.failure.lossPercent}% materials`
+        : "No material loss on failure");
+    }
+    return parts.join(" · ");
   }
 
   static #hasQuantity(item) {

@@ -54,6 +54,63 @@
         <label class="cc-file-field"><span>Recipe Image</span><span><input type="text" name="img" value="{{draft.img}}"><button type="button" data-action="browse-image" data-target="img"><i class="fa-solid fa-folder-open"></i></button></span></label>
       </section>
 
+      <section class="cc-form-card cc-crafting-resolution-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Crafting Resolution</span><h3>Proficiency, Check & Failure Risk</h3></div><small>Optional rules layered on top of the existing recipe. Legacy recipes without these settings continue to craft automatically.</small></div>
+
+        <div class="cc-resolution-section">
+          <div class="cc-resolution-heading"><strong>Relevant Proficiency</strong><small>Choose a Skill, a Tool, or both. These determine access and/or automatic success according to the policies below.</small></div>
+          <div class="cc-grid two cc-resolution-proficiencies">
+            <label><span>Proficiency 1</span><select name="proficiency1">
+              <option value="" {{#if (eq craftingResolutionOptions.proficiency1 "")}}selected{{/if}}>None</option>
+              <optgroup label="Skills">{{#each craftingResolutionOptions.skillOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.proficiency1)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+              <optgroup label="Tools">{{#each craftingResolutionOptions.toolOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.proficiency1)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            </select></label>
+            <label><span>Proficiency 2 (optional)</span><select name="proficiency2">
+              <option value="" {{#if (eq craftingResolutionOptions.proficiency2 "")}}selected{{/if}}>None</option>
+              <optgroup label="Skills">{{#each craftingResolutionOptions.skillOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.proficiency2)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+              <optgroup label="Tools">{{#each craftingResolutionOptions.toolOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.proficiency2)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            </select></label>
+          </div>
+          <div class="cc-grid three cc-resolution-policy-grid">
+            <label><span>If two are selected</span><select name="proficiencyMatch">
+              <option value="any" {{#if (eq draft.craftingResolution.proficiencyMatch "any")}}selected{{/if}}>Any one qualifies</option>
+              <option value="all" {{#if (eq draft.craftingResolution.proficiencyMatch "all")}}selected{{/if}}>Both are required</option>
+            </select></label>
+            <label><span>Who can attempt</span><select name="attemptPolicy">
+              <option value="anyone" {{#if (eq draft.craftingResolution.attemptPolicy "anyone")}}selected{{/if}}>Anyone</option>
+              <option value="requiresProficiency" {{#if (eq draft.craftingResolution.attemptPolicy "requiresProficiency")}}selected{{/if}}>Requires relevant proficiency</option>
+            </select></label>
+            <label><span>If proficient</span><select name="proficientPolicy">
+              <option value="rollNormally" {{#if (eq draft.craftingResolution.proficientPolicy "rollNormally")}}selected{{/if}}>Roll normally</option>
+              <option value="automaticSuccess" {{#if (eq draft.craftingResolution.proficientPolicy "automaticSuccess")}}selected{{/if}}>Automatic success</option>
+            </select></label>
+          </div>
+        </div>
+
+        <div class="cc-resolution-section">
+          <div class="cc-resolution-heading"><strong>Crafting Check</strong><small>The selected native D&D5e roll is made by the crafting player. The active GM validates the roll and commits the transaction.</small></div>
+          <label class="cc-resolution-toggle"><input type="checkbox" name="requireCraftingCheck" data-resolution-rerender {{#if draft.craftingResolution.check.required}}checked{{/if}}><span><strong>Require a Crafting Check</strong><small>When disabled, an eligible crafter succeeds automatically.</small></span></label>
+          {{#if draft.craftingResolution.check.required}}
+          <div class="cc-grid two cc-resolution-check-grid">
+            <label><span>Check</span><select name="craftingCheck">
+              <optgroup label="Ability Checks">{{#each craftingResolutionOptions.abilityOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+              <optgroup label="Skills">{{#each craftingResolutionOptions.skillOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+              <optgroup label="Tools">{{#each craftingResolutionOptions.toolOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+              <optgroup label="Saving Throws">{{#each craftingResolutionOptions.saveOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            </select></label>
+            <label><span>Difficulty Class (DC)</span><input type="number" min="1" max="40" step="1" name="craftingDC" value="{{draft.craftingResolution.check.dc}}"></label>
+          </div>
+
+          <div class="cc-resolution-failure">
+            <label class="cc-resolution-toggle"><input type="checkbox" name="loseMaterialsOnFailure" data-resolution-rerender {{#if draft.craftingResolution.failure.loseMaterials}}checked{{/if}}><span><strong>Lose materials on failure</strong><small>If the Crafting Check fails, consume the configured percentage of every required ingredient.</small></span></label>
+            {{#if draft.craftingResolution.failure.loseMaterials}}
+            <label class="cc-loss-slider"><span>Materials Lost on Failure <output data-failure-loss-output>{{draft.craftingResolution.failure.lossPercent}}%</output></span><input type="range" min="0" max="100" step="5" name="failureLossPercent" value="{{draft.craftingResolution.failure.lossPercent}}"></label>
+            {{/if}}
+          </div>
+          {{/if}}
+        </div>
+      </section>
+
       <section class="cc-form-card">
         <div class="cc-card-heading"><div><span class="cc-kicker">Requirements</span><h3>Items Consumed</h3></div><small>Any D&D5e Item can be an input. Materials from Crafting Core — Materials are only the organized automatic source.</small></div>
         <div class="cc-drop-zone" data-drop-kind="ingredient"><i class="fa-solid fa-arrow-down-to-line"></i><strong>Drop required Items here</strong></div>

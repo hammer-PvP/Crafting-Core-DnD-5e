@@ -859,3 +859,32 @@
   font-size: 9px;
   line-height: 1.35;
 }
+
+/* v0.0.18 — Crafting Resolution */
+.cc-crafting-resolution-card { border-color: color-mix(in srgb, var(--cc-gold) 30%, var(--cc-border)); }
+.cc-resolution-section { display: grid; gap: 9px; padding: 10px 0; }
+.cc-resolution-section + .cc-resolution-section { border-top: 1px solid var(--cc-border-soft); }
+.cc-resolution-heading { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; }
+.cc-resolution-heading strong { color: var(--cc-gold); font-size: 11px; }
+.cc-resolution-heading small { max-width: 66%; opacity: .6; font-size: 9px; text-align: right; }
+.cc-resolution-toggle { display: grid !important; grid-template-columns: auto minmax(0,1fr); gap: 8px; align-items: start; padding: 7px 9px; border: 1px solid rgba(255,255,255,.065); border-radius: 4px; background: rgba(255,255,255,.02); cursor: pointer; }
+.cc-resolution-toggle input { margin: 2px 0 0; }
+.cc-resolution-toggle strong, .cc-resolution-toggle small { display: block; }
+.cc-resolution-toggle small { margin-top: 2px; opacity: .58; font-size: 9px; }
+.cc-resolution-failure { display: grid; gap: 8px; }
+.cc-loss-slider { display: grid !important; gap: 6px; padding: 7px 9px; border: 1px solid rgba(255,255,255,.05); border-radius: 4px; }
+.cc-loss-slider > span { display: flex; justify-content: space-between; gap: 10px; }
+.cc-loss-slider output { color: var(--cc-gold); font-weight: 800; }
+.cc-loss-slider input[type="range"] { width: 100%; }
+.cc-sheet-resolution { display: grid; gap: 4px; margin: 8px 0; padding: 7px 8px; border: 1px solid rgba(255,255,255,.065); border-radius: 4px; background: rgba(255,255,255,.018); }
+.cc-sheet-resolution.blocked { border-color: rgba(183,68,68,.34); background: rgba(183,68,68,.06); }
+.cc-sheet-resolution-row { display: grid; grid-template-columns: 16px minmax(95px,.55fr) minmax(0,1fr); gap: 6px; align-items: center; font-size: 10px; }
+.cc-sheet-resolution-row > i { color: var(--cc-gold); text-align: center; }
+.cc-sheet-resolution-row > span { opacity: .58; }
+.cc-sheet-resolution-row > strong { text-align: right; font-size: 10px; }
+.cc-sheet-resolution-block { margin: 3px 0 0; color: #d98f8f; font-size: 9px; }
+@media (max-width: 720px) {
+  .cc-resolution-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .cc-resolution-heading small { max-width: none; text-align: left; }
+  .cc-resolution-policy-grid { grid-template-columns: 1fr; }
+}

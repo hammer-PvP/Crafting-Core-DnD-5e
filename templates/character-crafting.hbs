@@ -30,7 +30,35 @@
           </div>
           {{/each}}
         </div>
-        <button type="button" class="cc-sheet-craft" data-action="craft" data-recipe-id="{{id}}" {{#unless canCraft}}disabled{{/unless}}><i class="fa-solid fa-hammer"></i> Craft</button>
+
+        <div class="cc-sheet-resolution {{#unless resolution.eligible}}blocked{{/unless}}">
+          {{#if resolution.proficiencyRows.length}}
+          <div class="cc-sheet-resolution-row">
+            <i class="fa-solid fa-screwdriver-wrench"></i>
+            <span>Relevant proficiency</span>
+            <strong>
+              {{#each resolution.proficiencyRows}}{{label}}{{#unless @last}}{{#if (eq ../resolution.proficiencyMatch "all")}} + {{else}} or {{/if}}{{/unless}}{{/each}}
+            </strong>
+          </div>
+          {{/if}}
+          {{#if resolution.check.required}}
+          <div class="cc-sheet-resolution-row">
+            <i class="fa-solid fa-dice-d20"></i>
+            <span>Crafting Check</span>
+            <strong>{{#if resolution.automaticSuccess}}Automatic Success{{else}}{{resolution.checkLabel}} · DC {{resolution.check.dc}}{{/if}}</strong>
+          </div>
+          {{/if}}
+          {{#if resolution.rollRequired}}
+          <div class="cc-sheet-resolution-row">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>Failure</span>
+            <strong>{{#if resolution.failure.loseMaterials}}{{resolution.failure.lossPercent}}% materials lost{{else}}No materials lost{{/if}}</strong>
+          </div>
+          {{/if}}
+          {{#unless resolution.eligible}}<p class="cc-sheet-resolution-block"><i class="fa-solid fa-lock"></i> {{resolution.blockReason}}</p>{{/unless}}
+        </div>
+
+        <button type="button" class="cc-sheet-craft" data-action="craft" data-recipe-id="{{id}}" {{#unless canCraft}}disabled{{/unless}}><i class="fa-solid {{#if resolution.rollRequired}}fa-dice-d20{{else}}fa-hammer{{/if}}"></i> {{#if resolution.rollRequired}}Attempt Craft{{else}}Craft{{/if}}</button>
       </article>
       {{/with}}
     {{else}}

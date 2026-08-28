@@ -40,6 +40,21 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (this.selectedId && !recipes.some(recipe => recipe.id === this.selectedId)) this.#newDraft();
     const rarity = String(this.draft?.result?.snapshot?.system?.rarity ?? "");
     const rarityLabel = rarity ? (CONFIG.DND5E?.itemRarity?.[rarity] ?? rarity) : "No rarity";
+    const localizeLabel = value => game.i18n.localize((typeof value === "string" ? value : value?.label) ?? "");
+    const skillOptions = Object.entries(CONFIG.DND5E?.skills ?? {}).map(([id, data]) => ({
+      value: `skill:${id}`, label: localizeLabel(data) || id
+    })).sort((a, b) => a.label.localeCompare(b.label, game.i18n.lang));
+    const toolOptions = Object.entries(CONFIG.DND5E?.tools ?? {}).map(([id, data]) => ({
+      value: `tool:${id}`, label: localizeLabel(data) || id
+    })).sort((a, b) => a.label.localeCompare(b.label, game.i18n.lang));
+    const abilityOptions = Object.entries(CONFIG.DND5E?.abilities ?? {}).map(([id, data]) => ({
+      value: `ability:${id}`, label: localizeLabel(data) || id
+    }));
+    const saveOptions = Object.entries(CONFIG.DND5E?.abilities ?? {}).map(([id, data]) => ({
+      value: `save:${id}`, label: `${localizeLabel(data) || id} Saving Throw`
+    }));
+    const proficiencyValues = (this.draft?.craftingResolution?.proficiencies ?? []).map(row => `${row.type}:${row.id}`);
+    const checkValue = `${this.draft?.craftingResolution?.check?.type ?? "skill"}:${this.draft?.craftingResolution?.check?.id ?? ""}`;
     return {
       recipeCount: recipes.length,
       recipes: recipes.map(recipe => ({
@@ -54,7 +69,13 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       defaultKnowledgeIcon: DEFAULT_KNOWLEDGE_ICON,
       knowledgeIcons: KNOWLEDGE_ICONS,
       outputRarity: rarityLabel,
-      knowledgePrice: Number(KNOWLEDGE_PRICE_BY_RARITY[rarity] ?? 0)
+      knowledgePrice: Number(KNOWLEDGE_PRICE_BY_RARITY[rarity] ?? 0),
+      craftingResolutionOptions: {
+        skillOptions, toolOptions, abilityOptions, saveOptions,
+        proficiency1: proficiencyValues[0] ?? "",
+        proficiency2: proficiencyValues[1] ?? "",
+        checkValue
+      }
     };
   }
 
@@ -110,6 +131,13 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       if (!current || oldDefaults.has(current)) this.draft.knowledge.img = KNOWLEDGE_ICONS[event.currentTarget.value] ?? DEFAULT_KNOWLEDGE_ICON;
       this.render({ force: true });
     });
+    root.querySelectorAll('[data-resolution-rerender]').forEach(input => input.addEventListener("change", () => {
+      this.#syncDraftFromForm();
+      this.render({ force: true });
+    }));
+    const lossSlider = root.querySelector('[name="failureLossPercent"]');
+    const lossOutput = root.querySelector('[data-failure-loss-output]');
+    if (lossSlider && lossOutput) lossSlider.addEventListener("input", () => { lossOutput.textContent = `${lossSlider.value}%`; });
   }
 
   #newDraft() {
@@ -118,6 +146,14 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       id: foundry.utils.randomID(20),
       name: "New Recipe",
       craftingTime: 10,
+      craftingResolution: {
+        proficiencies: [],
+        proficiencyMatch: "any",
+        attemptPolicy: "anyone",
+        proficientPolicy: "rollNormally",
+        check: { required: false, type: "skill", id: "arc", dc: 15 },
+        failure: { loseMaterials: false, lossPercent: 50 }
+      },
       ingredients: [],
       result: null,
       knowledge: { label: "Recipe", name: "", img: KNOWLEDGE_ICONS.Recipe }
@@ -137,6 +173,28 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this.draft.name = root.querySelector('[name="name"]')?.value ?? this.draft.name;
     this.draft.img = root.querySelector('[name="img"]')?.value ?? this.draft.img;
     this.draft.craftingTime = Math.max(0, Math.floor(Number(root.querySelector('[name="craftingTime"]')?.value) || 0));
+    const resolution = foundry.utils.deepClone(this.draft.craftingResolution ?? {});
+    const parseProficiency = value => {
+      const [type, id] = String(value || "").split(":", 2);
+      return (["skill", "tool"].includes(type) && id) ? { type, id } : null;
+    };
+    resolution.proficiencies = [
+      parseProficiency(root.querySelector('[name="proficiency1"]')?.value),
+      parseProficiency(root.querySelector('[name="proficiency2"]')?.value)
+    ].filter(Boolean);
+    resolution.proficiencyMatch = root.querySelector('[name="proficiencyMatch"]')?.value ?? resolution.proficiencyMatch ?? "any";
+    resolution.attemptPolicy = root.querySelector('[name="attemptPolicy"]')?.value ?? resolution.attemptPolicy ?? "anyone";
+    resolution.proficientPolicy = root.querySelector('[name="proficientPolicy"]')?.value ?? resolution.proficientPolicy ?? "rollNormally";
+    resolution.check ??= {};
+    resolution.check.required = Boolean(root.querySelector('[name="requireCraftingCheck"]')?.checked);
+    const [checkType, checkId] = String(root.querySelector('[name="craftingCheck"]')?.value || "skill:arc").split(":", 2);
+    resolution.check.type = checkType;
+    resolution.check.id = checkId;
+    resolution.check.dc = Math.clamp(Math.floor(Number(root.querySelector('[name="craftingDC"]')?.value) || 10), 1, 40);
+    resolution.failure ??= {};
+    resolution.failure.loseMaterials = Boolean(root.querySelector('[name="loseMaterialsOnFailure"]')?.checked);
+    resolution.failure.lossPercent = Math.clamp(Math.round(Number(root.querySelector('[name="failureLossPercent"]')?.value) || 0), 0, 100);
+    this.draft.craftingResolution = RecipeService.normalizeCraftingResolution(resolution);
     this.draft.knowledge ??= {};
     this.draft.knowledge.label = root.querySelector('[name="knowledgeLabel"]')?.value ?? "Recipe";
     this.draft.knowledge.name = root.querySelector('[name="knowledgeName"]')?.value ?? "";
@@ -204,6 +262,13 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (!this.draft.name?.trim()) throw new Error("Give the recipe a name.");
     if (!this.draft.result?.uuid) throw new Error("Drop a result Item into the recipe first.");
     if (!this.draft.ingredients.length) throw new Error("Add at least one required Item.");
+    const resolution = RecipeService.normalizeCraftingResolution(this.draft.craftingResolution);
+    if (resolution.attemptPolicy === "requiresProficiency" && !resolution.proficiencies.length) {
+      throw new Error("Choose at least one relevant proficiency when the recipe requires proficiency to attempt.");
+    }
+    if (resolution.check.required && !resolution.check.id) {
+      throw new Error("Choose a valid Crafting Check.");
+    }
   }
 
   async #save(event) {

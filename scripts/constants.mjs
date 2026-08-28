@@ -1,6 +1,6 @@
 export const MODULE_ID = "dnd5e-crafting-core";
 export const MODULE_TITLE = "Crafting Core (DnD 5e)";
-export const MODULE_VERSION = "0.0.17";
+export const MODULE_VERSION = "0.0.18";
 
 export const SETTINGS = Object.freeze({
   RECIPES: "recipes",
@@ -17,6 +17,7 @@ export const FLAGS = Object.freeze({
   // v0.0.3+ self-contained Actor knowledge store: { [recipeId]: { recipe, learnedAt, ... } }.
   LEARNED_RECIPES: "learnedRecipes",
   CRAFTING_JOB: "craftingJob",
+  CRAFTING_ROLL: "craftingRoll",
   SOURCE_UUID: "sourceUuid",
   KNOWLEDGE_RECIPE_ID: "knowledgeRecipeId",
   KNOWLEDGE_ACTIVITY: "knowledgeActivity",

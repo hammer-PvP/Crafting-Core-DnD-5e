@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.0.18
+
+Recipe Crafting Resolution development release.
+
+- Added optional per-Recipe **Relevant Proficiencies** using native D&D5e Skills and Tools. Recipes can configure one or two proficiencies and resolve them as **Any** or **All**.
+- Added configurable attempt policy: **Anyone** may attempt or the crafter must satisfy the relevant proficiency rule.
+- Added configurable proficient behavior: qualifying crafters may **Roll Normally** or receive **Automatic Success**. This supports recipes where an untrained character may risk an attempt while a trained crafter succeeds automatically.
+- Added optional native D&D5e **Crafting Checks** selected from Ability Checks, Skills, Tool Checks, or Saving Throws, with a GM-configured DC from 1 to 40.
+- Crafting Checks are rolled on the crafting user's client through the D&D5e 5.3.3 roll APIs. The active GM validates the flagged chat roll before committing inventory or result changes.
+- Added configurable **material loss on failed Crafting Check**. The GM can disable loss entirely or choose 0–100% with a 5% slider. Loss is applied independently to each required ingredient using round-up quantities; any positive percentage can therefore consume a single rare ingredient.
+- A failed Crafting Check never creates the output Item and never starts a crafting job. Only the configured failed-material share is consumed.
+- Existing Recipes remain backward compatible: recipes without Crafting Resolution settings require no check and retain the v0.0.17 automatic-success behavior.
+- Existing seconds-based Crafting Time remains unchanged in this release. Rest-based Crafting Projects are intentionally reserved for v0.0.19.
+- No Harvest, Creature Scanner, Essence, Item Piles corpse-loot, or normalization pipeline behavior was changed.
+
 ## 0.0.17
 
 Immersive corpse-loot normalization hotfix + optional Firearm homebrew.

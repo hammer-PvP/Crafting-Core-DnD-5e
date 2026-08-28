@@ -97,7 +97,11 @@ export class CharacterSheetService {
         if (!recipeId) return;
         craft.disabled = true;
         try {
-          await CraftingService.requestCraft(actor, recipeId);
+          const result = await CraftingService.requestCraft(actor, recipeId);
+          if (result?.outcome === "failure") {
+            const loss = Number(result.lossPercent) || 0;
+            ui.notifications.warn(`Crafting failed.${loss > 0 ? ` ${loss}% of the required materials were lost.` : " No materials were lost."}`);
+          }
           app.render({ force: true });
         } catch (error) {
           console.error(`${MODULE_ID} | Craft failed.`, error);

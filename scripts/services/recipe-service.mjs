@@ -54,6 +54,7 @@ export class RecipeService {
       name: String(recipe.name || "New Recipe").trim() || "New Recipe",
       img: String(recipe.img || recipe.result?.img || "icons/svg/item-bag.svg"),
       craftingTime: Math.max(0, Math.floor(Number(recipe.craftingTime) || 0)),
+      craftingResolution: this.normalizeCraftingResolution(recipe.craftingResolution),
       ingredients: ingredients
         .filter(row => row?.uuid)
         .map(row => ({
@@ -96,6 +97,40 @@ export class RecipeService {
       } : null,
       createdAt: Number(recipe.createdAt) || Date.now(),
       updatedAt: Date.now()
+    };
+  }
+
+  static normalizeCraftingResolution(value={}) {
+    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const proficiencies = Array.isArray(source.proficiencies) ? source.proficiencies : [];
+    const normalizedProficiencies = proficiencies
+      .map(entry => ({
+        type: ["skill", "tool"].includes(String(entry?.type)) ? String(entry.type) : "",
+        id: String(entry?.id || "")
+      }))
+      .filter(entry => entry.type && entry.id)
+      .filter((entry, index, rows) => rows.findIndex(row => row.type === entry.type && row.id === entry.id) === index)
+      .slice(0, 2);
+
+    const check = source.check && typeof source.check === "object" ? source.check : {};
+    const checkType = ["ability", "skill", "tool", "save"].includes(String(check.type)) ? String(check.type) : "skill";
+    const failure = source.failure && typeof source.failure === "object" ? source.failure : {};
+
+    return {
+      proficiencies: normalizedProficiencies,
+      proficiencyMatch: source.proficiencyMatch === "all" ? "all" : "any",
+      attemptPolicy: source.attemptPolicy === "requiresProficiency" ? "requiresProficiency" : "anyone",
+      proficientPolicy: source.proficientPolicy === "automaticSuccess" ? "automaticSuccess" : "rollNormally",
+      check: {
+        required: Boolean(check.required),
+        type: checkType,
+        id: String(check.id || (checkType === "save" ? "con" : checkType === "ability" ? "int" : "")),
+        dc: Math.clamp(Math.floor(Number(check.dc) || 10), 1, 40)
+      },
+      failure: {
+        loseMaterials: Boolean(check.required && failure.loseMaterials),
+        lossPercent: Math.clamp(Math.round(Number(failure.lossPercent) || 0), 0, 100)
+      }
     };
   }
 
