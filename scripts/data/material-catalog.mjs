@@ -20,7 +20,7 @@ const essence = (id, name, nature, {tags=[], quantity="1"}={}) => ({
   tags: ["essence", ...tags], requires: [], biomes: [], quantity, chance: 100
 });
 
-export const MATERIAL_CATALOG_VERSION = 6;
+export const MATERIAL_CATALOG_VERSION = 7;
 
 export const DEFAULT_MATERIALS = Object.freeze([
   // Aberration
@@ -152,8 +152,9 @@ export const DEFAULT_MATERIALS = Object.freeze([
   essence("essence-radiant", "Radiant Essence", "radiant", {tags:["radiant"]}),
   essence("essence-thunder", "Thunder Essence", "thunder", {tags:["thunder"]}),
 
-  // Environment gathering — wild resources. Biomes intentionally overlap categories:
-  // a forest can contain ore/crystal deposits, a mountain can carry flora/fungi, and so on.
+  // Environment gathering — wild resources. Biomes intentionally overlap categories so
+  // adventurers nearly always have something worth searching for, while each biome keeps a
+  // stronger identity through its available material mix and optional per-biome chance overrides.
   // Flora
   gathering("gathering-elfleaf", "Elvenleaf Herb", "flora", "common", {biomes:["forest","ravine"], tags:["herb"], quantity:"1d4"}),
   gathering("gathering-wild-sage", "Wild Sage", "flora", "common", {biomes:["forest","grassland","ravine"], tags:["herb","aromatic"], quantity:"1d4"}),
@@ -166,18 +167,20 @@ export const DEFAULT_MATERIALS = Object.freeze([
   gathering("gathering-cliff-moss", "Cliff Moss", "flora", "common", {biomes:["ravine","mountain","forest"], tags:["moss"], quantity:"1d3"}),
   gathering("gathering-ashen-lichen", "Ashen Lichen", "flora", "uncommon", {biomes:["ravine","mountain","cave"], tags:["lichen"]}),
   gathering("gathering-frostbloom", "Frostbloom", "flora", "rare", {biomes:["arctic","mountain"], tags:["flower"]}),
-  gathering("gathering-sungrass", "Sungrass", "flora", "common", {biomes:["grassland","forest"], tags:["herb"], quantity:"1d4"}),
+  gathering("gathering-sungrass", "Sungrass", "flora", "common", {biomes:["grassland","forest"], tags:["herb","grass"], quantity:"1d4"}),
   gathering("gathering-sea-herb", "Tide Herb", "flora", "common", {biomes:["coast","swamp"], tags:["herb"]}),
 
-  // Fungi
-  gathering("gathering-mooncap", "Mooncap Mushroom", "flora", "common", {biomes:["forest","cave"], tags:["fungus"], quantity:"1d3"}),
+  // Fungi — intentionally asymmetric by biome: Forest has one dependable fungus, Mountain four,
+  // Cave five, Swamp three, and Grassland only a very rare find.
+  gathering("gathering-mooncap", "Mooncap Mushroom", "flora", "common", {biomes:["forest"], tags:["fungus","mushroom"], quantity:"1d3"}),
   gathering("gathering-cavecap", "Cavecap Mushroom", "flora", "common", {biomes:["cave","mountain","ravine"], tags:["fungus","mushroom"], quantity:"1d3"}),
-  gathering("gathering-bitter-fungus", "Bitter Fungus", "flora", "common", {biomes:["forest","swamp","cave"], tags:["fungus","bitter"], quantity:"1d3"}),
-  gathering("gathering-glowcap", "Glowcap Fungus", "flora", "uncommon", {biomes:["cave","underdark"], tags:["fungus","luminous"], quantity:"1d2"}),
+  gathering("gathering-bitter-fungus", "Bitter Fungus", "flora", "common", {biomes:["swamp","mountain"], tags:["fungus","bitter"], quantity:"1d3"}),
+  gathering("gathering-glowcap", "Glowcap Fungus", "flora", "uncommon", {biomes:["cave","underdark","mountain"], tags:["fungus","luminous"], quantity:"1d2"}),
   gathering("gathering-embercap", "Embercap Mushroom", "flora", "uncommon", {biomes:["cave","mountain","desert"], tags:["fungus","fire"], quantity:"1d2"}),
   gathering("gathering-deep-spore", "Deep Spore", "flora", "rare", {biomes:["underdark","cave"], tags:["fungus","spore"]}),
   gathering("gathering-ghost-fungus", "Ghost Fungus", "flora", "rare", {biomes:["underdark","swamp","cave"], tags:["fungus","spirit"]}),
-  gathering("gathering-mycelial-cluster", "Mycelial Cluster", "flora", "rare", {biomes:["forest","cave","underdark"], tags:["fungus","mycelium"]}),
+  gathering("gathering-mycelial-cluster", "Mycelial Cluster", "flora", "rare", {biomes:["underdark","swamp"], tags:["fungus","mycelium"]}),
+  gathering("gathering-prairie-truffle", "Prairie Truffle", "flora", "veryRare", {biomes:["grassland"], tags:["fungus","truffle"]}),
 
   // Roots
   gathering("gathering-bloodroot", "Bloodroot", "flora", "common", {biomes:["forest","swamp"], tags:["root"], quantity:"1d3"}),
@@ -185,6 +188,7 @@ export const DEFAULT_MATERIALS = Object.freeze([
   gathering("gathering-bitter-root", "Bitter Root", "flora", "common", {biomes:["forest","swamp"], tags:["root","bitter"], quantity:"1d3"}),
   gathering("gathering-medicinal-root", "Medicinal Root", "flora", "uncommon", {biomes:["forest","grassland","mountain"], tags:["root","medicine"], quantity:"1d3"}),
   gathering("gathering-cave-root", "Cave Root", "flora", "uncommon", {biomes:["cave","underdark","ravine"], tags:["root"], quantity:"1d2"}),
+  gathering("gathering-elven-root", "Elven Root", "flora", "uncommon", {biomes:["forest","ravine"], tags:["root","herb","elven"], quantity:"1d2"}),
   gathering("gathering-arcane-root", "Arcane Root", "flora", "rare", {biomes:["underdark","forest","swamp"], tags:["root","arcane"]}),
 
   // Wood & Resin
@@ -196,10 +200,15 @@ export const DEFAULT_MATERIALS = Object.freeze([
   gathering("gathering-amber-resin", "Amber Resin", "flora", "uncommon", {biomes:["forest","mountain"], tags:["resin","alchemy"], quantity:"1d2"}),
   gathering("gathering-enchanted-resin", "Enchanted Resin", "flora", "rare", {biomes:["forest","underdark"], tags:["resin","arcane"]}),
 
-  // Minerals & Geological. Raw metals remain gathering resources; Steel stays a refined trade material.
+  // Wild Foraging — non-cultivated foodstuffs discovered in the environment.
+  gathering("gathering-wild-berries", "Wild Berries", "flora", "common", {biomes:["forest","grassland","mountain"], tags:["forage","food","berry"], quantity:"1d4"}),
+  gathering("gathering-wild-nuts", "Wild Nuts", "flora", "common", {biomes:["forest","mountain"], tags:["forage","food","nut"], quantity:"1d4"}),
+  gathering("gathering-wild-honey", "Wild Honey", "flora", "uncommon", {biomes:["forest"], tags:["forage","food","honey"], quantity:"1d2"}),
+
+  // Minerals & Geological. Raw metals remain gathering resources; Steel is deliberately not an ore.
   gathering("gathering-iron-ore", "Iron Ore", "mineral", "common", {biomes:["cave","mountain","ravine","forest","grassland"], tags:["metal"], quantity:"1d4"}),
   gathering("gathering-copper-ore", "Copper Ore", "mineral", "common", {biomes:["cave","mountain","ravine","forest","desert"], tags:["metal"], quantity:"1d4"}),
-  gathering("gathering-coal", "Coal", "mineral", "common", {biomes:["cave","mountain","ravine","forest"], tags:["mineral","fuel"], quantity:"1d4"}),
+  gathering("gathering-coal", "Coal", "mineral", "common", {biomes:["cave","mountain","ravine","forest"], tags:["mineral","fuel","coal"], quantity:"1d4"}),
   gathering("gathering-quartz", "Quartz Cluster", "mineral", "common", {biomes:["cave","mountain","ravine","forest","grassland","coast","desert","arctic"], tags:["crystal","stone"], quantity:"1d3"}),
   gathering("gathering-mineral-salt", "Mineral Salt", "mineral", "common", {biomes:["cave","coast","desert","swamp"], tags:["salt"], quantity:"1d4"}),
   gathering("gathering-silver-ore", "Silver Ore", "mineral", "uncommon", {biomes:["cave","mountain","ravine","arctic"], tags:["metal"]}),
@@ -215,23 +224,68 @@ export const DEFAULT_MATERIALS = Object.freeze([
   gathering("gathering-adamantine-ore", "Adamantine Ore", "mineral", "veryRare", {biomes:["underdark","mountain","cave"], tags:["metal","fantastic"]}),
   gathering("gathering-starstone", "Starstone Shard", "mineral", "legendary", {biomes:["mountain","desert"], tags:["stone","arcane"]}),
 
-  // Profession / trade materials. v0.0.19b only fills two obvious leather gaps;
-  // the broader Cultivated / Domestic and Profession & Trade expansion remains v0.0.19c.
+  // Cultivated / Domestic — ordinary farm, orchard, apiary and livestock products. These are
+  // intentionally Profession & Trade materials rather than Environment Gathering results.
+  profession("trade-wheat", "Wheat", "cultivated", "common", {tags:["cultivated","crop","grain","food"]}),
+  profession("trade-corn", "Corn", "cultivated", "common", {tags:["cultivated","crop","food"]}),
+  profession("trade-barley", "Barley", "cultivated", "common", {tags:["cultivated","crop","grain","food"]}),
+  profession("trade-rice", "Rice", "cultivated", "common", {tags:["cultivated","crop","grain","food"]}),
+  profession("trade-oats", "Oats", "cultivated", "common", {tags:["cultivated","crop","grain","food"]}),
+  profession("trade-potato", "Potato", "cultivated", "common", {tags:["cultivated","crop","vegetable","food"]}),
+  profession("trade-onion", "Onion", "cultivated", "common", {tags:["cultivated","crop","vegetable","food"]}),
+  profession("trade-garlic", "Garlic", "cultivated", "common", {tags:["cultivated","crop","vegetable","food"]}),
+  profession("trade-carrot", "Carrot", "cultivated", "common", {tags:["cultivated","crop","vegetable","food"]}),
+  profession("trade-cabbage", "Cabbage", "cultivated", "common", {tags:["cultivated","crop","vegetable","food"]}),
+  profession("trade-peas", "Peas", "cultivated", "common", {tags:["cultivated","crop","vegetable","food"]}),
+  profession("trade-beans", "Beans", "cultivated", "common", {tags:["cultivated","crop","vegetable","food"]}),
+  profession("trade-apple", "Apple", "cultivated", "common", {tags:["cultivated","orchard","fruit","food"]}),
+  profession("trade-grapes", "Grapes", "cultivated", "common", {tags:["cultivated","orchard","fruit","food"]}),
+  profession("trade-milk", "Milk", "cultivated", "common", {tags:["cultivated","domestic","dairy","food"]}),
+  profession("trade-eggs", "Eggs", "cultivated", "common", {tags:["cultivated","domestic","egg","food"]}),
+  profession("trade-honey", "Honey", "cultivated", "common", {tags:["cultivated","domestic","apiary","honey","food"]}),
+
+  // Food & Cooking — processed or pantry staples.
   profession("trade-salt", "Salt", "trade", "common", {tags:["food","preservative"]}),
   profession("trade-bread", "Bread", "trade", "common", {tags:["food"]}),
   profession("trade-flour", "Flour", "trade", "common", {tags:["food","grain"]}),
   profession("trade-seasonings", "Seasonings", "trade", "common", {tags:["food","spice"]}),
   profession("trade-cooking-oil", "Cooking Oil", "trade", "common", {tags:["food","oil"]}),
-  profession("trade-charcoal", "Charcoal", "trade", "common", {tags:["smithing","fuel"]}),
+
+  // Leatherworking — intentionally compact; Thread from General Materials can be shared by Recipes.
   profession("trade-leather-piece", "Leather Piece", "trade", "common", {tags:["leather","craft"]}),
   profession("trade-leather-straps", "Leather Straps", "trade", "uncommon", {tags:["leather","craft"]}),
   profession("trade-refined-leather", "Refined Leather", "trade", "rare", {tags:["leather","craft"]}),
-  profession("trade-iron-ingot", "Iron Ingot", "trade", "uncommon", {tags:["metal","smithing"]}),
-  profession("trade-steel-ingot", "Steel Ingot", "trade", "uncommon", {tags:["metal","smithing"]}),
-  profession("trade-silver-ingot", "Silver Ingot", "trade", "rare", {tags:["metal","smithing"]}),
-  profession("trade-fine-cloth", "Fine Cloth", "trade", "rare", {tags:["textile","craft"]}),
+
+  // General reusable crafting materials shared across professions.
+  profession("trade-thread", "Thread", "trade", "common", {tags:["textile","general","craft"]}),
+  profession("trade-cloth", "Cloth", "trade", "common", {tags:["textile","general","craft"]}),
+  profession("trade-twine", "Twine", "trade", "common", {tags:["cordage","general","craft"]}),
+  profession("trade-wax", "Wax", "trade", "common", {tags:["wax","general","craft"]}),
+  profession("trade-fine-cloth", "Fine Cloth", "trade", "rare", {tags:["textile","general","craft"]}),
+
+  // Alchemy — broadly useful processed reagents rather than specific potion Recipes.
+  profession("trade-alcohol", "Alcohol", "trade", "common", {tags:["alchemy","solvent","liquid"]}),
+  profession("trade-distilled-extract", "Distilled Extract", "trade", "uncommon", {tags:["alchemy","extract","liquid"]}),
+  profession("trade-binding-agent", "Binding Agent", "trade", "uncommon", {tags:["alchemy","binder","craft"]}),
+  profession("trade-alchemical-catalyst", "Alchemical Catalyst", "trade", "rare", {tags:["alchemy","catalyst"]}),
   profession("trade-alchemical-solvent", "Alchemical Solvent", "trade", "rare", {tags:["alchemy"]}),
   profession("trade-refined-pigment", "Refined Pigment", "trade", "veryRare", {tags:["craft","alchemy"]}),
-  profession("trade-masterwork-alloy", "Masterwork Alloy", "trade", "veryRare", {tags:["metal","smithing"]}),
-  profession("trade-perfect-gem", "Perfect Gemstone", "trade", "legendary", {tags:["gem","jewelry"]})
+
+  // Metalworking — raw ores come from Gathering; ingots/alloys are the processed stage.
+  profession("trade-charcoal", "Charcoal", "trade", "common", {tags:["smithing","fuel","charcoal"]}),
+  profession("trade-iron-ingot", "Iron Ingot", "trade", "uncommon", {tags:["metal","smithing"]}),
+  profession("trade-copper-ingot", "Copper Ingot", "trade", "uncommon", {tags:["metal","smithing"]}),
+  profession("trade-steel-ingot", "Steel Ingot", "trade", "uncommon", {tags:["metal","smithing","alloy","carbon"]}),
+  profession("trade-silver-ingot", "Silver Ingot", "trade", "rare", {tags:["metal","smithing"]}),
+  profession("trade-gold-ingot", "Gold Ingot", "trade", "rare", {tags:["metal","smithing"]}),
+  profession("trade-mithral-ingot", "Mithral Ingot", "trade", "veryRare", {tags:["metal","smithing","fantastic"]}),
+  profession("trade-adamantine-ingot", "Adamantine Ingot", "trade", "legendary", {tags:["metal","smithing","fantastic"]}),
+  profession("trade-masterwork-alloy", "Masterwork Alloy", "trade", "veryRare", {tags:["metal","smithing","alloy"]}),
+
+  // Gemcutting & Crystals — explicit refinement chains for Geological materials.
+  profession("trade-cut-gem", "Cut Gemstone", "trade", "rare", {tags:["gem","jewelry","gemcutting"]}),
+  profession("trade-perfect-gem", "Perfect Gemstone", "trade", "legendary", {tags:["gem","jewelry","gemcutting"]}),
+  profession("trade-refined-crystal", "Refined Crystal", "trade", "rare", {tags:["crystal","gemcutting","craft"]}),
+  profession("trade-perfect-crystal", "Perfected Crystal", "trade", "veryRare", {tags:["crystal","gemcutting","craft"]})
+
 ]);

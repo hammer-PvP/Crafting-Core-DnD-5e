@@ -86,7 +86,7 @@ export class MaterialGenerationService {
       .filter(e => e.family === "gathering" && (e.biomes ?? []).includes(String(biome)))
       .map(e => e.category)
       .filter(Boolean));
-    const preferred = ["flora", "roots", "fungi", "wood", "mineral"];
+    const preferred = ["flora", "roots", "fungi", "wood", "forage", "mineral"];
     return [...set].sort((a, b) => {
       const ai = preferred.indexOf(a); const bi = preferred.indexOf(b);
       if (ai >= 0 || bi >= 0) return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);

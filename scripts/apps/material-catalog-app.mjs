@@ -23,14 +23,18 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
   async _prepareContext() {
     const summary = await MaterialCatalogService.packSummary();
     const entries = await MaterialCatalogService.allEntries();
-    const filtered = entries.filter(entry => this.#matches(entry)).map(entry => MaterialCatalogService.withIconChoices(entry));
+    const filtered = entries.filter(entry => this.#matches(entry, { includeSearch: false })).map(entry => {
+      const row = MaterialCatalogService.withIconChoices(entry);
+      row.searchText = this.#searchText(entry);
+      return row;
+    });
     const natures = [...new Set(entries.map(entry => entry.nature).filter(Boolean))].sort((a,b) => a.localeCompare(b, game.i18n.lang));
     return {
       summary,
       groups: MaterialCatalogService.groupedEntries(filtered),
       economy: MaterialCatalogService.economy(),
       catalogCount: entries.length,
-      shownCount: filtered.length,
+      shownCount: filtered.filter(entry => !this.filters.search || entry.searchText.includes(String(this.filters.search).trim().toLowerCase())).length,
       filters: this.filters,
       natureOptions: natures.map(value => ({ value, label: value.replace(/[-_]+/g," ").replace(/\b\w/g,c=>c.toUpperCase()), selected: this.filters.nature === value })),
       familyOptions: [
@@ -65,11 +69,14 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
         this.render({ force: true });
       });
     }
-    root.querySelector('[name="filter.search"]')?.addEventListener("input", event => {
+    const searchInput = root.querySelector('[name="filter.search"]');
+    searchInput?.addEventListener("input", event => {
       this.filters.search = event.currentTarget.value;
-      clearTimeout(this._ccSearchTimer);
-      this._ccSearchTimer = setTimeout(() => this.render({ force: true }), 180);
+      this.#applySearchFilter();
     });
+    // Search is deliberately DOM-local: no render while the GM is typing, so focus, caret,
+    // scroll position and open groups remain untouched even with a slow human typing cadence.
+    this.#applySearchFilter();
 
     const dropZone = root.querySelector('[data-drop-kind="custom-material"]');
     if (dropZone) {
@@ -91,13 +98,38 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     return super.close(options);
   }
 
-  #matches(entry) {
+  #matches(entry, { includeSearch=true }={}) {
     if (this.filters.family !== "all" && entry.family !== this.filters.family) return false;
     if (this.filters.nature !== "all" && entry.nature !== this.filters.nature) return false;
     if (this.filters.rarity !== "all" && entry.rarity !== this.filters.rarity) return false;
+    if (!includeSearch) return true;
     const search = String(this.filters.search || "").trim().toLowerCase();
-    if (!search) return true;
-    return [entry.name, entry.id, entry.nature, entry.category, ...(entry.tags ?? [])].join(" ").toLowerCase().includes(search);
+    return !search || this.#searchText(entry).includes(search);
+  }
+
+  #searchText(entry) {
+    return [entry.name, entry.id, entry.nature, entry.category, ...(entry.tags ?? []), ...(entry.biomes ?? [])]
+      .join(" ").toLowerCase();
+  }
+
+  #applySearchFilter() {
+    const root = this.element;
+    if (!root) return;
+    const search = String(this.filters.search || "").trim().toLowerCase();
+    let shown = 0;
+    root.querySelectorAll(".cc-material-group").forEach(group => {
+      let groupShown = 0;
+      group.querySelectorAll(".cc-material-table-row").forEach(row => {
+        const matches = !search || String(row.dataset.search ?? "").includes(search);
+        row.hidden = !matches;
+        if (matches) { shown += 1; groupShown += 1; }
+      });
+      group.hidden = groupShown === 0;
+      const count = group.querySelector("[data-role=group-visible-count]");
+      if (count) count.textContent = `${groupShown} material${groupShown === 1 ? "" : "s"}`;
+    });
+    const counter = root.querySelector("[data-role=material-visible-count]");
+    if (counter) counter.textContent = String(shown);
   }
 
   async #chooseIcon(event) {

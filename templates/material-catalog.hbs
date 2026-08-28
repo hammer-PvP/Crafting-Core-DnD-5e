@@ -52,7 +52,7 @@
 
     <main class="cc-material-catalog">
       <div class="cc-catalog-summary">
-        <div><span class="cc-kicker">Built-in + Custom Catalog</span><h2>{{shownCount}} / {{catalogCount}} Materials</h2></div>
+        <div><span class="cc-kicker">Built-in + Custom Catalog</span><h2><span data-role="material-visible-count">{{shownCount}}</span> / {{catalogCount}} Materials</h2></div>
         <p>Creature Harvest, Essences, Gathering, and Profession / Trade materials are organized into folders. Each curated material offers three Foundry Core icon candidates; one is preselected and can be changed here.</p>
       </div>
 
@@ -65,11 +65,11 @@
 
       {{#each groups}}
       <details class="cc-material-group" open>
-        <summary><span>{{label}}</span><small>{{count}} materials</small></summary>
+        <summary><span>{{label}}</span><small data-role="group-visible-count">{{count}} materials</small></summary>
         <div class="cc-material-table">
           <div class="cc-material-table-head"><span>Material</span><span>Rarity</span><span>Chance</span><span>Qty</span><span>Core Icon — choose 1 of 3</span><span></span></div>
           {{#each materials}}
-          <div class="cc-material-table-row" data-material-row="{{id}}" data-current-icon="{{selectedIcon}}">
+          <div class="cc-material-table-row" data-material-row="{{id}}" data-current-icon="{{selectedIcon}}" data-search="{{searchText}}">
             <span class="cc-material-name"><img src="{{selectedIcon}}" alt=""><strong>{{name}}</strong></span>
             <span class="cc-rarity {{rarity}}">{{rarityLabel}}</span>
             <span>{{chance}}%</span>

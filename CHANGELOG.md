@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.0.19c
+
+Cultivated/Domestic and Profession & Trade catalog expansion on the stable v0.0.19 line. Crafting Projects, Creature Harvest, Scanner, Essence, Item Piles, and gear normalization are unchanged.
+
+- Expanded the built-in curated Material Catalog from **165 to 202 materials**.
+- Added a dedicated **Profession & Trade — Cultivated & Domestic** group with 17 farm/orchard/apiary staples: Wheat, Corn, Barley, Rice, Oats, Potato, Onion, Garlic, Carrot, Cabbage, Peas, Beans, Apple, Grapes, Milk, Eggs, and Honey. These are vendor/farm materials and are not Environment Gathering results.
+- Added **Wild Foraging** to Environment Gathering with Wild Berries, Wild Nuts, and **Wild Honey**. Wild Honey is distinct from cultivated Honey and currently belongs to Forest gathering.
+- Refined fungus distribution by biome so the resource remains discoverable without making every biome equivalent: Forest has one dependable fungus, Mountain four, Cave five, Swamp three, Grassland one very-rare fungus, with additional Underdark/Ravine/Desert presence where appropriate.
+- Added **Elven Root** to the Roots pool, complementing Elvenleaf Herb and giving Forest/Ravine exploration another distinct botanical resource.
+- Expanded **Alchemy** with Alcohol, Distilled Extract, Binding Agent, and Alchemical Catalyst alongside the existing Alchemical Solvent and Refined Pigment.
+- Expanded **General Materials** with Thread, Cloth, Twine, and Wax. Fine Cloth remains the higher-tier textile and shared materials can be reused across Leatherworking and other Recipes.
+- Added a dedicated **Gemcutting & Crystals** Profession group. Rough Gemstone can now progress conceptually to Cut Gemstone and Perfect Gemstone; Raw Crystal can progress to Refined Crystal and Perfected Crystal.
+- Expanded **Metalworking** with Copper Ingot, Gold Ingot, Mithral Ingot, and Adamantine Ingot. Coal remains a gathered mineral fuel; Charcoal remains a separate processed/trade fuel. Steel remains a processed alloy material intended for a simple Iron Ingot + carbon-source refinement Recipe rather than any fictional Steel Ore.
+- Preserved GM-authored Recipes as the authority for actual refinement ratios; v0.0.19c adds the material endpoints but does not auto-create refinery Recipes.
+- Every one of the **202** built-in materials has exactly three Foundry Core icon candidates and one curated default. All 202 shipped defaults use distinct icon paths, and all referenced paths were validated against the supplied Core Icons archive. No Foundry artwork is bundled.
+- Reworked Materials search so typing filters the already-rendered catalog in place. Search no longer rerenders on each keystroke, preserving focus, caret, scroll position, and open groups for normal human typing speed. Search text includes material name, ID, nature, category, tags, and biomes.
+- Bumped the built-in Material Catalog schema to version **7**.
+- Game Hunt remains reserved for v0.0.19d. Extra Effort remains reserved for v0.0.20.
+
 ## 0.0.19b
 
 Environment Catalog and icon-curation refinement on the stable v0.0.19 line. Crafting Projects, Harvest, Scanner, Essence, Item Piles, and gear normalization are not changed.

@@ -1,5 +1,21 @@
 # Crafting Core (DnD 5e)
 
+## v0.0.19c — Cultivated, Trade & Refinement Catalog
+
+v0.0.19c continues the visual/catalog consolidation of the stable v0.0.19 Crafting Projects line. It does not change Project, Progress Check, Harvest, Scanner, Essence, Item Piles, or gear-normalization mechanics.
+
+The curated Material Catalog now contains **202 built-in materials**. A new **Cultivated & Domestic** Profession group provides ordinary farm, orchard, livestock, and apiary goods for markets and future Supplier/Vendor profiles: Wheat, Corn, Barley, Rice, Oats, vegetables, fruit, Milk, Eggs, and ordinary Honey. Environment Gathering receives a separate **Wild Foraging** group with Wild Berries, Wild Nuts, and **Wild Honey**, keeping natural discovery distinct from farm/vendor supply.
+
+Environment distribution is also refined for exploration variety. Resource families overlap biomes instead of being hard-locked, but each biome keeps an identity. In particular, Fungi are intentionally asymmetric: Forest has one dependable fungus, Mountain four, Cave five, Swamp three, and Grassland only one very-rare fungus. Elven Root joins the Roots pool as a Forest/Ravine botanical find.
+
+Profession & Trade is substantially deeper. Alchemy now includes Alcohol, Distilled Extract, Binding Agent, and Alchemical Catalyst. General Materials adds Thread, Cloth, Twine, and Wax. Gemstone/crystal refinement has its own **Gemcutting & Crystals** group, and Metalworking now closes the raw-ore endpoints with Copper, Gold, Mithral, and Adamantine Ingots. `Coal` and `Charcoal` remain distinct materials. Steel remains a processed material intended for a straightforward `Iron Ingot + carbon source → Steel Ingot` Recipe; the module deliberately does not invent Steel Ore or automatically create GM Recipes.
+
+The Materials search field has also been fixed for human typing. Text filtering now happens in the existing DOM instead of rerendering the application on every keystroke, so focus, caret, open groups, and scroll position remain stable while the GM types names such as `salts` or `undead`.
+
+As in v0.0.19a/b, every built-in material has exactly **three** curated Foundry Core icon candidates with one default, and Crafting Core stores only native `icons/...` references. No Foundry Core artwork is distributed inside the module.
+
+Game Hunt remains scoped for **v0.0.19d**. Extra Effort remains scoped for **v0.0.20**.
+
 ## v0.0.19b — Environment Catalog Expansion
 
 v0.0.19b expands the wild **Environment Gathering** vocabulary while keeping the stable v0.0.19 Crafting Project engine, Harvest pipeline, Scanner, Essence rules, Item Piles integration, and gear normalization unchanged.

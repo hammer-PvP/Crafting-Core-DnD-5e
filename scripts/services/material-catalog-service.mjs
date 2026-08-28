@@ -238,10 +238,13 @@ export class MaterialCatalogService {
       fungi: "Fungi",
       wood: "Wood & Resin",
       mineral: "Minerals & Geological",
+      forage: "Wild Foraging",
+      cultivated: "Cultivated & Domestic",
       food: "Food & Cooking",
       metalworking: "Metalworking",
       leatherworking: "Leatherworking",
       alchemy: "Alchemy",
+      gemcutting: "Gemcutting & Crystals",
       general: "General Materials"
     })[category] ?? this.#title(category);
   }
@@ -254,11 +257,14 @@ export class MaterialCatalogService {
     if (family === "essence") return "essence";
     if (family === "gathering") {
       if (nature === "mineral") return "mineral";
+      if (tags.has("forage")) return "forage";
       if (tags.has("root")) return "roots";
       if (tags.has("fungus") || tags.has("mushroom") || tags.has("spore")) return "fungi";
       if (tags.has("resin") || tags.has("wood") || tags.has("bark") || tags.has("sap")) return "wood";
       return "flora";
     }
+    if (tags.has("cultivated") || tags.has("domestic") || tags.has("crop") || tags.has("orchard") || tags.has("apiary")) return "cultivated";
+    if (tags.has("gemcutting") || tags.has("jewelry") || tags.has("gem")) return "gemcutting";
     if (tags.has("food") || tags.has("grain") || tags.has("spice") || tags.has("preservative") || tags.has("oil")) return "food";
     if (tags.has("leather")) return "leatherworking";
     if (tags.has("alchemy")) return "alchemy";
@@ -285,10 +291,10 @@ export class MaterialCatalogService {
     ];
     const creatureTypes = [...new Set(DEFAULT_MATERIALS.filter(m => m.family === "creature").map(m => m.nature))].sort();
     for (const nature of creatureTypes) defs.push({ key: `creature:${nature}`, name: this.#title(nature), parent: "creature" });
-    for (const [key, name] of [["flora","Flora"],["roots","Roots"],["fungi","Fungi"],["wood","Wood & Resin"],["mineral","Minerals & Geological"]]) {
+    for (const [key, name] of [["flora","Flora"],["roots","Roots"],["fungi","Fungi"],["wood","Wood & Resin"],["forage","Wild Foraging"],["mineral","Minerals & Geological"]]) {
       defs.push({ key: `gathering:${key}`, name, parent: "gathering" });
     }
-    for (const [key, name] of [["food","Food & Cooking"],["metalworking","Metalworking"],["leatherworking","Leatherworking"],["alchemy","Alchemy"],["general","General Materials"]]) {
+    for (const [key, name] of [["cultivated","Cultivated & Domestic"],["food","Food & Cooking"],["metalworking","Metalworking"],["leatherworking","Leatherworking"],["alchemy","Alchemy"],["gemcutting","Gemcutting & Crystals"],["general","General Materials"]]) {
       defs.push({ key: `profession:${key}`, name, parent: "profession" });
     }
     return defs;
