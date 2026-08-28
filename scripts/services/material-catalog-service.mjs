@@ -5,6 +5,7 @@ import {
   SETTINGS
 } from "../constants.mjs";
 import { DEFAULT_MATERIALS, MATERIAL_CATALOG_VERSION } from "../data/material-catalog.mjs";
+import { materialDefaultIcon, materialIconCandidates } from "../data/material-icon-catalog.mjs";
 import { CompendiumService } from "./compendium-service.mjs";
 
 export class MaterialCatalogService {
@@ -38,6 +39,36 @@ export class MaterialCatalogService {
   static rarityOptions({ includeAll=false }={}) {
     const options = this.RARITIES.map(value => ({ value, label: this.rarityLabel(value) }));
     return includeAll ? [{ value: "all", label: "All Rarities" }, ...options] : options;
+  }
+
+  static iconCandidatesFor(materialOrId) {
+    const material = typeof materialOrId === "object" && materialOrId ? materialOrId : null;
+    const id = String(material?.id ?? materialOrId ?? "");
+    const current = String(material?.img ?? "");
+    const curated = materialIconCandidates(id).slice(0, 3);
+
+    // A GM may have already chosen a custom presentation icon outside this curated shortlist.
+    // Preserve that choice by keeping it visible/selectable rather than silently replacing it.
+    if (current && current !== DEFAULT_MATERIAL_ICON && !curated.includes(current)) {
+      return [current, ...curated].slice(0, 3);
+    }
+    return curated.length ? curated : (current ? [current] : []);
+  }
+
+  static withIconChoices(material) {
+    const entry = foundry.utils.deepClone(material);
+    const candidates = this.iconCandidatesFor(entry);
+    const selected = candidates.includes(entry.img)
+      ? entry.img
+      : (candidates[0] ?? entry.img ?? DEFAULT_MATERIAL_ICON);
+    entry.iconCandidates = candidates.map((path, index) => ({
+      path,
+      index: index + 1,
+      selected: path === selected
+    }));
+    entry.selectedIcon = selected;
+    entry.hasIconCandidates = entry.iconCandidates.length > 0;
+    return entry;
   }
 
   static registerSettings() {
@@ -101,7 +132,7 @@ export class MaterialCatalogService {
         chance: override.chance ?? base.chance ?? economy[rarity]?.chance ?? 0,
         price: override.price ?? economy[rarity]?.price ?? 0,
         denomination: override.denomination ?? economy[rarity]?.denomination ?? "gp",
-        img: override.img ?? DEFAULT_MATERIAL_ICON,
+        img: (override.img && String(override.img) !== DEFAULT_MATERIAL_ICON) ? override.img : (materialDefaultIcon(base.id) ?? DEFAULT_MATERIAL_ICON),
         managed: true,
         source: "builtin"
       };
@@ -121,7 +152,10 @@ export class MaterialCatalogService {
 
     const entries = builtIns.map(material => {
       const item = byId.get(material.id);
-      return item ? { ...material, name: item.name, img: item.img || material.img, packUuid: item.uuid } : material;
+      if (!item) return material;
+      const itemImg = String(item.img || "");
+      const img = itemImg && itemImg !== DEFAULT_MATERIAL_ICON ? itemImg : material.img;
+      return { ...material, name: item.name, img, packUuid: item.uuid };
     });
 
     for (const item of docs) {
@@ -285,7 +319,7 @@ export class MaterialCatalogService {
 
         // Preserve manual GM-facing presentation edits made directly in the pack (name, image,
         // description and weight). Catalog-editor overrides are already merged into material metadata.
-        updates.push({
+        const update = {
           _id: item.id,
           folder: folder?.id ?? null,
           "system.rarity": material.rarity,
@@ -304,7 +338,11 @@ export class MaterialCatalogService {
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_BIOMES}`]: material.biomes ?? [],
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_MANAGED}`]: true,
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_CATALOG_VERSION}`]: MATERIAL_CATALOG_VERSION
-        });
+        };
+        // v0.0.19a visual migration: replace only the legacy generic pouch. Any GM-selected
+        // or manually assigned non-default image remains authoritative.
+        if (!item.img || String(item.img) === DEFAULT_MATERIAL_ICON) update.img = material.img;
+        updates.push(update);
       }
 
       const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
@@ -387,6 +425,52 @@ export class MaterialCatalogService {
     } finally {
       if (wasLocked) await pack.configure({ locked: true });
     }
+  }
+
+  static async saveIconChoice(id, img) {
+    if (!game.user.isGM) throw new Error("Only a GM can choose Crafting Core material icons.");
+    const entry = await this.getEntry(id);
+    if (!entry) throw new Error("Crafting material could not be resolved.");
+    const path = String(img ?? "").trim();
+    if (!path) throw new Error("Choose a valid Foundry Core icon.");
+
+    if (!entry.managed) return this.saveEntry(id, { img: path });
+
+    const curated = this.iconCandidatesFor(entry);
+    if (curated.length && !curated.includes(path)) throw new Error("That icon is not one of the curated choices for this material.");
+
+    const overrides = this.overrides();
+    overrides[entry.id] = { ...(overrides[entry.id] ?? {}), img: path };
+    await game.settings.set(MODULE_ID, SETTINGS.MATERIAL_OVERRIDES, overrides);
+
+    const pack = this.pack();
+    if (pack) {
+      const docs = await pack.getDocuments();
+      const item = docs.find(doc => String(doc.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? "") === entry.id);
+      if (item) {
+        const wasLocked = Boolean(pack.locked);
+        if (wasLocked) await pack.configure({ locked: false });
+        try { await item.update({ img: path }); }
+        finally { if (wasLocked) await pack.configure({ locked: true }); }
+      }
+    }
+
+    Hooks.callAll(`${MODULE_ID}.materialsChanged`, entry.id);
+    return this.getEntry(entry.id);
+  }
+
+  static async migrateCuratedCatalogIfNeeded() {
+    if (!game.user?.isGM) return { migrated: false };
+    const pack = this.pack();
+    if (!pack) return { migrated: false, reason: "missing-pack" };
+    const docs = await pack.getDocuments();
+    const needsMigration = docs.some(item => item.getFlag(MODULE_ID, FLAGS.MATERIAL_MANAGED)
+      && (Number(item.getFlag(MODULE_ID, FLAGS.MATERIAL_CATALOG_VERSION) ?? 0) < MATERIAL_CATALOG_VERSION
+        || !item.img
+        || String(item.img) === DEFAULT_MATERIAL_ICON));
+    if (!needsMigration) return { migrated: false, reason: "current" };
+    const result = await this.sync();
+    return { migrated: true, ...result };
   }
 
   static async saveEntry(id, changes={}) {

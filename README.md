@@ -1,5 +1,15 @@
 # Crafting Core (DnD 5e)
 
+## v0.0.19a — Material Icon Curation
+
+v0.0.19a is a visual-refinement build on the stable v0.0.19 Crafting Projects line. The GM Materials catalog now offers **three curated Foundry Core icon candidates for every existing built-in material**, with one candidate preselected. The selection is made directly in the Materials table and persists to the private Materials Compendium.
+
+All artwork remains native to Foundry: Crafting Core stores only `icons/...` paths and does not bundle or redistribute the Core image files. Legacy managed materials still using the generic brown pouch are migrated to the curated default, while any non-default image chosen by the GM is preserved.
+
+The Materials window is wider, redundant per-row Nature data has been removed where the surrounding group already communicates it, and the reclaimed space is used for the three visual candidates. This build intentionally leaves the v0.0.19 Project/Rest/Progress mechanics unchanged.
+
+The larger material expansion remains staged: **v0.0.19b Environment**, **v0.0.19c Cultivated/Domestic + Profession/Trade**, and **v0.0.19d Game Hunt**.
+
 ## v0.0.19 — Crafting Projects & Rest Progress
 
 v0.0.19 adds persistent, rest-gated Crafting Projects while retaining the existing seconds-based Timed crafting path and the live-validated v0.0.18a resolution/visibility behavior. The Harvest, Scanner, Essence, Item Piles and gear-normalization pipeline remains unchanged.

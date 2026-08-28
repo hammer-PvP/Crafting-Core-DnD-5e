@@ -10,7 +10,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     id: "crafting-core-materials",
     classes: ["crafting-core", "crafting-core-materials-app", "standard-form"],
     tag: "form",
-    position: { width: 1080, height: 780 },
+    position: { width: 1280, height: 820 },
     window: { title: "Crafting Core — Materials", resizable: true }
   };
 
@@ -23,7 +23,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
   async _prepareContext() {
     const summary = await MaterialCatalogService.packSummary();
     const entries = await MaterialCatalogService.allEntries();
-    const filtered = entries.filter(entry => this.#matches(entry));
+    const filtered = entries.filter(entry => this.#matches(entry)).map(entry => MaterialCatalogService.withIconChoices(entry));
     const natures = [...new Set(entries.map(entry => entry.nature).filter(Boolean))].sort((a,b) => a.localeCompare(b, game.i18n.lang));
     return {
       summary,
@@ -56,6 +56,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       event.preventDefault();
       new MaterialEditorApp(button.dataset.materialId).render({ force: true });
     }));
+    root.querySelectorAll('[data-action="choose-material-icon"]').forEach(input => input.addEventListener("change", event => this.#chooseIcon(event)));
 
     for (const selector of ['[name="filter.family"]','[name="filter.nature"]','[name="filter.rarity"]']) {
       root.querySelector(selector)?.addEventListener("change", event => {
@@ -97,6 +98,32 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     const search = String(this.filters.search || "").trim().toLowerCase();
     if (!search) return true;
     return [entry.name, entry.id, entry.nature, entry.category, ...(entry.tags ?? [])].join(" ").toLowerCase().includes(search);
+  }
+
+  async #chooseIcon(event) {
+    const input = event.currentTarget;
+    if (!input?.checked) return;
+    const row = input.closest(".cc-material-table-row");
+    const materialId = String(input.dataset.materialId ?? "");
+    const path = String(input.value ?? "");
+    const controls = [...(row?.querySelectorAll('[data-action="choose-material-icon"]') ?? [])];
+    controls.forEach(control => control.disabled = true);
+    row?.classList.add("saving-icon");
+    try {
+      const saved = await MaterialCatalogService.saveIconChoice(materialId, path);
+      const preview = row?.querySelector(".cc-material-name img");
+      if (preview && saved?.img) preview.src = saved.img;
+      row?.querySelectorAll(".cc-icon-choice").forEach(label => label.classList.toggle("selected", label.querySelector("input")?.value === saved?.img));
+      row?.classList.add("icon-saved");
+      setTimeout(() => row?.classList.remove("icon-saved"), 550);
+    } catch (error) {
+      console.error(`${MODULE_ID} | Material icon selection failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not save that material icon.");
+      this.render({ force: true });
+    } finally {
+      row?.classList.remove("saving-icon");
+      controls.forEach(control => control.disabled = false);
+    }
   }
 
   async #sync(event) {

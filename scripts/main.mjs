@@ -110,6 +110,12 @@ Hooks.once("ready", async () => {
     } catch (error) {
       console.error(`${MODULE_TITLE} | Legacy knowledge migration failed.`, error);
     }
+    try {
+      const materialMigration = await MaterialCatalogService.migrateCuratedCatalogIfNeeded();
+      if (materialMigration.migrated) console.info(`${MODULE_TITLE} | Applied v0.0.19a curated material icon migration.`, materialMigration);
+    } catch (error) {
+      console.error(`${MODULE_TITLE} | Curated material icon migration failed.`, error);
+    }
   }
 });
 

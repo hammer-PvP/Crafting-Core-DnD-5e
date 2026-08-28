@@ -1073,3 +1073,64 @@
   .cc-failure-choice-grid { grid-template-columns: 1fr; }
   .cc-project-actions { grid-template-columns: 1fr; }
 }
+
+/* v0.0.19a — Material Icon Curation */
+.crafting-core-materials-app .window-content { padding: 0; overflow: hidden; }
+.crafting-core-materials-app .cc-material-layout { grid-template-columns: 285px minmax(0, 1fr); }
+.crafting-core-materials-app .cc-material-catalog { padding: 16px; }
+.crafting-core-materials-app .cc-catalog-summary p { max-width: 560px; }
+.crafting-core-materials-app .cc-material-table-head,
+.crafting-core-materials-app .cc-material-table-row {
+  grid-template-columns: minmax(205px, 1.55fr) 78px 62px 48px minmax(180px, .95fr) 32px;
+  gap: 7px;
+}
+.crafting-core-materials-app .cc-material-table-row { min-height: 58px; transition: background-color 160ms ease, opacity 160ms ease; }
+.crafting-core-materials-app .cc-material-table-row.saving-icon { opacity: .68; }
+.crafting-core-materials-app .cc-material-table-row.icon-saved { background: rgba(96,166,100,.10); }
+.crafting-core-materials-app .cc-material-name { grid-template-columns: 34px minmax(0,1fr); gap: 8px; }
+.crafting-core-materials-app .cc-material-name img { width: 34px; height: 34px; border: 1px solid rgba(255,255,255,.12); }
+.cc-icon-curation { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.cc-icon-choice {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 5px;
+  background: rgba(0,0,0,.22);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+.cc-icon-choice:hover { border-color: rgba(209,176,107,.65); transform: translateY(-1px); }
+.cc-icon-choice.selected { border-color: var(--cc-gold); box-shadow: 0 0 0 1px rgba(209,176,107,.28), 0 0 10px rgba(209,176,107,.18); }
+.cc-icon-choice input { position: absolute; opacity: 0; pointer-events: none; }
+.cc-icon-choice img { width: 38px; height: 38px; object-fit: cover; border: 0; border-radius: 3px; }
+.cc-icon-choice small {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 2px;
+  display: grid;
+  place-items: center;
+  border-radius: 3px;
+  background: rgba(0,0,0,.78);
+  color: rgba(255,255,255,.8);
+  font-size: 8px;
+  line-height: 1;
+}
+.cc-icon-choice.selected small { background: rgba(135,101,34,.92); color: #fff; }
+
+@media (max-width: 1050px) {
+  .crafting-core-materials-app .cc-material-layout { grid-template-columns: 250px minmax(0, 1fr); }
+  .crafting-core-materials-app .cc-material-table-head,
+  .crafting-core-materials-app .cc-material-table-row {
+    grid-template-columns: minmax(170px, 1.35fr) 72px 56px 44px minmax(155px, .9fr) 30px;
+  }
+  .cc-icon-choice { width: 38px; height: 38px; flex-basis: 38px; }
+  .cc-icon-choice img { width: 34px; height: 34px; }
+}

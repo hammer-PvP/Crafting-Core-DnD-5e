@@ -20,6 +20,7 @@
         <span class="cc-kicker">Private Compendium</span>
         <h3>Crafting Core — Materials</h3>
         <p class="cc-note">Stored under the <strong>Crafting Core</strong> Compendium folder. The pack is private and inaccessible to players.</p>
+        <p class="cc-note"><i class="fa-solid fa-image"></i> Curated artwork uses Foundry Core <code>icons/...</code> references only. No Core artwork is bundled with Crafting Core.</p>
         <button type="button" class="cc-primary-action cc-wide" data-action="sync-materials"><i class="fa-solid fa-arrows-rotate"></i> Create / Sync Materials</button>
         <button type="button" class="cc-secondary-action cc-wide" data-action="open-materials"><i class="fa-solid fa-book-open"></i> Open Compendium</button>
       </section>
@@ -52,7 +53,7 @@
     <main class="cc-material-catalog">
       <div class="cc-catalog-summary">
         <div><span class="cc-kicker">Built-in + Custom Catalog</span><h2>{{shownCount}} / {{catalogCount}} Materials</h2></div>
-        <p>Creature Harvest, Gathering, and Profession / Trade materials are organized into folders and can be edited individually.</p>
+        <p>Creature Harvest, Essences, Gathering, and Profession / Trade materials are organized into folders. Each curated material offers three Foundry Core icon candidates; one is preselected and can be changed here.</p>
       </div>
 
       <div class="cc-material-filters">
@@ -66,14 +67,22 @@
       <details class="cc-material-group" open>
         <summary><span>{{label}}</span><small>{{count}} materials</small></summary>
         <div class="cc-material-table">
-          <div class="cc-material-table-head"><span>Material</span><span>Nature</span><span>Rarity</span><span>Chance</span><span>Qty</span><span></span></div>
+          <div class="cc-material-table-head"><span>Material</span><span>Rarity</span><span>Chance</span><span>Qty</span><span>Core Icon — choose 1 of 3</span><span></span></div>
           {{#each materials}}
-          <div class="cc-material-table-row">
-            <span class="cc-material-name"><img src="{{img}}" alt=""><strong>{{name}}</strong></span>
-            <span>{{nature}}</span>
+          <div class="cc-material-table-row" data-material-row="{{id}}">
+            <span class="cc-material-name"><img src="{{selectedIcon}}" alt=""><strong>{{name}}</strong></span>
             <span class="cc-rarity {{rarity}}">{{rarityLabel}}</span>
             <span>{{chance}}%</span>
             <span>{{quantity}}</span>
+            <span class="cc-icon-curation" role="radiogroup" aria-label="Core icon choices for {{name}}">
+              {{#each iconCandidates}}
+              <label class="cc-icon-choice {{#if selected}}selected{{/if}}" title="{{path}}">
+                <input type="radio" name="material-icon-{{../id}}" value="{{path}}" data-action="choose-material-icon" data-material-id="{{../id}}" {{#if selected}}checked{{/if}}>
+                <img src="{{path}}" alt="Icon option {{index}} for {{../name}}">
+                <small>{{index}}</small>
+              </label>
+              {{/each}}
+            </span>
             <button type="button" class="cc-icon-button" data-action="edit-material" data-material-id="{{id}}" aria-label="Edit {{name}}"><i class="fa-solid fa-pen"></i></button>
           </div>
           {{/each}}

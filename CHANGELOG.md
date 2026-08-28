@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.19a
+
+Material Catalog visual-curation build on top of the mechanically stable v0.0.19 line. No Crafting Project, Harvest, Scanner, Essence, Item Piles, or normalization logic is changed.
+
+- Added a curated Foundry Core icon shortlist for all **132 existing built-in materials**. Every curated material has exactly **three** candidate `icons/...` paths and one preselected default.
+- Crafting Core references Foundry Core artwork by path only; no Core image file is copied or redistributed inside the module.
+- Reworked the GM Materials table for visual curation: widened the application, removed the redundant **Nature** column from rows already grouped by source/category, tightened utility columns, and added three clickable icon previews per curated material.
+- Icon choices use an exclusive radio-style selection because one material can have only one active presentation icon. Selecting a candidate saves immediately to the material override and updates the managed Compendium Item without rerendering the entire catalog.
+- Added a safe visual migration for legacy managed materials that still use the generic brown Crafting Core pouch. On upgrade, those generic icons move to the curated default while any GM-assigned non-default image is preserved.
+- Direct Compendium image edits are also respected. If a managed Item already uses a custom non-default image, the table keeps that image as one of the three visible choices rather than silently replacing it.
+- Reset Curated Default now returns a built-in material to its v0.0.19a curated icon instead of the legacy generic pouch.
+- This build deliberately does **not** add the Environment/Game Hunt/Cultivated catalog expansion yet. Those remain staged for v0.0.19b–v0.0.19d as previously scoped.
+
 ## 0.0.19
 
 Crafting Projects & Rest Progress development release. The validated Harvest pipeline remains untouched.

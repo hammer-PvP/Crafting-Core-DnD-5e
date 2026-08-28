@@ -20,7 +20,7 @@ const essence = (id, name, nature, {tags=[], quantity="1"}={}) => ({
   tags: ["essence", ...tags], requires: [], biomes: [], quantity, chance: 100
 });
 
-export const MATERIAL_CATALOG_VERSION = 4;
+export const MATERIAL_CATALOG_VERSION = 5;
 
 export const DEFAULT_MATERIALS = Object.freeze([
   // Aberration
