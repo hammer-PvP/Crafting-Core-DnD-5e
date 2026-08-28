@@ -69,7 +69,7 @@
         <div class="cc-material-table">
           <div class="cc-material-table-head"><span>Material</span><span>Rarity</span><span>Chance</span><span>Qty</span><span>Core Icon — choose 1 of 3</span><span></span></div>
           {{#each materials}}
-          <div class="cc-material-table-row" data-material-row="{{id}}">
+          <div class="cc-material-table-row" data-material-row="{{id}}" data-current-icon="{{selectedIcon}}">
             <span class="cc-material-name"><img src="{{selectedIcon}}" alt=""><strong>{{name}}</strong></span>
             <span class="cc-rarity {{rarity}}">{{rarityLabel}}</span>
             <span>{{chance}}%</span>

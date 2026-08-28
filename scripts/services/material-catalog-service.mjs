@@ -5,7 +5,7 @@ import {
   SETTINGS
 } from "../constants.mjs";
 import { DEFAULT_MATERIALS, MATERIAL_CATALOG_VERSION } from "../data/material-catalog.mjs";
-import { materialDefaultIcon, materialIconCandidates } from "../data/material-icon-catalog.mjs";
+import { materialDefaultIcon, materialIconCandidates, materialLegacyCuratedDefault } from "../data/material-icon-catalog.mjs";
 import { CompendiumService } from "./compendium-service.mjs";
 
 export class MaterialCatalogService {
@@ -237,7 +237,7 @@ export class MaterialCatalogService {
       roots: "Roots",
       fungi: "Fungi",
       wood: "Wood & Resin",
-      mineral: "Mineral",
+      mineral: "Minerals & Geological",
       food: "Food & Cooking",
       metalworking: "Metalworking",
       leatherworking: "Leatherworking",
@@ -285,7 +285,7 @@ export class MaterialCatalogService {
     ];
     const creatureTypes = [...new Set(DEFAULT_MATERIALS.filter(m => m.family === "creature").map(m => m.nature))].sort();
     for (const nature of creatureTypes) defs.push({ key: `creature:${nature}`, name: this.#title(nature), parent: "creature" });
-    for (const [key, name] of [["flora","Flora"],["roots","Roots"],["fungi","Fungi"],["wood","Wood & Resin"],["mineral","Mineral"]]) {
+    for (const [key, name] of [["flora","Flora"],["roots","Roots"],["fungi","Fungi"],["wood","Wood & Resin"],["mineral","Minerals & Geological"]]) {
       defs.push({ key: `gathering:${key}`, name, parent: "gathering" });
     }
     for (const [key, name] of [["food","Food & Cooking"],["metalworking","Metalworking"],["leatherworking","Leatherworking"],["alchemy","Alchemy"],["general","General Materials"]]) {
@@ -306,6 +306,7 @@ export class MaterialCatalogService {
       const byMaterialId = new Map(existing
         .map(item => [String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? ""), item])
         .filter(([id]) => id));
+      const catalogOverrides = this.overrides();
 
       const creates = [];
       const updates = [];
@@ -339,9 +340,18 @@ export class MaterialCatalogService {
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_MANAGED}`]: true,
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_CATALOG_VERSION}`]: MATERIAL_CATALOG_VERSION
         };
-        // v0.0.19a visual migration: replace only the legacy generic pouch. Any GM-selected
-        // or manually assigned non-default image remains authoritative.
-        if (!item.img || String(item.img) === DEFAULT_MATERIAL_ICON) update.img = material.img;
+        // v0.0.19b visual migration:
+        // - generic pouch -> current curated default;
+        // - untouched v0.0.19a curated defaults may advance to the refined v0.0.19b default;
+        // - any explicit Catalog override or unrelated manual Compendium image remains authoritative.
+        const explicitIconOverride = String(catalogOverrides?.[material.id]?.img ?? "").trim();
+        const legacyCuratedDefault = materialLegacyCuratedDefault(material.id);
+        const currentImg = String(item.img ?? "");
+        const mayAdvanceCuratedDefault = !explicitIconOverride
+          && legacyCuratedDefault
+          && currentImg === legacyCuratedDefault
+          && currentImg !== String(material.img ?? "");
+        if (!currentImg || currentImg === DEFAULT_MATERIAL_ICON || mayAdvanceCuratedDefault) update.img = material.img;
         updates.push(update);
       }
 

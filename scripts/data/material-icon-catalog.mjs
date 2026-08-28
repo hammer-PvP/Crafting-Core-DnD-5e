@@ -42,8 +42,8 @@ const ICON_SETS = Object.freeze({
     "icons/magic/perception/orb-crystal-ball-scrying-blue.webp",
   ]),
   "arcane_crystal": Object.freeze([
-    "icons/commodities/gems/gem-cluster-purple.webp",
     "icons/commodities/gems/gem-cluster-blue-white.webp",
+    "icons/commodities/gems/gem-cluster-purple.webp",
     "icons/commodities/gems/gem-rough-heart-teal.webp",
   ]),
   "arcane_organ": Object.freeze([
@@ -107,9 +107,9 @@ const ICON_SETS = Object.freeze({
     "icons/magic/holy/chalice-glowing-gold-water.webp",
   ]),
   "charcoal": Object.freeze([
-    "icons/commodities/stone/ore-chunk-black.webp",
     "icons/commodities/stone/ore-pile-iron-black.webp",
     "icons/commodities/materials/powder-black.webp",
+    "icons/commodities/stone/ore-chunk-black.webp",
   ]),
   "cliff_moss": Object.freeze([
     "icons/commodities/stone/stone-chunk-moss-grey.webp",
@@ -117,9 +117,9 @@ const ICON_SETS = Object.freeze({
     "icons/consumables/plants/fern-leaf-bundle-green.webp",
   ]),
   "conductor": Object.freeze([
-    "icons/commodities/tech/coil-tesla.webp",
-    "icons/commodities/tech/wire-spool-steel.webp",
-    "icons/commodities/tech/cable-armored-reticulated.webp",
+    "icons/commodities/metal/clasp-steel-braid-glowing.webp",
+    "icons/magic/symbols/circled-gem-pink.webp",
+    "icons/magic/perception/orb-crystal-ball-scrying.webp",
   ]),
   "construct_core": Object.freeze([
     "icons/commodities/tech/battery-coil-tesla.webp",
@@ -137,8 +137,8 @@ const ICON_SETS = Object.freeze({
     "icons/commodities/stone/ore-chunk-orange.webp",
   ]),
   "corrupted_marrow": Object.freeze([
-    "icons/commodities/bones/bones-broken-marrow-white-red.webp",
     "icons/commodities/bones/bone-broken-grey-red.webp",
+    "icons/commodities/bones/bones-broken-marrow-white-red.webp",
     "icons/commodities/bones/bone-red.webp",
   ]),
   "death_essence": Object.freeze([
@@ -252,14 +252,14 @@ const ICON_SETS = Object.freeze({
     "icons/magic/acid/projectile-glowing-bubbles.webp",
   ]),
   "essence_psychic": Object.freeze([
-    "icons/commodities/biological/organ-brain-pink-purple.webp",
     "icons/magic/perception/third-eye-blue-red.webp",
+    "icons/commodities/biological/organ-brain-pink-purple.webp",
     "icons/magic/control/debuff-energy-snare-purple-pink.webp",
   ]),
   "essence_radiant": Object.freeze([
+    "icons/magic/holy/prayer-hands-glowing-yellow.webp",
     "icons/magic/light/beam-rays-yellow.webp",
     "icons/magic/holy/chalice-glowing-gold.webp",
-    "icons/magic/holy/prayer-hands-glowing-yellow.webp",
   ]),
   "essence_thunder": Object.freeze([
     "icons/magic/sonic/explosion-impact-shock-wave.webp",
@@ -322,9 +322,9 @@ const ICON_SETS = Object.freeze({
     "icons/commodities/materials/powder-black.webp",
   ]),
   "gear": Object.freeze([
+    "icons/magic/symbols/cog-glowing-green.webp",
     "icons/commodities/tech/cog-gear-steel-glass.webp",
-    "icons/commodities/tech/cog-brass.webp",
-    "icons/commodities/tech/cog-steel.webp",
+    "icons/commodities/tech/cog-gold.webp",
   ]),
   "ghost_orchid": Object.freeze([
     "icons/commodities/flowers/lotus-white.webp",
@@ -382,8 +382,8 @@ const ICON_SETS = Object.freeze({
     "icons/commodities/metal/ingot-stamped-steel-purple.webp",
   ]),
   "masterwork_component": Object.freeze([
-    "icons/commodities/tech/cog-gear-wheel-gold.webp",
     "icons/commodities/metal/clasp-steel-braid-glowing.webp",
+    "icons/commodities/tech/cog-gear-wheel-gold.webp",
     "icons/commodities/tech/metal-joint.webp",
   ]),
   "meat": Object.freeze([
@@ -482,9 +482,9 @@ const ICON_SETS = Object.freeze({
     "icons/commodities/materials/bowl-liquid-white.webp",
   ]),
   "primal_essence": Object.freeze([
-    "icons/magic/nature/tree-spirit-green.webp",
-    "icons/magic/nature/leaf-glow-green.webp",
-    "icons/magic/nature/seed-acorn-glowing-green.webp",
+    "icons/magic/nature/stealth-hide-beast-eyes-green.webp",
+    "icons/magic/unholy/hand-claw-glow-orange.webp",
+    "icons/magic/lightning/claws-unarmed-strike-teal.webp",
   ]),
   "primal_heart": Object.freeze([
     "icons/commodities/biological/organ-heart-red.webp",
@@ -517,19 +517,19 @@ const ICON_SETS = Object.freeze({
     "icons/commodities/materials/bowl-powder-pink.webp",
   ]),
   "rune_core": Object.freeze([
-    "icons/magic/symbols/cog-glowing-green.webp",
-    "icons/magic/symbols/rune-sigil-green-purple.webp",
     "icons/magic/symbols/circled-gem-pink.webp",
+    "icons/magic/symbols/rune-sigil-green-purple.webp",
+    "icons/magic/symbols/rune-sigil-black-pink.webp",
   ]),
   "salt": Object.freeze([
-    "icons/consumables/food/salt-seasoning-spice-pink.webp",
     "icons/commodities/gems/powder-raw-white.webp",
+    "icons/consumables/food/salt-seasoning-spice-pink.webp",
     "icons/commodities/materials/bowl-powder-grey.webp",
   ]),
   "seasonings": Object.freeze([
     "icons/consumables/food/salt-seasoning-spice-pink.webp",
     "icons/consumables/food/spice-anise-pod.webp",
-    "icons/consumables/plants/dried-herbs-leaves-brown.webp",
+    "icons/consumables/plants/dried-herb-bundle-brown.webp",
   ]),
   "silver_ingot": Object.freeze([
     "icons/commodities/metal/ingot-silver.webp",
@@ -621,6 +621,186 @@ const ICON_SETS = Object.freeze({
     "icons/commodities/metal/barstock-broken-steel.webp",
     "icons/commodities/metal/fragments-steel-ring.webp",
   ]),
+  "neural_fragment": Object.freeze([
+    "icons/commodities/biological/organ-brain-red.webp",
+    "icons/commodities/biological/organ-brain-pink.webp",
+    "icons/magic/control/debuff-energy-snare-purple-pink.webp",
+  ]),
+  "giant_marrow": Object.freeze([
+    "icons/commodities/bones/bone-broken-brown.webp",
+    "icons/commodities/bones/bones-broken-marrow-white-red.webp",
+    "icons/commodities/bones/bone-red.webp",
+  ]),
+  "trade_seasonings": Object.freeze([
+    "icons/consumables/food/spice-anise-pod.webp",
+    "icons/consumables/plants/dried-herbs-leaves-brown.webp",
+    "icons/consumables/food/salt-seasoning-spice-pink.webp",
+  ]),
+  "wild_sage": Object.freeze([
+    "icons/consumables/plants/herb-marjoram-basil-oregano-leaf-bunch-green.webp",
+    "icons/consumables/plants/herb-tied-bundle-green.webp",
+    "icons/consumables/plants/dill-herb-bundle-green.webp",
+  ]),
+  "bitterleaf": Object.freeze([
+    "icons/consumables/plants/leaf-dried-eaten-green.webp",
+    "icons/consumables/plants/tearthumb-dried-halberd-leaf-green.webp",
+    "icons/consumables/plants/dried-leaf-stem-herb-brown.webp",
+  ]),
+  "silverleaf": Object.freeze([
+    "icons/consumables/plants/leaf-hastate-white-green.webp",
+    "icons/consumables/plants/leaf-elm-glowing-green.webp",
+    "icons/magic/nature/leaf-glow-teal.webp",
+  ]),
+  "thornvine": Object.freeze([
+    "icons/consumables/plants/thorned-stem-vine-green.webp",
+    "icons/consumables/plants/thorned-curled-vine-green.webp",
+    "icons/magic/nature/vines-thorned-green.webp",
+  ]),
+  "moonwort": Object.freeze([
+    "icons/magic/nature/leaf-rune-glow-green.webp",
+    "icons/consumables/plants/leaf-veins-glowing-green.webp",
+    "icons/magic/nature/leaf-glow-orange-purple.webp",
+  ]),
+  "cavecap": Object.freeze([
+    "icons/consumables/mushrooms/crimini-button-brown.webp",
+    "icons/consumables/mushrooms/convex-bolete-brown.webp",
+    "icons/consumables/mushrooms/helm-brown.webp",
+  ]),
+  "bitter_fungus": Object.freeze([
+    "icons/consumables/mushrooms/convex-green-brown.webp",
+    "icons/consumables/mushrooms/umbontae-green.webp",
+    "icons/consumables/mushrooms/conical-bell-green.webp",
+  ]),
+  "glowcap": Object.freeze([
+    "icons/consumables/mushrooms/campanulate-bell-shiny-blue.webp",
+    "icons/consumables/mushrooms/umbontae-blue.webp",
+    "icons/consumables/mushrooms/ovate-blue.webp",
+  ]),
+  "embercap": Object.freeze([
+    "icons/consumables/mushrooms/conical-bell-orange-white.webp",
+    "icons/consumables/mushrooms/convex-spotted-orange-white.webp",
+    "icons/consumables/mushrooms/conical-bell-yellow.webp",
+  ]),
+  "ghost_fungus": Object.freeze([
+    "icons/consumables/mushrooms/helm-purple-shiny.webp",
+    "icons/consumables/mushrooms/umbontae-pink-purple.webp",
+    "icons/consumables/mushrooms/umbontae-bumpy-purple.webp",
+  ]),
+  "mycelial_cluster": Object.freeze([
+    "icons/consumables/mushrooms/cluster-red-brown.webp",
+    "icons/consumables/mushrooms/alien-spotted-blue.webp",
+    "icons/consumables/mushrooms/campanulate-bell-bumpy-white-red.webp",
+  ]),
+  "common_root": Object.freeze([
+    "icons/consumables/vegetable/root-yam-carrot-brown.webp",
+    "icons/consumables/plants/dried-bundle-stems-sticks-roots-brown.webp",
+    "icons/consumables/vegetable/root-brown-orange.webp",
+  ]),
+  "bitter_root": Object.freeze([
+    "icons/consumables/vegetable/root-ginger-brown.webp",
+    "icons/consumables/plants/dried-stem-vine-root-bramble-brown.webp",
+    "icons/consumables/vegetable/root-ginger-yellow.webp",
+  ]),
+  "medicinal_root": Object.freeze([
+    "icons/consumables/vegetable/root-parsnip-grey.webp",
+    "icons/consumables/vegetable/root-carrot-radish-white.webp",
+    "icons/magic/nature/root-vine-caduceus-healing.webp",
+  ]),
+  "cave_root": Object.freeze([
+    "icons/consumables/vegetable/root-alien-green.webp",
+    "icons/magic/nature/root-vines-knot-brown.webp",
+    "icons/consumables/vegetable/root-potato-radish-brown-purple.webp",
+  ]),
+  "arcane_root": Object.freeze([
+    "icons/consumables/vegetable/root-alien-purple.webp",
+    "icons/magic/nature/root-vine-thorned-pink.webp",
+    "icons/magic/nature/root-vines-face-glow-green.webp",
+  ]),
+  "softwood": Object.freeze([
+    "icons/commodities/wood/log-cut-ash-brown.webp",
+    "icons/commodities/wood/log-rough-brown.webp",
+    "icons/commodities/wood/logs-pile-rough-brown.webp",
+  ]),
+  "hardwood": Object.freeze([
+    "icons/commodities/wood/log-cut-hickory-brown.webp",
+    "icons/commodities/wood/log-cut-walnut.webp",
+    "icons/commodities/wood/log-stack-hickory-brown.webp",
+  ]),
+  "ironwood": Object.freeze([
+    "icons/commodities/wood/log-cut-petrified-violet.webp",
+    "icons/commodities/wood/wood-carved-runes.webp",
+    "icons/commodities/wood/log-rough-petrified-white.webp",
+  ]),
+  "sticky_resin": Object.freeze([
+    "icons/consumables/potions/bottle-round-corked-orange.webp",
+    "icons/commodities/materials/liquid-orange.webp",
+    "icons/consumables/potions/round-cork-leaf-green.webp",
+  ]),
+  "amber_resin": Object.freeze([
+    "icons/commodities/gems/gem-rough-cushion-orange.webp",
+    "icons/commodities/gems/gem-rough-oval-orange.webp",
+    "icons/commodities/materials/liquid-orange.webp",
+  ]),
+  "enchanted_resin": Object.freeze([
+    "icons/magic/nature/leaf-drip-light-green.webp",
+    "icons/consumables/potions/round-cork-leaf-green.webp",
+    "icons/magic/unholy/orb-droplet-pink.webp",
+  ]),
+  "coal": Object.freeze([
+    "icons/commodities/stone/ore-chunk-black.webp",
+    "icons/commodities/stone/ore-pile-iron-black.webp",
+    "icons/commodities/materials/powder-black.webp",
+  ]),
+  "quartz": Object.freeze([
+    "icons/commodities/stone/stone-white-quartz-ball.webp",
+    "icons/commodities/stone/geode-raw-white.webp",
+    "icons/commodities/gems/gem-rough-oval-white.webp",
+  ]),
+  "rough_gemstone": Object.freeze([
+    "icons/commodities/gems/gem-raw-rough-teal.webp",
+    "icons/commodities/gems/gem-raw-rough-green.webp",
+    "icons/commodities/gems/gem-raw-rough-purple.webp",
+  ]),
+  "obsidian": Object.freeze([
+    "icons/commodities/stone/geode-raw-black.webp",
+    "icons/commodities/gems/gem-faceted-round-black.webp",
+    "icons/commodities/stone/ore-chunk-black.webp",
+  ]),
+  "sulfur": Object.freeze([
+    "icons/commodities/materials/bowl-powder-yellow.webp",
+    "icons/commodities/stone/ore-chunk-yellow-gold.webp",
+    "icons/commodities/stone/geode-raw-yellow.webp",
+  ]),
+  "gold_ore": Object.freeze([
+    "icons/commodities/stone/ore-pile-gold.webp",
+    "icons/commodities/stone/ore-chunk-yellow-gold.webp",
+    "icons/commodities/stone/ore-pile-nuggets-gold.webp",
+  ]),
+  "mithral_ore": Object.freeze([
+    "icons/commodities/stone/ore-chunk-teal.webp",
+    "icons/commodities/stone/ore-pile-teal.webp",
+    "icons/commodities/stone/ore-chunk-silver-gray.webp",
+  ]),
+  "adamantine_ore": Object.freeze([
+    "icons/commodities/stone/ore-chunk-green-brown.webp",
+    "icons/commodities/stone/ore-pile-green.webp",
+    "icons/commodities/stone/ore-chunk-blue-brown.webp",
+  ]),
+  "gem_geode": Object.freeze([
+    "icons/commodities/stone/geode-raw-purple.webp",
+    "icons/commodities/stone/geode-raw-teal.webp",
+    "icons/commodities/stone/geode-raw-red.webp",
+  ]),
+  "leather_piece": Object.freeze([
+    "icons/commodities/leather/leather-scrap-tan.webp",
+    "icons/commodities/leather/leather-patch-tan.webp",
+    "icons/commodities/leather/leather-pelt-cured.webp",
+  ]),
+  "refined_leather": Object.freeze([
+    "icons/commodities/leather/leather-bolt-brown.webp",
+    "icons/commodities/leather/leather-patchwork-folded-tan.webp",
+    "icons/commodities/leather/leather-bolt-tan.webp",
+  ]),
 });
 
 const MATERIAL_ICON_SET = Object.freeze({
@@ -628,7 +808,7 @@ const MATERIAL_ICON_SET = Object.freeze({
   "aberration-eye": "aberrant_eye",
   "aberration-membrane": "membrane",
   "aberration-psychic-gland": "psychic_brain",
-  "aberration-neural-fragment": "psychic_brain",
+  "aberration-neural-fragment": "neural_fragment",
   "aberration-void-essence": "void_essence",
   "beast-hide": "hide",
   "beast-bone": "bone",
@@ -676,7 +856,7 @@ const MATERIAL_ICON_SET = Object.freeze({
   "giant-bone": "bone",
   "giant-blood": "blood",
   "giant-tendon": "tendon",
-  "giant-marrow": "marrow",
+  "giant-marrow": "giant_marrow",
   "giant-titan-essence": "titan_essence",
   "humanoid-worked-leather": "worked_leather",
   "humanoid-seasonings": "seasonings",
@@ -741,10 +921,43 @@ const MATERIAL_ICON_SET = Object.freeze({
   "gathering-starstone": "starstone",
   "gathering-mineral-salt": "mineral_salt",
   "gathering-volcanic-glass": "volcanic_glass",
+  "gathering-wild-sage": "wild_sage",
+  "gathering-bitterleaf": "bitterleaf",
+  "gathering-silverleaf": "silverleaf",
+  "gathering-thornvine": "thornvine",
+  "gathering-moonwort": "moonwort",
+  "gathering-cavecap": "cavecap",
+  "gathering-bitter-fungus": "bitter_fungus",
+  "gathering-glowcap": "glowcap",
+  "gathering-embercap": "embercap",
+  "gathering-ghost-fungus": "ghost_fungus",
+  "gathering-mycelial-cluster": "mycelial_cluster",
+  "gathering-common-root": "common_root",
+  "gathering-bitter-root": "bitter_root",
+  "gathering-medicinal-root": "medicinal_root",
+  "gathering-cave-root": "cave_root",
+  "gathering-arcane-root": "arcane_root",
+  "gathering-softwood": "softwood",
+  "gathering-hardwood": "hardwood",
+  "gathering-ironwood": "ironwood",
+  "gathering-sticky-resin": "sticky_resin",
+  "gathering-amber-resin": "amber_resin",
+  "gathering-enchanted-resin": "enchanted_resin",
+  "gathering-coal": "coal",
+  "gathering-quartz": "quartz",
+  "gathering-rough-gemstone": "rough_gemstone",
+  "gathering-obsidian": "obsidian",
+  "gathering-sulfur": "sulfur",
+  "gathering-gold-ore": "gold_ore",
+  "gathering-mithral-ore": "mithral_ore",
+  "gathering-adamantine-ore": "adamantine_ore",
+  "gathering-gem-geode": "gem_geode",
+  "trade-leather-piece": "leather_piece",
+  "trade-refined-leather": "refined_leather",
   "trade-salt": "salt",
   "trade-bread": "bread",
   "trade-flour": "flour",
-  "trade-seasonings": "seasonings",
+  "trade-seasonings": "trade_seasonings",
   "trade-cooking-oil": "cooking_oil",
   "trade-charcoal": "charcoal",
   "trade-leather-straps": "leather_straps",
@@ -758,13 +971,87 @@ const MATERIAL_ICON_SET = Object.freeze({
   "trade-perfect-gem": "perfect_gem",
 });
 
+const MATERIAL_DEFAULT_INDEX = Object.freeze({
+  "celestial-luminous-bone": 1,
+  "giant-bone": 2,
+  "celestial-ichor": 1,
+  "plant-sap": 1,
+  "fiend-infernal-blood": 1,
+  "giant-blood": 2,
+  "elemental-primal-heart": 1,
+  "elemental-planar-shard": 2,
+  "fiend-abyssal-fragment": 1,
+  "fey-dew": 1,
+  "monstrosity-venom-gland": 1,
+  "ooze-prime-matrix": 1,
+  "undead-profane-bone": 1,
+  "undead-necrotic-essence": 2,
+  "trade-perfect-gem": 2,
+  "construct-conductor": 2,
+  "gathering-rough-gemstone": 1,
+  "gathering-obsidian": 1,
+  "trade-refined-leather": 1,
+  "giant-hide": 2,
+  "monstrosity-hide": 1,
+  "essence-poison": 1,
+  "undead-ectoplasm": 1,
+  "gathering-glowcap": 1,
+  "trade-salt": 1,
+  "humanoid-seasonings": 2,
+});
+
+const LEGACY_CURATED_DEFAULTS = Object.freeze({
+  "humanoid-seasonings": "icons/consumables/food/salt-seasoning-spice-pink.webp",
+  "giant-hide": "icons/commodities/leather/fur-pelt-brown.webp",
+  "monstrosity-hide": "icons/commodities/leather/fur-pelt-brown.webp",
+  "essence-poison": "icons/consumables/potions/potion-bottle-skull-label-poison-teal.webp",
+  "undead-ectoplasm": "icons/commodities/materials/slime-white.webp",
+  "gathering-glowcap": "icons/consumables/mushrooms/campanulate-bell-shiny-blue.webp",
+  "trade-perfect-gem": "icons/commodities/gems/gem-faceted-diamond-blue.webp",
+  "undead-necrotic-essence": "icons/magic/death/skull-energy-light-purple.webp",
+  "undead-profane-bone": "icons/commodities/bones/bone-broken-grey-red.webp",
+  "ooze-prime-matrix": "icons/magic/acid/orb-bubble-smoke-drip.webp",
+  "monstrosity-venom-gland": "icons/consumables/potions/bottle-conical-corked-labeled-skull-poison-green.webp",
+  "fey-dew": "icons/commodities/materials/liquid-droplet-blue.webp",
+  "fiend-abyssal-fragment": "icons/commodities/gems/gem-fragments-purple.webp",
+  "elemental-planar-shard": "icons/commodities/gems/gem-fragments-purple.webp",
+  "elemental-primal-heart": "icons/commodities/biological/organ-heart-red.webp",
+  "giant-blood": "icons/consumables/potions/vial-cork-red.webp",
+  "fiend-infernal-blood": "icons/consumables/potions/vial-cork-red.webp",
+  "plant-sap": "icons/commodities/materials/liquid-orange.webp",
+  "celestial-ichor": "icons/commodities/materials/liquid-orange.webp",
+  "giant-bone": "icons/commodities/bones/bone-simple-white.webp",
+  "celestial-luminous-bone": "icons/commodities/bones/bone-simple-white.webp",
+  "aberration-neural-fragment": "icons/commodities/biological/organ-brain-pink-purple.webp",
+  "beast-primal-essence": "icons/magic/nature/tree-spirit-green.webp",
+  "construct-arcane-gear": "icons/commodities/tech/cog-gear-steel-glass.webp",
+  "construct-conductor": "icons/commodities/tech/coil-tesla.webp",
+  "construct-rune-core": "icons/magic/symbols/cog-glowing-green.webp",
+  "giant-marrow": "icons/commodities/bones/bones-broken-marrow-white-red.webp",
+  "humanoid-masterwork-component": "icons/commodities/tech/cog-gear-wheel-gold.webp",
+  "undead-corrupted-marrow": "icons/commodities/bones/bones-broken-marrow-white-red.webp",
+  "essence-psychic": "icons/commodities/biological/organ-brain-pink-purple.webp",
+  "essence-radiant": "icons/magic/light/beam-rays-yellow.webp",
+  "gathering-arcane-crystal": "icons/commodities/gems/gem-cluster-purple.webp",
+  "trade-salt": "icons/consumables/food/salt-seasoning-spice-pink.webp",
+  "trade-seasonings": "icons/consumables/food/salt-seasoning-spice-pink.webp",
+  "trade-charcoal": "icons/commodities/stone/ore-chunk-black.webp",
+});
+
 export function materialIconCandidates(materialId) {
   const key = MATERIAL_ICON_SET[String(materialId ?? "")];
   return key ? [...(ICON_SETS[key] ?? [])] : [];
 }
 
 export function materialDefaultIcon(materialId) {
-  return materialIconCandidates(materialId)[0] ?? null;
+  const id = String(materialId ?? "");
+  const candidates = materialIconCandidates(id);
+  const preferred = Math.max(0, Number(MATERIAL_DEFAULT_INDEX[id] ?? 0) || 0);
+  return candidates[preferred] ?? candidates[0] ?? null;
+}
+
+export function materialLegacyCuratedDefault(materialId) {
+  return LEGACY_CURATED_DEFAULTS[String(materialId ?? "")] ?? null;
 }
 
 export const MATERIAL_ICON_CURATION_COUNT = Object.keys(MATERIAL_ICON_SET).length;

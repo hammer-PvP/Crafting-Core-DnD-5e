@@ -1,5 +1,19 @@
 # Crafting Core (DnD 5e)
 
+## v0.0.19b — Environment Catalog Expansion
+
+v0.0.19b expands the wild **Environment Gathering** vocabulary while keeping the stable v0.0.19 Crafting Project engine, Harvest pipeline, Scanner, Essence rules, Item Piles integration, and gear normalization unchanged.
+
+The built-in curated Material Catalog grows from **132 to 165 materials**. Gathering now contains **51** built-in records across Flora, Roots, Fungi, Wood & Resin, and **Minerals & Geological**. Biome metadata deliberately overlaps resource families: a Forest can expose mineral/crystal resources, Mountains can expose flora/fungi, and similar mixed pools are derived from the Material Catalog rather than from a one-biome/one-resource assumption.
+
+The geological chain is broader for future crafting/refinement recipes. Existing Iron, Copper, and Silver Ore are joined by **Coal, Quartz Cluster, Rough Gemstone, Obsidian, Sulfur, Gold Ore, Mithral Ore, Adamantine Ore, and Gem-Bearing Geode**. Steel remains a **refined** Profession & Trade material rather than a naturally gathered ore, preserving the intended future `raw ore → refinement Recipe → ingot/alloy → crafted item` chain.
+
+Wild plant resources are expanded with additional Herbs/Flora, Mushrooms/Fungi, Roots, Timber, and Resins. The Profession & Trade family receives only two intentionally small leather gaps in this build — **Leather Piece** and **Refined Leather** around the existing Leather Straps — while the broader Cultivated/Domestic and profession catalog remains scoped for v0.0.19c. Game Hunt remains scoped for v0.0.19d.
+
+The v0.0.19a icon-curation UI remains intact. Every built-in material, including all 33 new records, has exactly **three Foundry Core icon candidates** with one default. Default curation now prefers the next equivalent candidate where practical instead of repeatedly using the same image; the shipped v0.0.19b default selection uses a distinct icon path for each of the 165 built-ins. Several v0.0.19a defaults were refined from live feedback: Neural Fragment/Psychic Gland are distinct, Primal Beast Essence is explicitly beast-themed, Arcane Gear/Conductor/Runic Core are more magical, repeated Marrow/Essence defaults are reduced, Charcoal is darker and more readable, and Salt/Seasonings are no longer the same default. Existing GM icon choices remain authoritative.
+
+All visual assets are still referenced only by native `icons/...` paths; Crafting Core bundles no Foundry Core artwork.
+
 ## v0.0.19a — Material Icon Curation
 
 v0.0.19a is a visual-refinement build on the stable v0.0.19 Crafting Projects line. The GM Materials catalog now offers **three curated Foundry Core icon candidates for every existing built-in material**, with one candidate preselected. The selection is made directly in the Materials table and persists to the private Materials Compendium.

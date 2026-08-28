@@ -20,7 +20,7 @@ const essence = (id, name, nature, {tags=[], quantity="1"}={}) => ({
   tags: ["essence", ...tags], requires: [], biomes: [], quantity, chance: 100
 });
 
-export const MATERIAL_CATALOG_VERSION = 5;
+export const MATERIAL_CATALOG_VERSION = 6;
 
 export const DEFAULT_MATERIALS = Object.freeze([
   // Aberration
@@ -152,37 +152,80 @@ export const DEFAULT_MATERIALS = Object.freeze([
   essence("essence-radiant", "Radiant Essence", "radiant", {tags:["radiant"]}),
   essence("essence-thunder", "Thunder Essence", "thunder", {tags:["thunder"]}),
 
-  // Environment gathering — intended for future biome pools.
+  // Environment gathering — wild resources. Biomes intentionally overlap categories:
+  // a forest can contain ore/crystal deposits, a mountain can carry flora/fungi, and so on.
+  // Flora
   gathering("gathering-elfleaf", "Elvenleaf Herb", "flora", "common", {biomes:["forest","ravine"], tags:["herb"], quantity:"1d4"}),
-  gathering("gathering-bloodroot", "Bloodroot", "flora", "common", {biomes:["forest","swamp"], tags:["root"], quantity:"1d3"}),
-  gathering("gathering-mooncap", "Mooncap Mushroom", "flora", "common", {biomes:["forest","cave"], tags:["fungus"], quantity:"1d3"}),
+  gathering("gathering-wild-sage", "Wild Sage", "flora", "common", {biomes:["forest","grassland","ravine"], tags:["herb","aromatic"], quantity:"1d4"}),
+  gathering("gathering-bitterleaf", "Bitterleaf", "flora", "common", {biomes:["forest","swamp","grassland"], tags:["herb","bitter"], quantity:"1d4"}),
+  gathering("gathering-silverleaf", "Silverleaf", "flora", "uncommon", {biomes:["forest","mountain","arctic"], tags:["herb","alchemy"], quantity:"1d3"}),
+  gathering("gathering-thornvine", "Thornvine", "flora", "uncommon", {biomes:["forest","swamp","ravine"], tags:["plant","thorn"], quantity:"1d3"}),
+  gathering("gathering-moonwort", "Moonwort", "flora", "rare", {biomes:["forest","swamp","underdark"], tags:["herb","arcane"], quantity:"1d2"}),
   gathering("gathering-blackwater-flower", "Blackwater Flower", "flora", "uncommon", {biomes:["swamp"], tags:["flower"]}),
   gathering("gathering-ghost-orchid", "Ghost Orchid", "flora", "veryRare", {biomes:["swamp","underdark"], tags:["flower","arcane"]}),
-  gathering("gathering-aromatic-resin", "Aromatic Resin", "flora", "common", {biomes:["forest"], tags:["resin"], quantity:"1d3"}),
-  gathering("gathering-cliff-moss", "Cliff Moss", "flora", "common", {biomes:["ravine","mountain"], tags:["moss"], quantity:"1d3"}),
+  gathering("gathering-cliff-moss", "Cliff Moss", "flora", "common", {biomes:["ravine","mountain","forest"], tags:["moss"], quantity:"1d3"}),
   gathering("gathering-ashen-lichen", "Ashen Lichen", "flora", "uncommon", {biomes:["ravine","mountain","cave"], tags:["lichen"]}),
   gathering("gathering-frostbloom", "Frostbloom", "flora", "rare", {biomes:["arctic","mountain"], tags:["flower"]}),
-  gathering("gathering-sungrass", "Sungrass", "flora", "common", {biomes:["grassland"], tags:["herb"], quantity:"1d4"}),
-  gathering("gathering-sea-herb", "Tide Herb", "flora", "common", {biomes:["coast"], tags:["herb"]}),
-  gathering("gathering-deep-spore", "Deep Spore", "flora", "rare", {biomes:["underdark","cave"], tags:["fungus"]}),
+  gathering("gathering-sungrass", "Sungrass", "flora", "common", {biomes:["grassland","forest"], tags:["herb"], quantity:"1d4"}),
+  gathering("gathering-sea-herb", "Tide Herb", "flora", "common", {biomes:["coast","swamp"], tags:["herb"]}),
 
-  gathering("gathering-iron-ore", "Iron Ore", "mineral", "common", {biomes:["cave","mountain","ravine"], tags:["metal"], quantity:"1d4"}),
-  gathering("gathering-copper-ore", "Copper Ore", "mineral", "common", {biomes:["cave","mountain"], tags:["metal"], quantity:"1d4"}),
-  gathering("gathering-silver-ore", "Silver Ore", "mineral", "uncommon", {biomes:["cave","mountain"], tags:["metal"]}),
-  gathering("gathering-raw-crystal", "Raw Crystal", "mineral", "uncommon", {biomes:["cave","ravine"], tags:["crystal"]}),
-  gathering("gathering-arcane-crystal", "Arcane Crystal", "mineral", "rare", {biomes:["cave","underdark"], tags:["crystal","arcane"]}),
+  // Fungi
+  gathering("gathering-mooncap", "Mooncap Mushroom", "flora", "common", {biomes:["forest","cave"], tags:["fungus"], quantity:"1d3"}),
+  gathering("gathering-cavecap", "Cavecap Mushroom", "flora", "common", {biomes:["cave","mountain","ravine"], tags:["fungus","mushroom"], quantity:"1d3"}),
+  gathering("gathering-bitter-fungus", "Bitter Fungus", "flora", "common", {biomes:["forest","swamp","cave"], tags:["fungus","bitter"], quantity:"1d3"}),
+  gathering("gathering-glowcap", "Glowcap Fungus", "flora", "uncommon", {biomes:["cave","underdark"], tags:["fungus","luminous"], quantity:"1d2"}),
+  gathering("gathering-embercap", "Embercap Mushroom", "flora", "uncommon", {biomes:["cave","mountain","desert"], tags:["fungus","fire"], quantity:"1d2"}),
+  gathering("gathering-deep-spore", "Deep Spore", "flora", "rare", {biomes:["underdark","cave"], tags:["fungus","spore"]}),
+  gathering("gathering-ghost-fungus", "Ghost Fungus", "flora", "rare", {biomes:["underdark","swamp","cave"], tags:["fungus","spirit"]}),
+  gathering("gathering-mycelial-cluster", "Mycelial Cluster", "flora", "rare", {biomes:["forest","cave","underdark"], tags:["fungus","mycelium"]}),
+
+  // Roots
+  gathering("gathering-bloodroot", "Bloodroot", "flora", "common", {biomes:["forest","swamp"], tags:["root"], quantity:"1d3"}),
+  gathering("gathering-common-root", "Common Root", "flora", "common", {biomes:["forest","grassland","swamp"], tags:["root"], quantity:"1d4"}),
+  gathering("gathering-bitter-root", "Bitter Root", "flora", "common", {biomes:["forest","swamp"], tags:["root","bitter"], quantity:"1d3"}),
+  gathering("gathering-medicinal-root", "Medicinal Root", "flora", "uncommon", {biomes:["forest","grassland","mountain"], tags:["root","medicine"], quantity:"1d3"}),
+  gathering("gathering-cave-root", "Cave Root", "flora", "uncommon", {biomes:["cave","underdark","ravine"], tags:["root"], quantity:"1d2"}),
+  gathering("gathering-arcane-root", "Arcane Root", "flora", "rare", {biomes:["underdark","forest","swamp"], tags:["root","arcane"]}),
+
+  // Wood & Resin
+  gathering("gathering-softwood", "Softwood Timber", "flora", "common", {biomes:["forest","grassland","mountain"], tags:["wood"], quantity:"1d4"}),
+  gathering("gathering-hardwood", "Hardwood Timber", "flora", "uncommon", {biomes:["forest","swamp"], tags:["wood"], quantity:"1d3"}),
+  gathering("gathering-ironwood", "Ironwood Timber", "flora", "rare", {biomes:["forest","mountain"], tags:["wood","craft"], quantity:"1d2"}),
+  gathering("gathering-aromatic-resin", "Aromatic Resin", "flora", "common", {biomes:["forest"], tags:["resin","aromatic"], quantity:"1d3"}),
+  gathering("gathering-sticky-resin", "Sticky Resin", "flora", "common", {biomes:["forest","swamp"], tags:["resin"], quantity:"1d3"}),
+  gathering("gathering-amber-resin", "Amber Resin", "flora", "uncommon", {biomes:["forest","mountain"], tags:["resin","alchemy"], quantity:"1d2"}),
+  gathering("gathering-enchanted-resin", "Enchanted Resin", "flora", "rare", {biomes:["forest","underdark"], tags:["resin","arcane"]}),
+
+  // Minerals & Geological. Raw metals remain gathering resources; Steel stays a refined trade material.
+  gathering("gathering-iron-ore", "Iron Ore", "mineral", "common", {biomes:["cave","mountain","ravine","forest","grassland"], tags:["metal"], quantity:"1d4"}),
+  gathering("gathering-copper-ore", "Copper Ore", "mineral", "common", {biomes:["cave","mountain","ravine","forest","desert"], tags:["metal"], quantity:"1d4"}),
+  gathering("gathering-coal", "Coal", "mineral", "common", {biomes:["cave","mountain","ravine","forest"], tags:["mineral","fuel"], quantity:"1d4"}),
+  gathering("gathering-quartz", "Quartz Cluster", "mineral", "common", {biomes:["cave","mountain","ravine","forest","grassland","coast","desert","arctic"], tags:["crystal","stone"], quantity:"1d3"}),
+  gathering("gathering-mineral-salt", "Mineral Salt", "mineral", "common", {biomes:["cave","coast","desert","swamp"], tags:["salt"], quantity:"1d4"}),
+  gathering("gathering-silver-ore", "Silver Ore", "mineral", "uncommon", {biomes:["cave","mountain","ravine","arctic"], tags:["metal"]}),
+  gathering("gathering-raw-crystal", "Raw Crystal", "mineral", "uncommon", {biomes:["cave","ravine","mountain","forest","coast"], tags:["crystal"]}),
+  gathering("gathering-rough-gemstone", "Rough Gemstone", "mineral", "uncommon", {biomes:["cave","mountain","ravine","desert","forest"], tags:["gem","crystal"], quantity:"1d2"}),
+  gathering("gathering-obsidian", "Obsidian", "mineral", "uncommon", {biomes:["mountain","desert","cave"], tags:["glass","stone"], quantity:"1d3"}),
+  gathering("gathering-sulfur", "Sulfur", "mineral", "uncommon", {biomes:["cave","mountain","swamp"], tags:["alchemy","mineral"], quantity:"1d3"}),
+  gathering("gathering-gold-ore", "Gold Ore", "mineral", "rare", {biomes:["cave","mountain","ravine","desert"], tags:["metal"], quantity:"1d2"}),
+  gathering("gathering-mithral-ore", "Mithral Ore", "mineral", "rare", {biomes:["cave","mountain","underdark"], tags:["metal","fantastic"]}),
+  gathering("gathering-arcane-crystal", "Arcane Crystal", "mineral", "rare", {biomes:["cave","underdark","mountain"], tags:["crystal","arcane"]}),
+  gathering("gathering-volcanic-glass", "Volcanic Glass", "mineral", "rare", {biomes:["mountain","desert","cave"], tags:["glass","stone"]}),
+  gathering("gathering-gem-geode", "Gem-Bearing Geode", "mineral", "rare", {biomes:["cave","mountain","ravine"], tags:["gem","stone"]}),
+  gathering("gathering-adamantine-ore", "Adamantine Ore", "mineral", "veryRare", {biomes:["underdark","mountain","cave"], tags:["metal","fantastic"]}),
   gathering("gathering-starstone", "Starstone Shard", "mineral", "legendary", {biomes:["mountain","desert"], tags:["stone","arcane"]}),
-  gathering("gathering-mineral-salt", "Mineral Salt", "mineral", "common", {biomes:["cave","coast","desert"], tags:["salt"], quantity:"1d4"}),
-  gathering("gathering-volcanic-glass", "Volcanic Glass", "mineral", "rare", {biomes:["mountain"], tags:["glass","stone"]}),
 
-  // Profession / trade materials. These can later feed vendors, regions and profession pools.
+  // Profession / trade materials. v0.0.19b only fills two obvious leather gaps;
+  // the broader Cultivated / Domestic and Profession & Trade expansion remains v0.0.19c.
   profession("trade-salt", "Salt", "trade", "common", {tags:["food","preservative"]}),
   profession("trade-bread", "Bread", "trade", "common", {tags:["food"]}),
   profession("trade-flour", "Flour", "trade", "common", {tags:["food","grain"]}),
   profession("trade-seasonings", "Seasonings", "trade", "common", {tags:["food","spice"]}),
   profession("trade-cooking-oil", "Cooking Oil", "trade", "common", {tags:["food","oil"]}),
   profession("trade-charcoal", "Charcoal", "trade", "common", {tags:["smithing","fuel"]}),
+  profession("trade-leather-piece", "Leather Piece", "trade", "common", {tags:["leather","craft"]}),
   profession("trade-leather-straps", "Leather Straps", "trade", "uncommon", {tags:["leather","craft"]}),
+  profession("trade-refined-leather", "Refined Leather", "trade", "rare", {tags:["leather","craft"]}),
   profession("trade-iron-ingot", "Iron Ingot", "trade", "uncommon", {tags:["metal","smithing"]}),
   profession("trade-steel-ingot", "Steel Ingot", "trade", "uncommon", {tags:["metal","smithing"]}),
   profession("trade-silver-ingot", "Silver Ingot", "trade", "rare", {tags:["metal","smithing"]}),

@@ -2,7 +2,7 @@
   "id": "dnd5e-crafting-core",
   "title": "Crafting Core (DnD 5e)",
   "description": "A D&D5e crafting framework for Foundry VTT 14 with curated materials, preview-first generation, configurable creature scanning, Essence affinity harvesting, and GM-driven Item Piles corpse harvesting with optional gear normalization.",
-  "version": "0.0.19a",
+  "version": "0.0.19b",
   "authors": [
     {
       "name": "Raphael Andrade"
@@ -48,6 +48,6 @@
   "readme": "README.md",
   "url": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e",
   "manifest": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e/releases/latest/download/module.json",
-  "download": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e/releases/download/v0.0.19a/crafting-core.zip",
+  "download": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e/releases/download/v0.0.19b/crafting-core.zip",
   "socket": true
 }

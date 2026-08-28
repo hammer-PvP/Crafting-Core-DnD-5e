@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.0.19b
+
+Environment Catalog and icon-curation refinement on the stable v0.0.19 line. Crafting Projects, Harvest, Scanner, Essence, Item Piles, and gear normalization are not changed.
+
+- Expanded the built-in curated Material Catalog from **132 to 165 materials**.
+- Expanded Environment Gathering to **51** curated records across Flora, Roots, Fungi, Wood & Resin, and **Minerals & Geological**.
+- Added new wild Flora: `Wild Sage`, `Bitterleaf`, `Silverleaf`, `Thornvine`, and `Moonwort`.
+- Added new Fungi: `Cavecap Mushroom`, `Bitter Fungus`, `Glowcap Fungus`, `Embercap Mushroom`, `Ghost Fungus`, and `Mycelial Cluster`.
+- Added new Roots: `Common Root`, `Bitter Root`, `Medicinal Root`, `Cave Root`, and `Arcane Root`.
+- Added Wood & Resin depth: `Softwood Timber`, `Hardwood Timber`, `Ironwood Timber`, `Sticky Resin`, `Amber Resin`, and `Enchanted Resin` in addition to the existing Aromatic Resin.
+- Expanded Minerals & Geological with `Coal`, `Quartz Cluster`, `Rough Gemstone`, `Obsidian`, `Sulfur`, `Gold Ore`, `Mithral Ore`, `Adamantine Ore`, and `Gem-Bearing Geode`.
+- Broadened biome metadata so Environment resources can overlap naturally. Forest/Grassland/Coast/Arctic/etc. can expose geological resources where configured instead of treating resource families as biome-exclusive.
+- Kept `Steel Ingot` as a processed trade material rather than inventing a Steel Ore. The expanded raw ore catalog is intended to support later refinement Recipes and alloy chains.
+- Added the small leather refinement requested before the larger v0.0.19c trade expansion: `Leather Piece` (Common) and `Refined Leather` (Rare), complementing the existing `Leather Straps`.
+- Preserved the v0.0.19a three-candidate icon UI for every material; all 165 built-ins have exactly three native Foundry Core `icons/...` candidates and one preselected default.
+- Refined live-feedback icon defaults and candidate logic, including Neural Fragment, Primal Beast Essence, Arcane Gear, Arcane Conductor, Runic Core, Giant/Corrupted Marrow, Masterwork Component, Psychic/Radiant/Necrotic Essence, Arcane Crystal, Salt, Seasonings, and Charcoal.
+- Added default-selection de-duplication by choosing equivalent second/third candidates when a strong image had already been used elsewhere. The shipped v0.0.19b defaults now use distinct icon paths across all 165 built-ins while still keeping three semantically valid choices per material.
+- Added a safe v0.0.19a → v0.0.19b curated-icon migration. Untouched old curated defaults advance to the refined default, but any explicit GM icon override or unrelated direct Compendium image remains authoritative.
+- Hardened inline icon selection failure handling: the row keeps/restores its last saved radio state without forcing a full catalog rerender.
+- Bumped the built-in Material Catalog schema to version **6**.
+- Cultivated/Domestic + broad Profession & Trade expansion remains v0.0.19c. Game Hunt remains v0.0.19d.
+
 ## 0.0.19a
 
 Material Catalog visual-curation build on top of the mechanically stable v0.0.19 line. No Crafting Project, Harvest, Scanner, Essence, Item Piles, or normalization logic is changed.

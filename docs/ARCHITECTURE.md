@@ -118,7 +118,7 @@ A player learns about a material or Knowledge Source only when the GM deliberate
 
 ### Curated defaults
 
-The 119 shipped default materials are the **Crafting Core Built-in Curated Catalog**. They are not extracted from installed PHB, DMG, Monster Manual, Tasha or SRD packs.
+The 165 shipped default materials are the **Crafting Core Built-in Curated Catalog**. They are not extracted from installed PHB, DMG, Monster Manual, Tasha or SRD packs.
 
 The catalog is a crafting vocabulary used by future generation systems.
 
@@ -128,7 +128,7 @@ Materialized materials are native D&D5e Items:
 
 - `type = "loot"`
 - `system.type.value = "trade"`
-- default icon `icons/containers/bags/coinpouch-simple-leather-silver-brown.webp`
+- curated built-ins reference one of three native Foundry Core `icons/...` candidates; custom/unmapped fallbacks may still use the generic Crafting Core pouch
 
 Any D&D5e Item can still be used directly in a Recipe without registration. Registering an Item as a material simply makes it available to future automated Harvest/Gathering/region/vendor systems.
 
@@ -142,7 +142,9 @@ Any D&D5e Item can still be used directly in a Recipe without registration. Regi
 - Roots
 - Fungi
 - Wood & Resin
-- Mineral
+- Minerals & Geological
+
+Gathering categories are not biome-exclusive. A biome may expose several categories when its material metadata supports them; for example, Forest can contain Flora, Roots, Fungi, Wood/Resin, and selected mineral/crystal deposits.
 
 **Profession & Trade**
 - Food & Cooking
