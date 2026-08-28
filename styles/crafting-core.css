@@ -1194,3 +1194,103 @@
   .cc-pool-head { grid-template-columns: minmax(0,1fr) 105px; }
   .cc-profile-counts { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* v0.0.19e — Generate Materials 2.0 + compact scanner polish */
+.cc-generator-fields.cc-grid.four {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+.cc-generator-multi-field {
+  display: grid !important;
+  gap: 3px;
+  min-width: 0;
+}
+.cc-generator-wide-field { margin-top: 1px; }
+.cc-generator-multi-field > span,
+.cc-generator-fields > label > span {
+  font-size: 9px;
+  text-transform: uppercase;
+  font-weight: 800;
+  opacity: .68;
+}
+.cc-generator-multi-field > small {
+  opacity: .58;
+  font-size: 9px;
+  line-height: 1.25;
+}
+.cc-generator-multi {
+  min-width: 0;
+  border: 1px solid rgba(255,255,255,.11);
+  border-radius: 4px;
+  background: rgba(0,0,0,.16);
+}
+.cc-generator-multi > summary {
+  list-style: none;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 14px;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 7px;
+  cursor: pointer;
+}
+.cc-generator-multi > summary::-webkit-details-marker { display: none; }
+.cc-generator-multi > summary strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 600;
+}
+.cc-generator-multi > summary i { opacity: .45; font-size: 9px; transition: transform .15s ease; }
+.cc-generator-multi[open] > summary i { transform: rotate(180deg); }
+.cc-generator-multi-options {
+  max-height: 230px;
+  overflow-y: auto;
+  display: grid;
+  gap: 2px;
+  padding: 5px;
+  border-top: 1px solid rgba(255,255,255,.07);
+  scrollbar-gutter: stable;
+}
+.cc-generator-multi-options > label {
+  display: grid !important;
+  grid-template-columns: 18px minmax(0,1fr);
+  gap: 6px;
+  align-items: center;
+  min-height: 27px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: rgba(255,255,255,.012);
+}
+.cc-generator-multi-options > label:hover { background: rgba(141,233,1,.04); }
+.cc-generator-multi-options > label.disabled { opacity: .3; }
+.cc-generator-multi-options input { margin: 0; }
+.cc-generator-multi-options span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.cc-generator-affinity-options { grid-template-columns: repeat(2, minmax(0,1fr)); }
+.cc-danger-soft { border-color: rgba(183,68,68,.38) !important; color: #efc0c0 !important; }
+
+/* Four scanner counters remain readable in the compact row instead of colliding. */
+.cc-profile-row { grid-template-columns: 44px minmax(0,1fr) 170px 104px; min-height: 54px; }
+.cc-profile-counts { grid-template-columns: repeat(4, minmax(0,1fr)); gap: 3px; }
+.cc-profile-counts > span { min-width: 0; padding: 3px 1px; }
+.cc-profile-counts strong { font-size: 11px; line-height: 1; }
+.cc-profile-counts small { font-size: 7px; line-height: 1.05; white-space: nowrap; }
+
+/* Slightly denser editor without changing the underlying pool UI. */
+.crafting-core-profile-editor-app .cc-profile-editor-body { padding: 8px 10px; }
+.crafting-core-profile-editor-app .cc-form-card { padding: 8px 9px; }
+.cc-pool-option { min-height: 33px; padding-block: 2px; }
+.cc-pool-option img { width: 25px; height: 25px; }
+
+@media (max-width: 900px) {
+  .cc-generator-fields.cc-grid.four { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .cc-profile-row { grid-template-columns: 44px minmax(0,1fr) 140px 96px; }
+  .cc-profile-counts { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 620px) {
+  .cc-generator-fields.cc-grid.four { grid-template-columns: 1fr; }
+  .cc-generator-affinity-options { grid-template-columns: 1fr; }
+}

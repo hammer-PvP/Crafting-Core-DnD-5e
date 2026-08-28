@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.19e
+- Reworked **Generate Materials** into a shared multi-selection gathering tool for manual Creature Harvest, Environment Gathering, and Game Hunt.
+- Added checkbox multi-select fields using the same compact interaction language as Harvest Profile rarity pools.
+- Manual Creature Harvest can mix Creature Types and Harvest Profiles in one generation while preserving Essence affinity selection and Sources/Bodies as the attempt count.
+- Environment Gathering now supports up to 3 Biomes, multiple Resource Categories, up to 2 Abundance bands, and explicit Gather Attempts.
+- Mixed Environment generation chooses from the selected biome/resource context per discovery; selecting more categories expands variety instead of multiplying loot linearly.
+- Game Hunt now supports up to 3 Biomes and up to 2 Abundance bands in one generation; Hunt Attempts remain the number of hunting opportunities.
+- Added direct **Create Item Pile** output when Item Piles is active. The generated pile is created on the viewed Scene and uses the highest-quantity generated material as its visual when possible.
+- Renamed Materials **Create / Sync Materials** to **Sync Catalog** and added a distinct **Reset to Curated Defaults** action. Sync preserves GM overrides; Reset deliberately restores every built-in curated material and rarity economy while preserving registered custom materials.
+- Compacted Creature Scanner pool/candidate/Essence/Pinpoint counters and slightly tightened Harvest Profile editor spacing.
+- Test checklists are no longer packaged in the GitHub/Foundry runtime ZIP; the current checklist is delivered separately for manual validation.
+
 ## 0.0.19d
 
 Harvest variety and Game Hunt expansion on the stable v0.0.19 line. Crafting Projects, Progress Checks, Knowledge, Item Piles gear handling, and normalization are otherwise unchanged.

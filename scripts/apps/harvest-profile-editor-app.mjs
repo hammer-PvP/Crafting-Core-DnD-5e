@@ -8,7 +8,7 @@ export class HarvestProfileEditorApp extends HandlebarsApplicationMixin(Applicat
     id: "crafting-core-harvest-profile-editor",
     classes: ["crafting-core", "crafting-core-profile-editor-app", "standard-form"],
     tag: "form",
-    position: { width: 940, height: 780 },
+    position: { width: 900, height: 740 },
     window: { title: "Crafting Core — Harvest Profile", resizable: true }
   };
 
@@ -181,7 +181,7 @@ export class HarvestProfileEditorApp extends HandlebarsApplicationMixin(Applicat
     this.#syncDraft();
     const options = await HarvestProfileService.materialOptions({ includeAll: true });
     const first = options[0];
-    if (!first) return ui.notifications.warn("Create / Sync at least one Crafting Core material first.");
+    if (!first) return ui.notifications.warn("Sync the Crafting Core Materials Catalog first.");
     this.draft.pinpointOverrides.push({
       id: foundry.utils.randomID(12),
       materialId: first.value,

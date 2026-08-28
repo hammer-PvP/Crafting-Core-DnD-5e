@@ -572,6 +572,58 @@ export class MaterialCatalogService {
     return this.getEntry(id);
   }
 
+  static async resetCuratedDefaults() {
+    if (!game.user.isGM) throw new Error("Only a GM can reset Crafting Core materials.");
+
+    // A catalog-wide reset is intentionally stronger than Sync Catalog. It removes every
+    // built-in catalog override and restores the shipped rarity economy. Custom registered
+    // materials remain untouched. Direct presentation edits on managed Compendium Items are
+    // also replaced so the private pack truly returns to the Crafting Core curated baseline.
+    await game.settings.set(MODULE_ID, SETTINGS.MATERIAL_OVERRIDES, {});
+    await game.settings.set(MODULE_ID, SETTINGS.MATERIAL_ECONOMY, foundry.utils.deepClone(this.DEFAULT_ECONOMY));
+
+    const pack = await this.ensurePack();
+    const wasLocked = Boolean(pack.locked);
+    if (wasLocked) await pack.configure({ locked: false });
+    try {
+      const folders = await CompendiumService.ensurePackFolders(pack, this.#folderDefinitions());
+      const docs = await pack.getDocuments();
+      const byMaterialId = new Map(docs
+        .filter(item => item.getFlag(MODULE_ID, FLAGS.MATERIAL_MANAGED))
+        .map(item => [String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? ""), item])
+        .filter(([id]) => id));
+
+      const updates = [];
+      const creates = [];
+      for (const material of this.definitions()) {
+        const folder = folders.get(`${material.family}:${material.category}`) ?? folders.get(material.family) ?? null;
+        const data = this.#itemData(material, folder?.id ?? null);
+        const item = byMaterialId.get(material.id);
+        if (!item) {
+          creates.push(data);
+          continue;
+        }
+        updates.push({
+          _id: item.id,
+          name: data.name,
+          img: data.img,
+          folder: data.folder,
+          system: data.system,
+          flags: data.flags
+        });
+      }
+
+      const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+      const created = creates.length ? await ItemClass.createDocuments(creates, { pack: pack.collection }) : [];
+      const updated = updates.length ? await ItemClass.updateDocuments(updates, { pack: pack.collection }) : [];
+      await pack.getIndex({ fields: ["name", "img", "type", "folder", "system.rarity", `flags.${MODULE_ID}.${FLAGS.MATERIAL_ID}`] });
+      Hooks.callAll(`${MODULE_ID}.materialsChanged`);
+      return { pack, created: created.length, updated: updated.length, total: this.definitions().length };
+    } finally {
+      if (wasLocked) await pack.configure({ locked: true });
+    }
+  }
+
   static async resetEntry(id) {
     if (!game.user.isGM) throw new Error("Only a GM can reset Crafting Core materials.");
     const base = DEFAULT_MATERIALS.find(material => material.id === String(id));

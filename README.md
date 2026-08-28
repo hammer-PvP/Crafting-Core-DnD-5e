@@ -1,5 +1,18 @@
 # Crafting Core (DnD 5e)
 
+## v0.0.19e — Generate Materials 2.0
+
+v0.0.19e turns **Generate Materials** into the GM-facing Resource Gathering tool for situations that are not handled directly on a corpse Token. Creature Harvest, Environment Gathering, and Game Hunt now share compact checkbox multi-select controls. Mixed biomes and mixed resource categories expand the candidate pool, while explicit Attempts remain the main control over how many gathering opportunities are resolved.
+
+- **Manual Creature Harvest:** mix Creature Types and compatible Harvest Profiles, set Sources/Bodies, and select multiple Essence affinities.
+- **Environment Gathering:** combine up to three Biomes, multiple Resource Categories, up to two Abundance bands, and a Gather Attempts count.
+- **Game Hunt:** combine up to three Biomes, up to two Abundance bands, and Hunt Attempts.
+- **Item Piles:** when Item Piles is active, a non-empty preview can be materialized directly as an Item Pile on the viewed Scene.
+- **Materials Catalog:** `Sync Catalog` preserves GM customization; `Reset to Curated Defaults` deliberately restores the built-in Crafting Core catalog while preserving custom registered materials.
+- **UI polish:** Scanner counters and the Harvest Profile editor are slightly more compact without changing rarity-pool mechanics.
+
+Extra Effort remains reserved for **v0.0.20** after the normal Crafting Project flow receives more live testing.
+
 ## v0.0.19d — Harvest Rarity Pools & Game Hunt
 
 v0.0.19d deepens harvesting without changing the stable Crafting Project engine. Scanned Creature Harvest Profiles no longer store one fixed material in each of four slots. They now expose **Common, Uncommon, Rare, and Very Rare / Legendary rarity pools**, and each pool can contain several plausible materials selected through a checkbox multi-select. The fifth Essence Pool remains separate.

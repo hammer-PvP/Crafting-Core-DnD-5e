@@ -49,10 +49,10 @@ export class MaterialGenerationService {
   }
 
   static ABUNDANCE = Object.freeze({
-    scarce: { label: "Scarce", maxTypes: 1, quantityFactor: 1 },
-    normal: { label: "Normal", maxTypes: 2, quantityFactor: 1 },
-    rich: { label: "Rich", maxTypes: 3, quantityFactor: 1.5 },
-    abundant: { label: "Abundant", maxTypes: 4, quantityFactor: 2 }
+    scarce: { label: "Scarce", findChance: 55, discoveries: 1, maxTypes: 1, quantityFactor: 1 },
+    normal: { label: "Normal", findChance: 75, discoveries: 1, maxTypes: 2, quantityFactor: 1 },
+    rich: { label: "Rich", findChance: 90, discoveries: 2, maxTypes: 3, quantityFactor: 1.5 },
+    abundant: { label: "Abundant", findChance: 100, discoveries: 2, maxTypes: 4, quantityFactor: 2 }
   });
 
   static GAME_HUNT_ABUNDANCE = Object.freeze({
@@ -90,11 +90,12 @@ export class MaterialGenerationService {
     return { entries, creatureNatures, biomes, huntBiomes };
   }
 
-  static resourceCategories(entries, biome) {
+  static resourceCategories(entries, biomes=[]) {
+    const selected = new Set(this.#array(biomes).map(String));
     const set = new Set(entries
       .filter(e => e.family === "gathering"
         && !(e.tags ?? []).includes("game-hunt")
-        && (e.biomes ?? []).includes(String(biome)))
+        && (!selected.size || (e.biomes ?? []).some(biome => selected.has(String(biome)))))
       .map(e => e.category)
       .filter(Boolean));
     const preferred = ["flora", "roots", "fungi", "wood", "forage", "mineral"];
@@ -105,28 +106,52 @@ export class MaterialGenerationService {
     });
   }
 
-  static async generateCreature({ nature, profileId="general", sources=1, essenceAffinities=[] }={}) {
+  static creatureProfileOptions(natures=[]) {
+    const selected = new Set(this.#array(natures).map(value => String(value).toLowerCase()));
+    const rows = [];
+    for (const nature of selected) {
+      for (const profile of this.profilesFor(nature)) {
+        rows.push({
+          key: `${nature}:${profile.id}`,
+          nature,
+          natureLabel: this.title(nature),
+          id: profile.id,
+          label: `${this.title(nature)} — ${profile.label}`
+        });
+      }
+    }
+    return rows;
+  }
+
+  static async generateCreature({ natures=[], nature="", profileKeys=[], profileId="general", sources=1, essenceAffinities=[] }={}) {
     if (!game.user?.isGM) throw new Error("Only a GM can generate Crafting Core materials.");
     const allEntries = await MaterialCatalogService.allEntries();
-    const entries = allEntries
-      .filter(entry => entry.family === "creature" && entry.nature === String(nature));
-    if (!entries.length) throw new Error("No Creature Harvest materials are configured for that creature type.");
+    const selectedNatures = [...new Set(this.#array(natures).concat(nature ? [nature] : []).map(value => String(value).toLowerCase()).filter(Boolean))];
+    if (!selectedNatures.length) throw new Error("Select at least one Creature Type.");
 
+    const selectedProfileKeys = new Set(this.#array(profileKeys).map(String).filter(Boolean));
+    const combinations = [];
+    for (const selectedNature of selectedNatures) {
+      const profiles = this.profilesFor(selectedNature);
+      const matching = profiles.filter(profile => selectedProfileKeys.has(`${selectedNature}:${profile.id}`));
+      const usable = matching.length ? matching : (selectedProfileKeys.size ? [] : [profiles.find(profile => profile.id === profileId) ?? profiles[0]].filter(Boolean));
+      for (const profile of usable) combinations.push({ nature: selectedNature, profile });
+    }
+    if (!combinations.length) throw new Error("Select at least one Harvest Profile for the chosen Creature Types.");
+
+    const creatureEntries = allEntries.filter(entry => entry.family === "creature");
     const essences = new Map(allEntries.filter(entry => entry.family === "essence").map(entry => [String(entry.nature), entry]));
     const essenceSlot = this.essenceSlotForAffinities(essenceAffinities);
-
-    const profiles = this.profilesFor(nature);
-    const profile = profiles.find(p => p.id === profileId) ?? profiles[0];
-    const eligible = entries.filter(entry => this.#matchesProfile(entry, profile));
-    const byRarity = Object.fromEntries(
-      MaterialCatalogService.RARITIES.map(rarity => [rarity, eligible.filter(entry => entry.rarity === rarity)])
-    );
-
     const count = Math.clamp(Math.floor(Number(sources) || 1), 1, 100);
     const aggregate = new Map();
     const attempts = [];
 
     for (let sourceIndex = 0; sourceIndex < count; sourceIndex++) {
+      const combo = combinations[Math.floor(Math.random() * combinations.length)] ?? combinations[0];
+      const eligible = creatureEntries
+        .filter(entry => entry.nature === combo.nature)
+        .filter(entry => this.#matchesProfile(entry, combo.profile));
+      const byRarity = Object.fromEntries(MaterialCatalogService.RARITIES.map(rarity => [rarity, eligible.filter(entry => entry.rarity === rarity)]));
       const used = new Set();
       const slots = this.DEFAULT_HARVEST_SLOTS
         .map(rarities => this.#pickSlot(rarities.flatMap(rarity => byRarity[rarity] ?? []), used))
@@ -139,27 +164,33 @@ export class MaterialGenerationService {
           quantity = await this.#rollQuantity(material.quantity);
           this.#aggregate(aggregate, material, quantity);
         }
-        sourceAttempts.push({ materialId: material.id, name: material.name, rarity: material.rarity, rarityLabel: material.rarityLabel, chance: material.chance, success, quantity });
+        sourceAttempts.push({
+          nature: combo.nature, profileId: combo.profile.id, profileLabel: combo.profile.label,
+          materialId: material.id, name: material.name, rarity: material.rarity, rarityLabel: material.rarityLabel,
+          chance: material.chance, success, quantity
+        });
       }
       const essenceAttempt = await this.#rollEssenceSlot(essenceSlot, essences, aggregate);
       if (essenceAttempt) sourceAttempts.push(essenceAttempt);
       attempts.push(sourceAttempts);
     }
 
+    const natureLabels = selectedNatures.map(value => this.title(value));
+    const profileLabels = combinations.map(row => row.label ?? row.profile.label);
     const result = {
       source: "creature",
       sourceLabel: "Creature Harvest",
-      nature: String(nature),
-      natureLabel: this.title(nature),
-      profileId: profile.id,
-      profileLabel: profile.label,
+      natures: selectedNatures,
+      natureLabels,
+      profileKeys: combinations.map(row => `${row.nature}:${row.profile.id}`),
+      profileLabels: [...new Set(profileLabels)],
       sources: count,
       essenceAffinities: essenceSlot.affinities.map(row => row.type),
       essenceMode: essenceSlot.affinities.length ? "specific" : "arcane-fallback",
       items: [...aggregate.values()],
       attempts
     };
-    result.folderName = `${result.natureLabel} — ${result.profileLabel} ×${count} — ${this.timestamp()}`;
+    result.folderName = `${natureLabels.join(" + ")} — Manual Harvest ×${count} — ${this.timestamp()}`;
     return result;
   }
 
@@ -253,88 +284,117 @@ export class MaterialGenerationService {
     return result;
   }
 
-  static async generateEnvironment({ biome, resource, abundance="normal" }={}) {
+  static async generateEnvironment({ biomes=[], biome="", resources=[], resource="", abundances=[], abundance="", attempts=1 }={}) {
     if (!game.user?.isGM) throw new Error("Only a GM can generate Crafting Core materials.");
-    const entries = (await MaterialCatalogService.allEntries()).filter(entry => entry.family === "gathering"
-      && (entry.biomes ?? []).includes(String(biome))
-      && entry.category === String(resource));
-    if (!entries.length) throw new Error("No gathering materials are configured for that Biome and Resource combination.");
+    const selectedBiomes = [...new Set(this.#array(biomes).concat(biome ? [biome] : []).map(String).filter(Boolean))].slice(0, 3);
+    const selectedResources = [...new Set(this.#array(resources).concat(resource ? [resource] : []).map(String).filter(Boolean))];
+    const selectedAbundances = [...new Set(this.#array(abundances).concat(abundance ? [abundance] : []).map(String).filter(value => this.ABUNDANCE[value]))].slice(0, 2);
+    if (!selectedBiomes.length) throw new Error("Select at least one Biome.");
+    if (!selectedResources.length) throw new Error("Select at least one Resource Category.");
+    if (!selectedAbundances.length) selectedAbundances.push("normal");
 
-    const abundanceData = this.ABUNDANCE[String(abundance)] ?? this.ABUNDANCE.normal;
-    const successes = [];
-    const attempts = [];
-    for (const material of entries) {
-      const success = this.#chance(material.chance);
-      attempts.push({ materialId: material.id, name: material.name, rarity: material.rarity, rarityLabel: material.rarityLabel, chance: material.chance, success });
-      if (success) successes.push(material);
-    }
+    const allEntries = (await MaterialCatalogService.allEntries()).filter(entry => entry.family === "gathering" && !(entry.tags ?? []).includes("game-hunt"));
+    const eligible = allEntries.filter(entry => (entry.biomes ?? []).some(row => selectedBiomes.includes(String(row))) && selectedResources.includes(String(entry.category)));
+    if (!eligible.length) throw new Error("No gathering materials are configured for the selected Biomes and Resources.");
 
-    // Abundance limits how many distinct material types can be found in one gathering result.
-    const selected = this.#shuffle(successes).slice(0, abundanceData.maxTypes);
-    const aggregate = new Map();
-    for (const material of selected) {
-      const rolled = await this.#rollQuantity(material.quantity);
-      const quantity = Math.max(1, Math.round(rolled * abundanceData.quantityFactor));
-      this.#aggregate(aggregate, material, quantity);
-    }
-
-    const result = {
-      source: "environment",
-      sourceLabel: "Environment Gathering",
-      biome: String(biome),
-      biomeLabel: this.title(biome),
-      resource: String(resource),
-      resourceLabel: MaterialCatalogService.categoryLabel("gathering", resource),
-      abundance: String(abundance),
-      abundanceLabel: abundanceData.label,
-      items: [...aggregate.values()],
-      attempts
-    };
-    result.folderName = `${result.biomeLabel} — ${result.resourceLabel} — ${result.abundanceLabel} — ${this.timestamp()}`;
-    return result;
-  }
-
-  static async generateGameHunt({ biome, abundance="normal", attempts=1 }={}) {
-    if (!game.user?.isGM) throw new Error("Only a GM can generate Crafting Core materials.");
-    const entries = (await MaterialCatalogService.allEntries()).filter(entry => entry.family === "gathering"
-      && (entry.tags ?? []).includes("game-hunt")
-      && (entry.biomes ?? []).includes(String(biome)));
-    if (!entries.length) throw new Error("No Game Hunt animals are configured for that Biome.");
-
-    const abundanceData = this.GAME_HUNT_ABUNDANCE[String(abundance)] ?? this.GAME_HUNT_ABUNDANCE.normal;
     const count = Math.clamp(Math.floor(Number(attempts) || 1), 1, 100);
     const aggregate = new Map();
     const rolls = [];
 
-    const speciesMap = new Map();
-    for (const material of entries) {
-      const tags = new Set((material.tags ?? []).map(String));
-      const species = [...tags].find(tag => !["game-hunt","small-game","medium-game","large-game","meat","basic","rich","premium"].includes(tag)) ?? material.id;
-      const size = tags.has("small-game") ? "small" : tags.has("large-game") ? "large" : "medium";
-      const quality = tags.has("premium") ? "premium" : tags.has("rich") ? "rich" : "basic";
-      const row = speciesMap.get(species) ?? { species, size, materials: {} };
-      row.materials[quality] = material;
-      speciesMap.set(species, row);
-    }
-    const speciesRows = [...speciesMap.values()];
-
-    for (let i = 0; i < count; i += 1) {
+    for (let attemptIndex = 0; attemptIndex < count; attemptIndex += 1) {
+      const abundanceKey = selectedAbundances[Math.floor(Math.random() * selectedAbundances.length)] ?? "normal";
+      const abundanceData = this.ABUNDANCE[abundanceKey] ?? this.ABUNDANCE.normal;
       if (!this.#chance(abundanceData.findChance)) {
-        rolls.push({ success: false, outcome: "no-game", chance: abundanceData.findChance });
+        rolls.push({ success: false, outcome: "nothing", abundance: abundanceKey, chance: abundanceData.findChance, discoveries: [] });
         continue;
       }
-      // First pick the prey size from the abundance profile, then choose one available
-      // species uniformly inside that size. This keeps the configured Small / Medium / Large
-      // distribution stable even when a biome contains different numbers of species per size.
+
+      const discoveries = [];
+      const used = new Set();
+      const discoveryCount = Math.max(1, Math.floor(Number(abundanceData.discoveries) || 1));
+      for (let discoveryIndex = 0; discoveryIndex < discoveryCount; discoveryIndex += 1) {
+        const viableBiomes = selectedBiomes.filter(selectedBiome => eligible.some(entry => !used.has(entry.id)
+          && (entry.biomes ?? []).includes(selectedBiome) && selectedResources.includes(String(entry.category))));
+        if (!viableBiomes.length) break;
+        const chosenBiome = viableBiomes[Math.floor(Math.random() * viableBiomes.length)];
+        const viableResources = selectedResources.filter(selectedResource => eligible.some(entry => !used.has(entry.id)
+          && (entry.biomes ?? []).includes(chosenBiome) && String(entry.category) === selectedResource));
+        if (!viableResources.length) continue;
+        const chosenResource = viableResources[Math.floor(Math.random() * viableResources.length)];
+        const candidates = eligible.filter(entry => !used.has(entry.id)
+          && (entry.biomes ?? []).includes(chosenBiome) && String(entry.category) === chosenResource);
+        const material = this.#weightedPick(candidates.map(entry => ({ entry, weight: Math.max(1, Number(entry.chance) || 1) })))?.entry ?? null;
+        if (!material) continue;
+        used.add(material.id);
+        const rolled = await this.#rollQuantity(material.quantity);
+        const quantity = Math.max(1, Math.round(rolled * abundanceData.quantityFactor));
+        this.#aggregate(aggregate, material, quantity);
+        discoveries.push({
+          biome: chosenBiome, resource: chosenResource, materialId: material.id, name: material.name,
+          rarity: material.rarity, rarityLabel: material.rarityLabel, quantity
+        });
+      }
+      rolls.push({ success: discoveries.length > 0, outcome: discoveries.length ? "found" : "nothing", abundance: abundanceKey, chance: abundanceData.findChance, discoveries });
+    }
+
+    const biomeLabels = selectedBiomes.map(value => this.title(value));
+    const resourceLabels = selectedResources.map(value => MaterialCatalogService.categoryLabel("gathering", value));
+    const abundanceLabels = selectedAbundances.map(value => this.ABUNDANCE[value]?.label ?? this.title(value));
+    const result = {
+      source: "environment", sourceLabel: "Environment Gathering",
+      biomes: selectedBiomes, biomeLabels, resources: selectedResources, resourceLabels,
+      abundances: selectedAbundances, abundanceLabels, attemptsCount: count,
+      items: [...aggregate.values()], attempts: rolls
+    };
+    result.folderName = `${biomeLabels.join(" + ")} — ${resourceLabels.join(" + ")} — ${abundanceLabels.join(" + ")} ×${count} — ${this.timestamp()}`;
+    return result;
+  }
+
+  static async generateGameHunt({ biomes=[], biome="", abundances=[], abundance="", attempts=1 }={}) {
+    if (!game.user?.isGM) throw new Error("Only a GM can generate Crafting Core materials.");
+    const selectedBiomes = [...new Set(this.#array(biomes).concat(biome ? [biome] : []).map(String).filter(Boolean))].slice(0, 3);
+    const selectedAbundances = [...new Set(this.#array(abundances).concat(abundance ? [abundance] : []).map(String).filter(value => this.GAME_HUNT_ABUNDANCE[value]))].slice(0, 2);
+    if (!selectedBiomes.length) throw new Error("Select at least one Game Hunt Biome.");
+    if (!selectedAbundances.length) selectedAbundances.push("normal");
+
+    const allEntries = (await MaterialCatalogService.allEntries()).filter(entry => entry.family === "gathering" && (entry.tags ?? []).includes("game-hunt"));
+    const entries = allEntries.filter(entry => (entry.biomes ?? []).some(row => selectedBiomes.includes(String(row))));
+    if (!entries.length) throw new Error("No Game Hunt animals are configured for the selected Biomes.");
+
+    const count = Math.clamp(Math.floor(Number(attempts) || 1), 1, 100);
+    const aggregate = new Map();
+    const rolls = [];
+
+    for (let i = 0; i < count; i += 1) {
+      const abundanceKey = selectedAbundances[Math.floor(Math.random() * selectedAbundances.length)] ?? "normal";
+      const abundanceData = this.GAME_HUNT_ABUNDANCE[abundanceKey] ?? this.GAME_HUNT_ABUNDANCE.normal;
+      const viableBiomes = selectedBiomes.filter(selectedBiome => entries.some(entry => (entry.biomes ?? []).includes(selectedBiome)));
+      const chosenBiome = viableBiomes[Math.floor(Math.random() * viableBiomes.length)] ?? viableBiomes[0];
+      const biomeEntries = entries.filter(entry => (entry.biomes ?? []).includes(chosenBiome));
+
+      if (!this.#chance(abundanceData.findChance)) {
+        rolls.push({ success: false, outcome: "no-game", biome: chosenBiome, abundance: abundanceKey, chance: abundanceData.findChance });
+        continue;
+      }
+
+      const speciesMap = new Map();
+      for (const material of biomeEntries) {
+        const tags = new Set((material.tags ?? []).map(String));
+        const species = [...tags].find(tag => !["game-hunt","small-game","medium-game","large-game","meat","basic","rich","premium"].includes(tag)) ?? material.id;
+        const size = tags.has("small-game") ? "small" : tags.has("large-game") ? "large" : "medium";
+        const quality = tags.has("premium") ? "premium" : tags.has("rich") ? "rich" : "basic";
+        const row = speciesMap.get(species) ?? { species, size, materials: {} };
+        row.materials[quality] = material;
+        speciesMap.set(species, row);
+      }
+      const speciesRows = [...speciesMap.values()];
       const availableSizes = ["small", "medium", "large"]
         .map(size => ({ size, species: speciesRows.filter(row => row.size === size), weight: abundanceData.sizeWeights[size] ?? 0 }))
         .filter(row => row.species.length && row.weight > 0);
       const sizeRow = this.#weightedPick(availableSizes);
-      const species = sizeRow?.species?.length
-        ? sizeRow.species[Math.floor(Math.random() * sizeRow.species.length)]
-        : null;
+      const species = sizeRow?.species?.length ? sizeRow.species[Math.floor(Math.random() * sizeRow.species.length)] : null;
       if (!species) {
-        rolls.push({ success: false, outcome: "no-game", chance: abundanceData.findChance });
+        rolls.push({ success: false, outcome: "no-game", biome: chosenBiome, abundance: abundanceKey, chance: abundanceData.findChance });
         continue;
       }
       const qualityRows = ["basic","rich","premium"]
@@ -346,24 +406,18 @@ export class MaterialGenerationService {
       const quantity = await this.#rollQuantity(material.quantity);
       this.#aggregate(aggregate, material, quantity);
       rolls.push({
-        success: true, outcome: "game", species: species.species, size: species.size, quality: quality.quality,
-        materialId: material.id, name: material.name, rarity: material.rarity, rarityLabel: material.rarityLabel,
-        quantity, chance: abundanceData.findChance
+        success: true, outcome: "game", biome: chosenBiome, abundance: abundanceKey, species: species.species, size: species.size, quality: quality.quality,
+        materialId: material.id, name: material.name, rarity: material.rarity, rarityLabel: material.rarityLabel, quantity, chance: abundanceData.findChance
       });
     }
 
+    const biomeLabels = selectedBiomes.map(value => this.title(value));
+    const abundanceLabels = selectedAbundances.map(value => this.GAME_HUNT_ABUNDANCE[value]?.label ?? this.title(value));
     const result = {
-      source: "hunt",
-      sourceLabel: "Game Hunt",
-      biome: String(biome),
-      biomeLabel: this.title(biome),
-      abundance: String(abundance),
-      abundanceLabel: abundanceData.label,
-      attemptsCount: count,
-      items: [...aggregate.values()],
-      attempts: rolls
+      source: "hunt", sourceLabel: "Game Hunt", biomes: selectedBiomes, biomeLabels, abundances: selectedAbundances, abundanceLabels,
+      attemptsCount: count, items: [...aggregate.values()], attempts: rolls
     };
-    result.folderName = `${result.biomeLabel} — Game Hunt — ${result.abundanceLabel} ×${count} — ${this.timestamp()}`;
+    result.folderName = `${biomeLabels.join(" + ")} — Game Hunt — ${abundanceLabels.join(" + ")} ×${count} — ${this.timestamp()}`;
     return result;
   }
 
@@ -509,6 +563,12 @@ export class MaterialGenerationService {
       success: Boolean(selected),
       outcome
     };
+  }
+
+  static #array(value) {
+    if (Array.isArray(value)) return value;
+    if (value === undefined || value === null || value === "") return [];
+    return [value];
   }
 
   static #weightedPick(rows) {

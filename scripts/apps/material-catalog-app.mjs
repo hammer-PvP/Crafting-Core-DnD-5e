@@ -51,9 +51,10 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
   _onRender() {
     const root = this.element;
     root.querySelector('[data-action="sync-materials"]')?.addEventListener("click", event => this.#sync(event));
+    root.querySelector('[data-action="reset-curated-defaults"]')?.addEventListener("click", event => this.#resetCuratedDefaults(event));
     root.querySelector('[data-action="open-materials"]')?.addEventListener("click", event => {
       event.preventDefault();
-      if (!MaterialCatalogService.openPack()) ui.notifications.warn("Create / Sync the Materials Compendium first.");
+      if (!MaterialCatalogService.openPack()) ui.notifications.warn("Sync the Materials Compendium first.");
     });
     root.querySelector('[data-action="save-economy"]')?.addEventListener("click", event => this.#saveEconomy(event));
     root.querySelectorAll('[data-action="edit-material"]').forEach(button => button.addEventListener("click", event => {
@@ -177,6 +178,28 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     } catch (error) {
       console.error(`${MODULE_ID} | Material sync failed.`, error);
       ui.notifications.error(error.message ?? "Crafting Core could not synchronize materials.");
+      button.disabled = false;
+    }
+  }
+
+  async #resetCuratedDefaults(event) {
+    event.preventDefault();
+    const confirmed = await foundry.applications.api.DialogV2.confirm({
+      window: { title: "Reset Curated Material Catalog" },
+      content: "<p>Reset every <strong>built-in curated material</strong> to the Crafting Core defaults?</p><p>This restores curated names, icons, rarity/value/drop defaults, quantities, tags and biome metadata. Registered custom materials are preserved.</p>",
+      yes: { label: "Reset Curated Defaults", icon: "fa-solid fa-rotate-left" },
+      no: { label: "Cancel" }
+    });
+    if (!confirmed) return;
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const result = await MaterialCatalogService.resetCuratedDefaults();
+      ui.notifications.info(`Curated catalog reset: ${result.created} created, ${result.updated} restored.`);
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Curated material reset failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not reset the curated catalog.");
       button.disabled = false;
     }
   }

@@ -4,7 +4,7 @@
     <div>
       <span class="cc-kicker">GM Tool · Manual Generation</span>
       <h1>Generate Materials</h1>
-      <p>Roll a preview first. Create a loot folder only when you want to keep the result.</p>
+      <p>Describe the gathering context, roll a preview, then keep it as a Folder or an Item Pile.</p>
     </div>
   </header>
 
@@ -14,39 +14,112 @@
 
       {{#if isCreature}}
       <div class="cc-grid three cc-generator-fields">
-        <label><span>Creature Type</span><select name="nature">{{#each creatureOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
-        <label><span>Profile</span><select name="profileId">{{#each profileOptions}}<option value="{{id}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
+        <label class="cc-generator-multi-field">
+          <span>Creature Types</span>
+          <details class="cc-generator-multi" data-multi-select="creature-natures" data-empty-label="Select creature types">
+            <summary><strong data-multi-summary>{{creatureSummary}}</strong><i class="fa-solid fa-chevron-down"></i></summary>
+            <div class="cc-generator-multi-options">
+              {{#each creatureOptions}}
+              <label><input type="checkbox" name="creatureNature" value="{{value}}" data-label="{{label}}" {{#if selected}}checked{{/if}}><span>{{label}}</span></label>
+              {{/each}}
+            </div>
+          </details>
+        </label>
+        <label class="cc-generator-multi-field">
+          <span>Harvest Profiles</span>
+          <details class="cc-generator-multi" data-multi-select="creature-profiles" data-empty-label="Select harvest profiles">
+            <summary><strong data-multi-summary>{{profileSummary}}</strong><i class="fa-solid fa-chevron-down"></i></summary>
+            <div class="cc-generator-multi-options">
+              {{#each profileOptions}}
+              <label class="{{#unless enabled}}disabled{{/unless}}"><input type="checkbox" name="creatureProfile" value="{{key}}" data-nature="{{nature}}" data-label="{{label}}" data-unavailable="{{#if enabled}}false{{else}}true{{/if}}" {{#if selected}}checked{{/if}} {{#unless enabled}}disabled{{/unless}}><span>{{label}}</span></label>
+              {{/each}}
+            </div>
+          </details>
+        </label>
         <label><span>Sources / Bodies</span><input type="number" name="sources" min="1" max="100" step="1" value="{{state.sources}}"></label>
       </div>
-      <div class="cc-essence-affinity-fieldset">
-        <div class="cc-essence-affinity-heading">
-          <span>Essence Affinity</span>
-          <small>Select one or more affinities. With none selected, each source has a 50% Arcane Essence fallback.</small>
-        </div>
-        <div class="cc-essence-affinity-options">
-          {{#each essenceOptions}}
-          <label class="cc-essence-check"><input type="checkbox" name="essenceAffinity" value="{{value}}" {{#if selected}}checked{{/if}}><span>{{label}}</span></label>
-          {{/each}}
-        </div>
-        <small class="cc-essence-affinity-note">With affinities selected: 45% Arcane / 55% split between selected specific Essences.</small>
-      </div>
+
+      <label class="cc-generator-multi-field cc-generator-wide-field">
+        <span>Essence Affinities</span>
+        <details class="cc-generator-multi" data-multi-select="essence-affinities" data-empty-label="No affinity · 50% Arcane fallback">
+          <summary><strong data-multi-summary>{{#if state.essenceAffinities.length}}{{state.essenceAffinities.length}} selected{{else}}No affinity · 50% Arcane fallback{{/if}}</strong><i class="fa-solid fa-chevron-down"></i></summary>
+          <div class="cc-generator-multi-options cc-generator-affinity-options">
+            {{#each essenceOptions}}
+            <label><input type="checkbox" name="essenceAffinity" value="{{value}}" data-label="{{label}}" {{#if selected}}checked{{/if}}><span>{{label}}</span></label>
+            {{/each}}
+          </div>
+        </details>
+        <small>With affinities selected: 45% Arcane / 55% split between the selected specific Essences.</small>
+      </label>
       {{/if}}
 
       {{#if isEnvironment}}
-      <div class="cc-grid three cc-generator-fields">
-        <label><span>Biome</span><select name="biome">{{#each biomeOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
-        <label><span>Resource</span><select name="resource">{{#each resourceOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
-        <label><span>Abundance</span><select name="abundance">{{#each abundanceOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
+      <div class="cc-grid four cc-generator-fields">
+        <label class="cc-generator-multi-field">
+          <span>Biomes</span>
+          <details class="cc-generator-multi" data-multi-select="environment-biomes" data-max-selections="3" data-empty-label="Select biomes">
+            <summary><strong data-multi-summary>{{environmentBiomeSummary}}</strong><i class="fa-solid fa-chevron-down"></i></summary>
+            <div class="cc-generator-multi-options">
+              {{#each environmentBiomeOptions}}
+              <label><input type="checkbox" name="environmentBiome" value="{{value}}" data-label="{{label}}" {{#if selected}}checked{{/if}}><span>{{label}}</span></label>
+              {{/each}}
+            </div>
+          </details>
+        </label>
+        <label class="cc-generator-multi-field">
+          <span>Resources</span>
+          <details class="cc-generator-multi" data-multi-select="environment-resources" data-empty-label="Select resources">
+            <summary><strong data-multi-summary>{{resourceSummary}}</strong><i class="fa-solid fa-chevron-down"></i></summary>
+            <div class="cc-generator-multi-options">
+              {{#each resourceOptions}}
+              <label class="{{#unless enabled}}disabled{{/unless}}"><input type="checkbox" name="resourceCategory" value="{{value}}" data-biomes="{{biomesCsv}}" data-label="{{label}}" data-unavailable="{{#if enabled}}false{{else}}true{{/if}}" {{#if selected}}checked{{/if}} {{#unless enabled}}disabled{{/unless}}><span>{{label}}</span></label>
+              {{/each}}
+            </div>
+          </details>
+        </label>
+        <label class="cc-generator-multi-field">
+          <span>Abundance</span>
+          <details class="cc-generator-multi" data-multi-select="environment-abundance" data-max-selections="2" data-empty-label="Select abundance">
+            <summary><strong data-multi-summary>{{environmentAbundanceSummary}}</strong><i class="fa-solid fa-chevron-down"></i></summary>
+            <div class="cc-generator-multi-options">
+              {{#each environmentAbundanceOptions}}
+              <label><input type="checkbox" name="environmentAbundance" value="{{value}}" data-label="{{label}}" {{#if selected}}checked{{/if}}><span>{{label}}</span></label>
+              {{/each}}
+            </div>
+          </details>
+        </label>
+        <label><span>Gather Attempts</span><input type="number" name="gatherAttempts" min="1" max="100" step="1" value="{{state.gatherAttempts}}"></label>
       </div>
+      <p class="cc-note"><i class="fa-solid fa-compass"></i> Biomes and Resources expand the candidate pool. Attempts control gathering opportunities; selecting more categories does not multiply loot linearly.</p>
       {{/if}}
 
       {{#if isHunt}}
       <div class="cc-grid three cc-generator-fields">
-        <label><span>Biome</span><select name="biome">{{#each biomeOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
-        <label><span>Abundance</span><select name="abundance">{{#each abundanceOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
-        <label><span>Hunting Attempts</span><input type="number" name="huntAttempts" min="1" max="100" step="1" value="{{state.huntAttempts}}"></label>
+        <label class="cc-generator-multi-field">
+          <span>Biomes</span>
+          <details class="cc-generator-multi" data-multi-select="hunt-biomes" data-max-selections="3" data-empty-label="Select hunt biomes">
+            <summary><strong data-multi-summary>{{huntBiomeSummary}}</strong><i class="fa-solid fa-chevron-down"></i></summary>
+            <div class="cc-generator-multi-options">
+              {{#each huntBiomeOptions}}
+              <label><input type="checkbox" name="huntBiome" value="{{value}}" data-label="{{label}}" {{#if selected}}checked{{/if}}><span>{{label}}</span></label>
+              {{/each}}
+            </div>
+          </details>
+        </label>
+        <label class="cc-generator-multi-field">
+          <span>Abundance</span>
+          <details class="cc-generator-multi" data-multi-select="hunt-abundance" data-max-selections="2" data-empty-label="Select abundance">
+            <summary><strong data-multi-summary>{{huntAbundanceSummary}}</strong><i class="fa-solid fa-chevron-down"></i></summary>
+            <div class="cc-generator-multi-options">
+              {{#each huntAbundanceOptions}}
+              <label><input type="checkbox" name="huntAbundance" value="{{value}}" data-label="{{label}}" {{#if selected}}checked{{/if}}><span>{{label}}</span></label>
+              {{/each}}
+            </div>
+          </details>
+        </label>
+        <label><span>Hunt Attempts</span><input type="number" name="huntAttempts" min="1" max="100" step="1" value="{{state.huntAttempts}}"></label>
       </div>
-      <p class="cc-note"><i class="fa-solid fa-crosshairs"></i> Game Hunt is pool-based and never targets an Actor. Abundance shifts the odds toward larger game and Rich/Premium meat.</p>
+      <p class="cc-note"><i class="fa-solid fa-crosshairs"></i> Each Hunt Attempt is one hunting opportunity. Mixed biomes share the attempts instead of multiplying them.</p>
       {{/if}}
 
       <button type="button" class="cc-primary-action cc-generator-button" data-action="generate"><i class="fa-solid fa-dice"></i> Generate Materials</button>
@@ -60,7 +133,7 @@
 
       {{#if lastResult}}
         {{#if lastResult.empty}}
-        <div class="cc-generator-empty"><i class="fa-solid fa-wind"></i><strong>Nothing was found.</strong><small>No Folder was created. Generate again whenever you want.</small></div>
+        <div class="cc-generator-empty"><i class="fa-solid fa-wind"></i><strong>Nothing was found.</strong><small>No Folder or Item Pile was created. Generate again whenever you want.</small></div>
         {{else}}
         <div class="cc-generated-list">
           {{#each lastResult.items}}
@@ -70,14 +143,22 @@
         {{#if lastResult.created}}
         <div class="cc-generated-folder"><i class="fa-solid fa-folder"></i><span><small>Created Folder</small><strong>{{lastResult.folderLabel}}</strong></span></div>
         {{/if}}
+        {{#if lastResult.pileCreated}}
+        <div class="cc-generated-folder"><i class="fa-solid fa-sack-dollar"></i><span><small>Item Piles</small><strong>{{lastResult.pileLabel}}</strong></span></div>
+        {{/if}}
         {{/if}}
 
         <div class="cc-generator-result-actions">
           <button type="button" class="cc-secondary-action" data-action="generate-again"><i class="fa-solid fa-rotate"></i> Generate Again</button>
           {{#unless lastResult.empty}}
             {{#unless lastResult.created}}
-            <button type="button" class="cc-primary-action" data-action="create-folder"><i class="fa-solid fa-folder-plus"></i> Create Loot Folder</button>
+            <button type="button" class="cc-secondary-action" data-action="create-folder"><i class="fa-solid fa-folder-plus"></i> Create Loot Folder</button>
             {{/unless}}
+            {{#if itemPilesAvailable}}
+              {{#unless lastResult.pileCreated}}
+              <button type="button" class="cc-primary-action" data-action="create-item-pile"><i class="fa-solid fa-box-open"></i> Create Item Pile</button>
+              {{/unless}}
+            {{/if}}
           {{/unless}}
         </div>
       {{else}}

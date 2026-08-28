@@ -59,9 +59,74 @@ export class ItemPilesBridge {
       payload.push({ item: data, quantity: Math.max(1, Math.floor(Number(row.quantity) || 1)) });
     }
     if (missing.length) {
-      throw new Error(`Crafting Core material Items are missing (${missing.join(", ")}). Run Materials → Create / Sync Materials and retry the corpse.`);
+      throw new Error(`Crafting Core material Items are missing (${missing.join(", ")}). Run Materials → Sync Catalog and retry the corpse.`);
     }
     return payload;
+  }
+
+  static async createGeneratedLootPile(result, { position=null }={}) {
+    if (!game.user?.isGM) throw new Error("Only a GM can create generated Item Piles.");
+    if (!this.isAvailable()) throw new Error("Item Piles is not active.");
+    if (!Array.isArray(result?.items) || !result.items.length) throw new Error("Generate at least one material before creating an Item Pile.");
+
+    const api = game.itempiles.API;
+    if (typeof api.createItemPile !== "function") {
+      throw new Error("The active Item Piles version does not expose createItemPile().");
+    }
+
+    const documents = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
+    const items = [];
+    const missing = [];
+    for (const row of result.items) {
+      const source = documents.get(String(row.materialId));
+      if (!source) {
+        missing.push(String(row.materialId));
+        continue;
+      }
+      const data = source.toObject();
+      delete data._id;
+      delete data._stats;
+      delete data.folder;
+      data.sort = 0;
+      data.system ??= {};
+      data.system.quantity = Math.max(1, Math.floor(Number(row.quantity) || 1));
+      data.flags ??= {};
+      data.flags[MODULE_ID] = {
+        ...(data.flags[MODULE_ID] ?? {}),
+        generatedLoot: true,
+        generatedAt: Date.now(),
+        generationSource: String(result.source ?? "manual-generation")
+      };
+      items.push(data);
+    }
+    if (missing.length) throw new Error(`Crafting Core material Items are missing (${missing.join(", ")}). Run Materials → Sync Catalog and retry.`);
+    if (!items.length) throw new Error("No generated material Items could be resolved.");
+
+    const dominant = [...result.items].sort((a, b) => (Number(b.quantity) || 0) - (Number(a.quantity) || 0))[0] ?? null;
+    const icon = String(dominant?.img || "icons/svg/item-bag.svg");
+    const sceneId = String(canvas?.scene?.id ?? game.user?.viewedScene ?? "");
+    if (!sceneId) throw new Error("Open a Scene before creating an Item Pile.");
+
+    let pilePosition = position;
+    if (!pilePosition) {
+      const scene = canvas?.scene ?? game.scenes?.get?.(sceneId);
+      const width = Number(scene?.width ?? canvas?.dimensions?.sceneWidth ?? canvas?.dimensions?.width ?? 0) || 0;
+      const height = Number(scene?.height ?? canvas?.dimensions?.sceneHeight ?? canvas?.dimensions?.height ?? 0) || 0;
+      const offsetX = Number(canvas?.dimensions?.sceneX ?? 0) || 0;
+      const offsetY = Number(canvas?.dimensions?.sceneY ?? 0) || 0;
+      pilePosition = { x: offsetX + (width / 2), y: offsetY + (height / 2) };
+    }
+
+    const name = String(result.sourceLabel || "Generated Materials");
+    const uuid = await api.createItemPile({
+      sceneId,
+      position: pilePosition,
+      items,
+      tokenOverrides: { name, texture: { src: icon } },
+      actorOverrides: { name, img: icon },
+      itemPileFlags: { displayOne: false, showItemName: false }
+    });
+    return { uuid, icon, position: pilePosition, itemCount: items.length };
   }
 
   static async turnTokenIntoLootPile(tokenDocument, result) {
