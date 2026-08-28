@@ -71,8 +71,35 @@ export class KnowledgeItemService {
       if (item) {
         const update = foundry.utils.deepClone(data);
         update._id = item.id;
+        // Published Knowledge Sources are fully managed by Crafting Core. Foundry deep-merges object fields
+        // during document updates, so explicitly delete every previous Activity before writing the single
+        // canonical Learn Recipe Activity. This makes publication idempotent and also repairs old duplicates.
+        update.system ??= {};
+        // Deletions must be applied before the canonical Activity is re-added. Rebuild the Activities
+        // update object in that order so an already-canonical ID is not deleted after being written.
+        const canonicalActivities = foundry.utils.deepClone(update.system.activities ?? {});
+        const reconciledActivities = {};
+        for (const activityId of Object.keys(item.system?.activities ?? {})) {
+          reconciledActivities[`-=${activityId}`] = null;
+        }
+        Object.assign(reconciledActivities, canonicalActivities);
+        update.system.activities = reconciledActivities;
         const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
         [item] = await ItemClass.updateDocuments([update], { pack: pack.collection });
+
+        // Enforce the post-condition instead of trusting a deep-merge implementation detail:
+        // one managed Knowledge Source always has exactly one canonical Learn Recipe Activity.
+        item = await pack.getDocument(item?.id ?? update._id) ?? item;
+        const canonicalId = Object.keys(canonicalActivities)[0];
+        const currentIds = Object.keys(item?.system?.activities ?? {});
+        if (canonicalId && (currentIds.length !== 1 || currentIds[0] !== canonicalId)) {
+          const activities = {};
+          for (const oldId of currentIds) if (oldId !== canonicalId) activities[`-=${oldId}`] = null;
+          if (!currentIds.includes(canonicalId)) activities[canonicalId] = foundry.utils.deepClone(canonicalActivities[canonicalId]);
+          if (Object.keys(activities).length) {
+            [item] = await ItemClass.updateDocuments([{ _id: item.id, system: { activities } }], { pack: pack.collection });
+          }
+        }
       } else {
         const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
         [item] = await ItemClass.createDocuments([data], { pack: pack.collection });
@@ -117,7 +144,7 @@ export class KnowledgeItemService {
   }
 
   static #knowledgeItemData(recipe, { folderId=null, published=false }={}) {
-    const activityId = foundry.utils.randomID(16);
+    const activityId = String(recipe?.id || foundry.utils.randomID(20)).slice(0, 16).padEnd(16, "0");
     const label = this.#sourceType(recipe);
     const itemName = recipe.knowledge?.name || `${label} — ${recipe.name}`;
     const img = (!recipe.knowledge?.img || recipe.knowledge.img === "icons/svg/book.svg")
@@ -229,9 +256,20 @@ export class KnowledgeItemService {
     }
 
     if (visibility.failure && resolution.check.required) {
-      let text = "No materials are lost on failure.";
-      if (resolution.failure.loseMaterials) {
-        text = visibility.failurePercent
+      let text;
+      if (recipe?.craftingMode === "project") {
+        if (resolution.failure.mode === "noProgress") text = "The Project stays ready; another compatible rest unlocks a new Final Check attempt.";
+        else if (resolution.failure.mode === "regress") text = `Regress ${resolution.failure.regressBy} Work Period${resolution.failure.regressBy === 1 ? "" : "s"}.`;
+        else {
+          text = "The Project fails.";
+          if (resolution.failure.loseMaterials) text += visibility.failurePercent
+            ? ` ${resolution.failure.lossPercent}% of reserved materials are lost.`
+            : " Some reserved materials are lost.";
+          else text += " Reserved materials are returned.";
+        }
+      } else {
+        text = "No materials are lost on failure.";
+        if (resolution.failure.loseMaterials) text = visibility.failurePercent
           ? `${resolution.failure.lossPercent}% of the required materials are lost on failure.`
           : "Some required materials are lost on failure.";
       }
@@ -239,7 +277,35 @@ export class KnowledgeItemService {
     }
 
     if (visibility.craftingTime) {
-      lines.push(`<p><strong>Crafting Time:</strong> ${Math.max(0, Number(recipe?.craftingTime) || 0)} seconds</p>`);
+      if (recipe?.craftingMode === "project") {
+        const project = RecipeService.normalizeProject(recipe?.project);
+        const cadence = project.cadence === "short" ? "Short Rest" : "Long Rest";
+        lines.push(`<p><strong>Crafting Project:</strong> ${project.requiredWork} Work Period${project.requiredWork === 1 ? "" : "s"} · ${cadence} cadence</p>`);
+      } else {
+        lines.push(`<p><strong>Crafting Time:</strong> ${Math.max(0, Number(recipe?.craftingTime) || 0)} seconds</p>`);
+      }
+    }
+
+    if (recipe?.craftingMode === "project") {
+      const project = RecipeService.normalizeProject(recipe?.project);
+      if (visibility.progressCheck && project.progressCheck.required) {
+        const timing = project.progressCheck.timing === "midpoint" ? "Midpoint only" : "Every Work Period";
+        const dc = visibility.progressDC ? ` · DC ${project.progressCheck.dc}` : "";
+        lines.push(`<p><strong>Progress Check:</strong> ${escape(RecipeService.checkLabel(project.progressCheck))}${dc} · ${timing}</p>`);
+      }
+      if (visibility.progressFailure && project.progressCheck.required) {
+        const failure = project.progressCheck.failure;
+        let text = "No progress on failure.";
+        if (failure.mode === "regress") text = `Regress ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}.`;
+        if (failure.mode === "failProject") {
+          text = "The Project fails.";
+          if (failure.loseMaterials) text += visibility.progressFailurePercent
+            ? ` ${failure.lossPercent}% of reserved materials are lost.`
+            : " Some reserved materials are lost.";
+          else text += " Reserved materials are returned.";
+        }
+        lines.push(`<p><strong>Progress Failure:</strong> ${escape(text)}</p>`);
+      }
     }
 
     return lines.join("\n");

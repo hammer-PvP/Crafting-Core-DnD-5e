@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.0.19
+
+Crafting Projects & Rest Progress development release. The validated Harvest pipeline remains untouched.
+
+- Added a persistent **Crafting Project** mode alongside legacy seconds-based Timed crafting. A Project tracks required/completed Work Periods and uses either Long-Rest or Short-Rest cadence.
+- **Start Project is the first Work Attempt.** Starting during downtime can immediately produce the first point of progress; a one-period Project can therefore complete during its initial work.
+- Completed compatible rests do not advance crafting automatically. They unlock exactly one new Work opportunity: Long-Rest Projects require a Long Rest, while Short-Rest Projects accept either a Short or Long Rest. The player can spend that opportunity later through **Work on Project**.
+- Limited each Character to one active Project while still allowing every known Recipe to remain browsable for planning. A second Project cannot start until the current one completes or is cancelled.
+- Ingredients are **reserved at Project start** and stored with the Project snapshot, so they cannot be reused by another craft. Cancelling returns all still-reserved materials. A Project also freezes its Recipe snapshot so later GM edits do not retroactively change work already underway.
+- Added optional **Progress Checks** using native D&D5e Ability, Skill, Tool, or Saving Throw rolls. They can occur Every Work Period or only when crossing the Project midpoint.
+- Progress Check failure has three exclusive outcomes: **No Progress**, **Regress Progress** by a GM-configured number of Work Periods, or **Fail Project**. Material loss exists only inside Fail Project and can optionally destroy a configured percentage of the reserved materials; otherwise the materials return.
+- Extended the existing **Final Crafting Check** to Project crafting without replacing its v0.0.18 roll flow. A failed Final Check may stay ready for a later attempt, regress the Project by a configured number of Work Periods, or fail the Project with optional material loss. A retry that stays ready requires a new compatible rest and cannot be spammed.
+- Relevant-proficiency **Automatic Success** continues to apply to the Final Crafting Check; Progress Checks remain their own Recipe-defined work tests.
+- Rebuilt the Character Crafting tab as a two-column profession workspace: persistent Recipe list on the left and a larger selected-Recipe/Project detail panel on the right with thematic information blocks, progress state, reserved materials and contextual controls.
+- Restored the live inventory **`N×` craftable count** beside known Recipes. It remains independently hideable through Player Visibility.
+- Added Project visibility controls for current progress, cadence/time, Progress Check, Progress DC and Progress-failure consequences. Hidden mechanics remain enforced without exposing their details in Project chat messages.
+- Fixed Knowledge Source republication so it is **idempotent**. Updating or renaming a published Recipe preserves the same managed Compendium document when possible, reconciles its contents, removes old Crafting Core learning Activities, and leaves exactly one canonical `Learn Recipe` Activity. Republishing also repairs previously duplicated Activities.
+- Kept existing Timed Recipes backward compatible. Existing Player Visibility, Learning Access, native **Learn** button, full Skill/Tool labels, Recipe descriptions, scroll preservation, and v0.0.18a UI fixes remain in place.
+- **Extra Effort is not included** in this release and remains reserved for v0.0.20. Harvest, Creature Scanner, Essence, Item Piles corpse loot, and gear normalization were not changed.
+
 ## 0.0.18a
 
 Crafting Resolution polish release. No v0.0.19 Crafting Projects behavior is included.

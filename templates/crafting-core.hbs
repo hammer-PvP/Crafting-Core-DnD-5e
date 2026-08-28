@@ -22,7 +22,7 @@
       {{#each recipes}}
       <button type="button" class="cc-recipe-nav {{#if selected}}active{{/if}}" data-recipe-id="{{id}}">
         <img src="{{img}}" alt="">
-        <span><strong>{{name}}</strong><small>{{#if published}}Published · {{sourceType}}{{else}}Draft{{/if}} · {{craftingTime}} sec</small></span>
+        <span><strong>{{name}}</strong><small>{{#if published}}Published · {{sourceType}}{{else}}Draft{{/if}} · {{#if (eq craftingMode "project")}}{{project.requiredWork}} work{{else}}{{craftingTime}} sec{{/if}}</small></span>
       </button>
       {{else}}
       <div class="cc-empty-sidebar"><i class="fa-solid fa-scroll"></i><span>No Recipe Builder drafts.</span></div>
@@ -46,20 +46,25 @@
       {{/if}}
 
       <section class="cc-form-card">
-        <h3>Recipe</h3>
+        <div class="cc-card-heading"><div><span class="cc-kicker">Recipe</span><h3>Identity & Crafting Mode</h3></div><small>Choose the simple legacy timer or a persistent work-period Project.</small></div>
         <div class="cc-grid two">
           <label><span>Name</span><input type="text" name="name" value="{{draft.name}}"></label>
-          <label><span>Crafting Time (seconds)</span><input type="number" min="0" step="1" name="craftingTime" value="{{draft.craftingTime}}"></label>
+          <label><span>Crafting Mode</span><select name="craftingMode" data-resolution-rerender>
+            <option value="timed" {{#if (eq draft.craftingMode "timed")}}selected{{/if}}>Timed / Seconds</option>
+            <option value="project" {{#if (eq draft.craftingMode "project")}}selected{{/if}}>Crafting Project</option>
+          </select></label>
         </div>
+        {{#if (eq draft.craftingMode "timed")}}
+        <label><span>Crafting Time (seconds)</span><input type="number" min="0" step="1" name="craftingTime" value="{{draft.craftingTime}}"></label>
+        {{/if}}
         <label class="cc-file-field"><span>Recipe Image</span><span><input type="text" name="img" value="{{draft.img}}"><button type="button" data-action="browse-image" data-target="img"><i class="fa-solid fa-folder-open"></i></button></span></label>
         <label class="cc-description-field"><span>Additional Description (optional)</span><textarea name="description" rows="4" placeholder="Optional lore, instructions, flavor, or crafting notes for this recipe.">{{draft.description}}</textarea><small>This text can be revealed to players independently through Player Visibility.</small></label>
       </section>
 
       <section class="cc-form-card cc-crafting-resolution-card">
-        <div class="cc-card-heading"><div><span class="cc-kicker">Crafting Resolution</span><h3>Proficiency, Check & Failure Risk</h3></div><small>Optional rules layered on top of the existing recipe. Legacy recipes without these settings continue to craft automatically.</small></div>
-
+        <div class="cc-card-heading"><div><span class="cc-kicker">Proficiency & Access</span><h3>Who Can Craft</h3></div><small>All access and proficiency behavior stays together in this block.</small></div>
         <div class="cc-resolution-section">
-          <div class="cc-resolution-heading"><strong>Relevant Proficiency</strong><small>Choose a Skill, a Tool, or both. These determine access and/or automatic success according to the policies below.</small></div>
+          <div class="cc-resolution-heading"><strong>Relevant Proficiency</strong><small>Choose a Skill, a Tool, or both.</small></div>
           <div class="cc-grid two cc-resolution-proficiencies">
             <label><span>Proficiency 1</span><select name="proficiency1">
               <option value="" {{#if (eq craftingResolutionOptions.proficiency1 "")}}selected{{/if}}>None</option>
@@ -73,59 +78,104 @@
             </select></label>
           </div>
           <div class="cc-grid three cc-resolution-policy-grid">
-            <label><span>If two are selected</span><select name="proficiencyMatch">
-              <option value="any" {{#if (eq draft.craftingResolution.proficiencyMatch "any")}}selected{{/if}}>Any one qualifies</option>
-              <option value="all" {{#if (eq draft.craftingResolution.proficiencyMatch "all")}}selected{{/if}}>Both are required</option>
-            </select></label>
-            <label><span>Who can attempt</span><select name="attemptPolicy">
-              <option value="anyone" {{#if (eq draft.craftingResolution.attemptPolicy "anyone")}}selected{{/if}}>Anyone</option>
-              <option value="requiresProficiency" {{#if (eq draft.craftingResolution.attemptPolicy "requiresProficiency")}}selected{{/if}}>Requires relevant proficiency</option>
-            </select></label>
-            <label><span>If proficient</span><select name="proficientPolicy">
-              <option value="rollNormally" {{#if (eq draft.craftingResolution.proficientPolicy "rollNormally")}}selected{{/if}}>Roll normally</option>
-              <option value="automaticSuccess" {{#if (eq draft.craftingResolution.proficientPolicy "automaticSuccess")}}selected{{/if}}>Automatic success</option>
-            </select></label>
+            <label><span>If two are selected</span><select name="proficiencyMatch"><option value="any" {{#if (eq draft.craftingResolution.proficiencyMatch "any")}}selected{{/if}}>Any one qualifies</option><option value="all" {{#if (eq draft.craftingResolution.proficiencyMatch "all")}}selected{{/if}}>Both are required</option></select></label>
+            <label><span>Who can attempt</span><select name="attemptPolicy"><option value="anyone" {{#if (eq draft.craftingResolution.attemptPolicy "anyone")}}selected{{/if}}>Anyone</option><option value="requiresProficiency" {{#if (eq draft.craftingResolution.attemptPolicy "requiresProficiency")}}selected{{/if}}>Requires relevant proficiency</option></select></label>
+            <label><span>If proficient</span><select name="proficientPolicy"><option value="rollNormally" {{#if (eq draft.craftingResolution.proficientPolicy "rollNormally")}}selected{{/if}}>Roll normally</option><option value="automaticSuccess" {{#if (eq draft.craftingResolution.proficientPolicy "automaticSuccess")}}selected{{/if}}>Automatic final success</option></select></label>
           </div>
-        </div>
-
-        <div class="cc-resolution-section">
-          <div class="cc-resolution-heading"><strong>Crafting Check</strong><small>The selected native D&D5e roll is made by the crafting player. The active GM validates the roll and commits the transaction.</small></div>
-          <label class="cc-resolution-toggle"><input type="checkbox" name="requireCraftingCheck" data-resolution-rerender {{#if draft.craftingResolution.check.required}}checked{{/if}}><span><strong>Require a Crafting Check</strong><small>When disabled, an eligible crafter succeeds automatically.</small></span></label>
-          {{#if draft.craftingResolution.check.required}}
-          <div class="cc-grid two cc-resolution-check-grid">
-            <label><span>Check</span><select name="craftingCheck">
-              <optgroup label="Ability Checks">{{#each craftingResolutionOptions.abilityOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
-              <optgroup label="Skills">{{#each craftingResolutionOptions.skillOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
-              <optgroup label="Tools">{{#each craftingResolutionOptions.toolOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
-              <optgroup label="Saving Throws">{{#each craftingResolutionOptions.saveOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
-            </select></label>
-            <label><span>Difficulty Class (DC)</span><input type="number" min="1" max="40" step="1" name="craftingDC" value="{{draft.craftingResolution.check.dc}}"></label>
-          </div>
-
-          <div class="cc-resolution-failure">
-            <label class="cc-resolution-toggle"><input type="checkbox" name="loseMaterialsOnFailure" data-resolution-rerender {{#if draft.craftingResolution.failure.loseMaterials}}checked{{/if}}><span><strong>Lose materials on failure</strong><small>If the Crafting Check fails, consume the configured percentage of every required ingredient.</small></span></label>
-            {{#if draft.craftingResolution.failure.loseMaterials}}
-            <label class="cc-loss-slider"><span>Materials Lost on Failure <output data-failure-loss-output>{{draft.craftingResolution.failure.lossPercent}}%</output></span><input type="range" min="0" max="100" step="5" name="failureLossPercent" value="{{draft.craftingResolution.failure.lossPercent}}"></label>
-            {{/if}}
-          </div>
-          {{/if}}
         </div>
       </section>
 
+      {{#if (eq draft.craftingMode "project")}}
+      <section class="cc-form-card cc-project-config-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Crafting Time / Project</span><h3>Work Periods</h3></div><small>Starting the Project immediately performs the first Work Attempt. A compatible rest only unlocks the next attempt.</small></div>
+        <div class="cc-grid two">
+          <label><span>Required Work Periods</span><input type="number" min="1" max="99" step="1" name="requiredWork" value="{{draft.project.requiredWork}}"></label>
+          <label><span>Cadence</span><select name="projectCadence"><option value="long" {{#if (eq draft.project.cadence "long")}}selected{{/if}}>Long Rest</option><option value="short" {{#if (eq draft.project.cadence "short")}}selected{{/if}}>Short Rest (Short or Long Rest unlocks)</option></select></label>
+        </div>
+      </section>
+
+      <section class="cc-form-card cc-progress-check-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Progress Checks</span><h3>Checks During the Project</h3></div><small>Failure always consumes that Work Attempt. Consequences decide whether the project merely stalls, regresses, or fails completely.</small></div>
+        <label class="cc-resolution-toggle"><input type="checkbox" name="requireProgressCheck" data-resolution-rerender {{#if draft.project.progressCheck.required}}checked{{/if}}><span><strong>Require Progress Checks</strong><small>When disabled, each Work Attempt automatically adds +1 progress.</small></span></label>
+        {{#if draft.project.progressCheck.required}}
+        <div class="cc-grid three">
+          <label><span>When</span><select name="progressCheckTiming"><option value="every" {{#if (eq draft.project.progressCheck.timing "every")}}selected{{/if}}>Every Work Period</option><option value="midpoint" {{#if (eq draft.project.progressCheck.timing "midpoint")}}selected{{/if}}>Midpoint Only</option></select></label>
+          <label><span>Check</span><select name="progressCheck">
+            <optgroup label="Ability Checks">{{#each craftingResolutionOptions.abilityOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.progressCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            <optgroup label="Skills">{{#each craftingResolutionOptions.skillOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.progressCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            <optgroup label="Tools">{{#each craftingResolutionOptions.toolOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.progressCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            <optgroup label="Saving Throws">{{#each craftingResolutionOptions.saveOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.progressCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+          </select></label>
+          <label><span>Difficulty Class (DC)</span><input type="number" min="1" max="40" step="1" name="progressDC" value="{{draft.project.progressCheck.dc}}"></label>
+        </div>
+        <div class="cc-resolution-section cc-failure-outcome-block">
+          <div class="cc-resolution-heading"><strong>On Progress Check Failure</strong><small>Choose one project outcome. Material loss only exists when the entire Project fails.</small></div>
+          <div class="cc-failure-choice-grid">
+            <label class="cc-choice-card"><input type="radio" name="progressFailureMode" value="noProgress" data-resolution-rerender {{#if (eq draft.project.progressCheck.failure.mode "noProgress")}}checked{{/if}}><span><strong>No Progress</strong><small>Do not gain +1. Project stays where it is.</small></span></label>
+            <label class="cc-choice-card"><input type="radio" name="progressFailureMode" value="regress" data-resolution-rerender {{#if (eq draft.project.progressCheck.failure.mode "regress")}}checked{{/if}}><span><strong>Regress Progress</strong><small>Do not gain +1 and move backward.</small></span></label>
+            <label class="cc-choice-card"><input type="radio" name="progressFailureMode" value="failProject" data-resolution-rerender {{#if (eq draft.project.progressCheck.failure.mode "failProject")}}checked{{/if}}><span><strong>Fail Project</strong><small>End this Project and require a complete restart.</small></span></label>
+          </div>
+          {{#if (eq draft.project.progressCheck.failure.mode "regress")}}<label><span>Progress Lost</span><input type="number" min="1" max="99" step="1" name="progressRegressBy" value="{{draft.project.progressCheck.failure.regressBy}}"></label>{{/if}}
+          {{#if (eq draft.project.progressCheck.failure.mode "failProject")}}
+            <label class="cc-resolution-toggle"><input type="checkbox" name="progressFailLoseMaterials" data-resolution-rerender {{#if draft.project.progressCheck.failure.loseMaterials}}checked{{/if}}><span><strong>Lose materials when the Project fails</strong><small>Unchecked: all reserved materials return to the Actor.</small></span></label>
+            {{#if draft.project.progressCheck.failure.loseMaterials}}<label class="cc-loss-slider"><span>Materials Lost <output data-progress-failure-loss-output>{{draft.project.progressCheck.failure.lossPercent}}%</output></span><input type="range" min="0" max="100" step="5" name="progressFailLossPercent" value="{{draft.project.progressCheck.failure.lossPercent}}"></label>{{/if}}
+          {{/if}}
+        </div>
+        {{/if}}
+      </section>
+      {{/if}}
+
+      <section class="cc-form-card cc-final-check-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Final Crafting Check</span><h3>Final Validation</h3></div><small>This is the v0.0.18 Crafting Check flow. Project Recipes gain configurable retry/regression/failure behavior around the same native D&D5e roll.</small></div>
+        <label class="cc-resolution-toggle"><input type="checkbox" name="requireCraftingCheck" data-resolution-rerender {{#if draft.craftingResolution.check.required}}checked{{/if}}><span><strong>Require a Final Crafting Check</strong><small>When disabled, an eligible crafter completes automatically after the required work.</small></span></label>
+        {{#if draft.craftingResolution.check.required}}
+        <div class="cc-grid two cc-resolution-check-grid">
+          <label><span>Check</span><select name="craftingCheck"><optgroup label="Ability Checks">{{#each craftingResolutionOptions.abilityOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup><optgroup label="Skills">{{#each craftingResolutionOptions.skillOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup><optgroup label="Tools">{{#each craftingResolutionOptions.toolOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup><optgroup label="Saving Throws">{{#each craftingResolutionOptions.saveOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup></select></label>
+          <label><span>Difficulty Class (DC)</span><input type="number" min="1" max="40" step="1" name="craftingDC" value="{{draft.craftingResolution.check.dc}}"></label>
+        </div>
+        {{#if (eq draft.craftingMode "project")}}
+        <div class="cc-resolution-section cc-failure-outcome-block">
+          <div class="cc-resolution-heading"><strong>On Final Check Failure</strong><small>The failed attempt is spent. Choose whether the Project stays ready, regresses, or fails completely.</small></div>
+          <div class="cc-failure-choice-grid">
+            <label class="cc-choice-card"><input type="radio" name="finalFailureMode" value="noProgress" data-resolution-rerender {{#if (eq draft.craftingResolution.failure.mode "noProgress")}}checked{{/if}}><span><strong>Stay Ready</strong><small>No progress is lost. Another compatible rest unlocks the next Final Check attempt.</small></span></label>
+            <label class="cc-choice-card"><input type="radio" name="finalFailureMode" value="regress" data-resolution-rerender {{#if (eq draft.craftingResolution.failure.mode "regress")}}checked{{/if}}><span><strong>Regress Project</strong><small>Move backward by a configured number of Work Periods.</small></span></label>
+            <label class="cc-choice-card"><input type="radio" name="finalFailureMode" value="failProject" data-resolution-rerender {{#if (eq draft.craftingResolution.failure.mode "failProject")}}checked{{/if}}><span><strong>Fail Project</strong><small>End the Project and require a complete restart.</small></span></label>
+          </div>
+          {{#if (eq draft.craftingResolution.failure.mode "regress")}}<label><span>Progress Lost</span><input type="number" min="1" max="99" step="1" name="finalRegressBy" value="{{draft.craftingResolution.failure.regressBy}}"></label>{{/if}}
+          {{#if (eq draft.craftingResolution.failure.mode "failProject")}}
+            <label class="cc-resolution-toggle"><input type="checkbox" name="loseMaterialsOnFailure" data-resolution-rerender {{#if draft.craftingResolution.failure.loseMaterials}}checked{{/if}}><span><strong>Lose materials when the Project fails</strong><small>Unchecked: all reserved materials return.</small></span></label>
+            {{#if draft.craftingResolution.failure.loseMaterials}}<label class="cc-loss-slider"><span>Materials Lost on Project Failure <output data-failure-loss-output>{{draft.craftingResolution.failure.lossPercent}}%</output></span><input type="range" min="0" max="100" step="5" name="failureLossPercent" value="{{draft.craftingResolution.failure.lossPercent}}"></label>{{/if}}
+          {{/if}}
+        </div>
+        {{else}}
+        <div class="cc-resolution-failure">
+          <label class="cc-resolution-toggle"><input type="checkbox" name="loseMaterialsOnFailure" data-resolution-rerender {{#if draft.craftingResolution.failure.loseMaterials}}checked{{/if}}><span><strong>Lose materials on failure</strong><small>Legacy timed crafting ends immediately on a failed Final Check.</small></span></label>
+          {{#if draft.craftingResolution.failure.loseMaterials}}<label class="cc-loss-slider"><span>Materials Lost on Failure <output data-failure-loss-output>{{draft.craftingResolution.failure.lossPercent}}%</output></span><input type="range" min="0" max="100" step="5" name="failureLossPercent" value="{{draft.craftingResolution.failure.lossPercent}}"></label>{{/if}}
+        </div>
+        {{/if}}
+        {{/if}}
+      </section>
+
       <section class="cc-form-card cc-player-visibility-card">
-        <div class="cc-card-heading"><div><span class="cc-kicker">Player Visibility</span><h3>What the Player Can See</h3></div><small>Hidden information remains stored and enforced by Crafting Core. These controls affect the Character Crafting tab and published Knowledge Source.</small></div>
+        <div class="cc-card-heading"><div><span class="cc-kicker">Player Visibility</span><h3>What the Player Can See</h3></div><small>Hidden information remains stored and enforced. The Character Crafting tab and published Knowledge Source use the same visibility rules.</small></div>
         <div class="cc-visibility-grid">
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.output" {{#if draft.playerVisibility.output}}checked{{/if}}><span><strong>Output</strong><small>Reveal the crafted Item.</small></span></label>
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.ingredients" {{#if draft.playerVisibility.ingredients}}checked{{/if}}><span><strong>Ingredients</strong><small>Reveal required Item names.</small></span></label>
-          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.ingredientQuantities" {{#if draft.playerVisibility.ingredientQuantities}}checked{{/if}}><span><strong>Ingredient Quantities</strong><small>Reveal required and available amounts when ingredients are visible.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.ingredientQuantities" {{#if draft.playerVisibility.ingredientQuantities}}checked{{/if}}><span><strong>Ingredient Quantities</strong><small>Reveal required and available amounts.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftCount" {{#if draft.playerVisibility.craftCount}}checked{{/if}}><span><strong>Craftable Count</strong><small>Reveal the N× counter beside known Recipes.</small></span></label>
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.proficiencies" {{#if draft.playerVisibility.proficiencies}}checked{{/if}}><span><strong>Relevant Proficiencies</strong><small>Reveal Skill/Tool requirements.</small></span></label>
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.attemptPolicy" {{#if draft.playerVisibility.attemptPolicy}}checked{{/if}}><span><strong>Who Can Attempt</strong><small>Reveal whether proficiency is required.</small></span></label>
-          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingCheck" {{#if draft.playerVisibility.craftingCheck}}checked{{/if}}><span><strong>Crafting Check</strong><small>Reveal the configured roll type.</small></span></label>
-          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingDC" {{#if draft.playerVisibility.craftingDC}}checked{{/if}}><span><strong>Crafting DC</strong><small>Reveal the target DC with the check.</small></span></label>
-          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.failure" {{#if draft.playerVisibility.failure}}checked{{/if}}><span><strong>Failure Consequence</strong><small>Reveal whether materials can be lost.</small></span></label>
-          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.failurePercent" {{#if draft.playerVisibility.failurePercent}}checked{{/if}}><span><strong>Failure Percentage</strong><small>Reveal the exact material-loss percentage.</small></span></label>
-          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingTime" {{#if draft.playerVisibility.craftingTime}}checked{{/if}}><span><strong>Crafting Time</strong><small>Reveal the current crafting duration.</small></span></label>
-          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.description" {{#if draft.playerVisibility.description}}checked{{/if}}><span><strong>Additional Description</strong><small>Reveal the optional GM-written description.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingTime" {{#if draft.playerVisibility.craftingTime}}checked{{/if}}><span><strong>Crafting Time / Cadence</strong><small>Reveal seconds or required Work Periods and cadence.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.projectProgress" {{#if draft.playerVisibility.projectProgress}}checked{{/if}}><span><strong>Current Project Progress</strong><small>Reveal exact current / total Work Periods.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.progressCheck" {{#if draft.playerVisibility.progressCheck}}checked{{/if}}><span><strong>Progress Check</strong><small>Reveal the intermediate check and timing.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.progressDC" {{#if draft.playerVisibility.progressDC}}checked{{/if}}><span><strong>Progress DC</strong><small>Reveal its exact DC.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.progressFailure" {{#if draft.playerVisibility.progressFailure}}checked{{/if}}><span><strong>Progress Failure</strong><small>Reveal stall/regression/project-failure consequences.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.progressFailurePercent" {{#if draft.playerVisibility.progressFailurePercent}}checked{{/if}}><span><strong>Progress Material Loss %</strong><small>Reveal the exact loss percentage when a Progress Check can fail the Project.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingCheck" {{#if draft.playerVisibility.craftingCheck}}checked{{/if}}><span><strong>Final Crafting Check</strong><small>Reveal the final roll type.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingDC" {{#if draft.playerVisibility.craftingDC}}checked{{/if}}><span><strong>Final Crafting DC</strong><small>Reveal its target DC.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.failure" {{#if draft.playerVisibility.failure}}checked{{/if}}><span><strong>Final Failure Consequence</strong><small>Reveal what a failed final attempt does.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.failurePercent" {{#if draft.playerVisibility.failurePercent}}checked{{/if}}><span><strong>Final Material Loss %</strong><small>Reveal the exact percentage when Final Check Project failure can destroy materials.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.description" {{#if draft.playerVisibility.description}}checked{{/if}}><span><strong>Additional Description</strong><small>Reveal the optional GM-written text.</small></span></label>
         </div>
       </section>
 

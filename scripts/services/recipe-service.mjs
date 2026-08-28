@@ -74,7 +74,9 @@ export class RecipeService {
       name: String(recipe.name || "New Recipe").trim() || "New Recipe",
       img: String(recipe.img || recipe.result?.img || "icons/svg/item-bag.svg"),
       description: String(recipe.description || ""),
+      craftingMode: recipe.craftingMode === "project" ? "project" : "timed",
       craftingTime: Math.max(0, Math.floor(Number(recipe.craftingTime) || 0)),
+      project: this.normalizeProject(recipe.project),
       craftingResolution,
       learning: { access: learningAccess },
       playerVisibility: this.normalizePlayerVisibility(recipe.playerVisibility),
@@ -138,6 +140,9 @@ export class RecipeService {
     const check = source.check && typeof source.check === "object" ? source.check : {};
     const checkType = ["ability", "skill", "tool", "save"].includes(String(check.type)) ? String(check.type) : "skill";
     const failure = source.failure && typeof source.failure === "object" ? source.failure : {};
+    const failureMode = ["noProgress", "regress", "failProject"].includes(String(failure.mode))
+      ? String(failure.mode)
+      : "failProject";
 
     return {
       proficiencies: normalizedProficiencies,
@@ -151,8 +156,41 @@ export class RecipeService {
         dc: Math.clamp(Math.floor(Number(check.dc) || 10), 1, 40)
       },
       failure: {
-        loseMaterials: Boolean(check.required && failure.loseMaterials),
+        mode: failureMode,
+        regressBy: Math.max(1, Math.floor(Number(failure.regressBy) || 1)),
+        // Material loss is only meaningful when the entire attempt/project fails.
+        // Legacy timed Recipes default to failProject, so their v0.0.18 behavior is preserved.
+        loseMaterials: Boolean(check.required && failureMode === "failProject" && failure.loseMaterials),
         lossPercent: Math.clamp(Math.round(Number(failure.lossPercent) || 0), 0, 100)
+      }
+    };
+  }
+
+  static normalizeProject(value={}) {
+    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const progressCheck = source.progressCheck && typeof source.progressCheck === "object" ? source.progressCheck : {};
+    const checkType = ["ability", "skill", "tool", "save"].includes(String(progressCheck.type))
+      ? String(progressCheck.type)
+      : "tool";
+    const failure = progressCheck.failure && typeof progressCheck.failure === "object" ? progressCheck.failure : {};
+    const failureMode = ["noProgress", "regress", "failProject"].includes(String(failure.mode))
+      ? String(failure.mode)
+      : "noProgress";
+    return {
+      requiredWork: Math.clamp(Math.floor(Number(source.requiredWork) || 1), 1, 99),
+      cadence: source.cadence === "short" ? "short" : "long",
+      progressCheck: {
+        required: Boolean(progressCheck.required),
+        timing: progressCheck.timing === "midpoint" ? "midpoint" : "every",
+        type: checkType,
+        id: String(progressCheck.id || (checkType === "save" ? "con" : checkType === "ability" ? "int" : checkType === "skill" ? "arc" : "smith")),
+        dc: Math.clamp(Math.floor(Number(progressCheck.dc) || 10), 1, 40),
+        failure: {
+          mode: failureMode,
+          regressBy: Math.max(1, Math.floor(Number(failure.regressBy) || 1)),
+          loseMaterials: Boolean(failureMode === "failProject" && failure.loseMaterials),
+          lossPercent: Math.clamp(Math.round(Number(failure.lossPercent) || 0), 0, 100)
+        }
       }
     };
   }
@@ -164,6 +202,7 @@ export class RecipeService {
       output: visibleByDefault("output"),
       ingredients: visibleByDefault("ingredients"),
       ingredientQuantities: visibleByDefault("ingredientQuantities"),
+      craftCount: visibleByDefault("craftCount"),
       proficiencies: visibleByDefault("proficiencies"),
       attemptPolicy: visibleByDefault("attemptPolicy"),
       craftingCheck: visibleByDefault("craftingCheck"),
@@ -171,6 +210,11 @@ export class RecipeService {
       failure: visibleByDefault("failure"),
       failurePercent: visibleByDefault("failurePercent"),
       craftingTime: visibleByDefault("craftingTime"),
+      projectProgress: visibleByDefault("projectProgress"),
+      progressCheck: visibleByDefault("progressCheck"),
+      progressDC: visibleByDefault("progressDC"),
+      progressFailure: visibleByDefault("progressFailure"),
+      progressFailurePercent: visibleByDefault("progressFailurePercent"),
       description: visibleByDefault("description")
     };
   }

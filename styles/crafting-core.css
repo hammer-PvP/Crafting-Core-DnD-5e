@@ -1002,3 +1002,74 @@
   .cc-visibility-grid { grid-template-columns: 1fr; }
   .cc-learning-access { grid-template-columns: 1fr; align-items: stretch; }
 }
+
+/* v0.0.19 — Character Crafting profession workspace */
+.crafting-core-tab { min-height: 0; height: 100%; }
+.crafting-core-tab .cc-profession-layout {
+  min-height: 420px;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(190px, 31%) minmax(0, 1fr);
+  border: 1px solid rgba(181,155,97,.28);
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(0,0,0,.12);
+}
+.cc-profession-recipes { min-width: 0; display: flex; flex-direction: column; background: rgba(62,42,78,.20); border-right: 1px solid rgba(181,155,97,.22); }
+.cc-profession-title { display: grid; grid-template-columns: 34px minmax(0,1fr); gap: 8px; align-items: center; padding: 11px 12px; border-bottom: 1px solid rgba(181,155,97,.20); }
+.cc-profession-title > i { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: rgba(181,155,97,.12); color: var(--dnd5e-color-gold, #b59b61); }
+.cc-profession-title strong, .cc-profession-title small { display: block; }
+.cc-profession-title small { opacity: .58; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; }
+.cc-profession-recipe-list { min-height: 0; overflow-y: auto; padding: 5px; display: grid; align-content: start; gap: 3px; }
+.cc-profession-recipe { width: 100%; min-width: 0; display: grid; grid-template-columns: 34px minmax(0,1fr) auto; gap: 7px; align-items: center; padding: 5px 7px; text-align: left; border: 1px solid transparent; border-radius: 4px; background: rgba(255,255,255,.018); color: inherit; }
+.cc-profession-recipe:hover { background: rgba(255,255,255,.05); }
+.cc-profession-recipe.selected { border-color: rgba(181,155,97,.48); background: rgba(74,107,128,.20); box-shadow: inset 3px 0 rgba(181,155,97,.55); }
+.cc-profession-recipe.active-project { border-color: rgba(91,158,98,.46); }
+.cc-profession-recipe img { width: 32px; height: 32px; border-radius: 3px; object-fit: cover; }
+.cc-profession-recipe-name { min-width: 0; }
+.cc-profession-recipe-name strong, .cc-profession-recipe-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-profession-recipe-name strong { font-size: 10px; }
+.cc-profession-recipe-name small { opacity: .55; font-size: 8px; margin-top: 1px; }
+.cc-profession-count { min-width: 28px; padding: 2px 4px; border-radius: 3px; text-align: center; font-weight: 800; font-size: 9px; color: #cbdccf; background: rgba(54,91,60,.35); }
+.cc-profession-detail { min-width: 0; min-height: 0; overflow-y: auto; padding: 12px; background: rgba(35,58,70,.12); }
+.cc-profession-detail-header { display: grid; grid-template-columns: 58px minmax(0,1fr); gap: 10px; align-items: center; padding-bottom: 10px; border-bottom: 1px solid rgba(181,155,97,.20); }
+.cc-profession-detail-header img { width: 56px; height: 56px; object-fit: cover; border-radius: 4px; border: 1px solid rgba(181,155,97,.35); }
+.cc-profession-detail-header h2 { margin: 1px 0 0; font-family: var(--dnd5e-font-roboto-slab, serif); font-size: 19px; }
+.cc-active-project-label { display: inline-flex; gap: 4px; align-items: center; margin-top: 3px; color: #8ac394; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+.cc-profession-block { margin-top: 9px; padding: 9px 10px; border: 1px solid rgba(255,255,255,.065); border-radius: 4px; background: rgba(0,0,0,.10); }
+.cc-profession-block > h3 { margin: 0 0 7px; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--dnd5e-color-gold, #b59b61); }
+.cc-profession-block-heading { display: flex; gap: 12px; justify-content: space-between; align-items: center; }
+.cc-profession-block-heading h3 { margin: 0; font-size: 13px; }
+.cc-profession-block-heading > strong { font-size: 11px; }
+.cc-project-status-block { border-color: rgba(91,158,98,.34); background: rgba(35,76,48,.10); }
+.cc-project-progress-track { height: 10px; margin: 8px 0 6px; overflow: hidden; border-radius: 999px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.08); }
+.cc-project-progress-track > span { display: block; height: 100%; background: linear-gradient(90deg, rgba(52,104,62,.95), rgba(94,153,105,.95)); transition: width .2s ease; }
+.cc-inline-fact { display: flex; justify-content: space-between; gap: 10px; font-size: 9px; }
+.cc-inline-fact span { opacity: .58; }
+.cc-project-actions { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 7px; margin-top: 10px; }
+.cc-project-actions .cc-sheet-craft, .cc-profession-detail > .cc-sheet-craft { width: 100%; margin: 10px 0 0; }
+.cc-project-actions .cc-sheet-craft { margin: 0; }
+.cc-project-cancel { min-height: 38px; padding: 0 12px; border: 1px solid rgba(177,78,78,.45); background: rgba(83,37,37,.55); color: #f0d8d8; font-weight: 700; }
+.cc-project-lock-note { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 7px; align-items: start; margin-top: 9px; padding: 8px 9px; border: 1px solid rgba(181,155,97,.22); border-radius: 4px; background: rgba(80,63,34,.12); font-size: 9px; }
+.cc-project-lock-note > i { color: var(--dnd5e-color-gold, #b59b61); margin-top: 1px; }
+.cc-reserved-materials .cc-sheet-ingredient > i { color: #b59b61; }
+.cc-active-timed-banner { margin-bottom: 9px; padding: 8px 10px; border: 1px solid rgba(181,155,97,.28); border-radius: 4px; background: rgba(70,50,85,.18); font-size: 9px; }
+.cc-active-timed-banner .cc-progress-track { margin-top: 6px; }
+
+/* v0.0.19 — compact themed configuration blocks */
+.cc-failure-choice-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; }
+.cc-choice-card { display: grid !important; grid-template-columns: auto minmax(0,1fr); gap: 7px; align-items: start; padding: 7px 8px; border: 1px solid rgba(255,255,255,.07); border-radius: 4px; background: rgba(255,255,255,.018); cursor: pointer; }
+.cc-choice-card:has(input:checked) { border-color: rgba(181,155,97,.52); background: rgba(181,155,97,.075); }
+.cc-choice-card input { margin: 2px 0 0; }
+.cc-choice-card strong, .cc-choice-card small { display: block; }
+.cc-choice-card small { margin-top: 2px; opacity: .56; font-size: 9px; line-height: 1.25; }
+.cc-project-config-card { border-left: 3px solid rgba(91,158,98,.52); }
+.cc-progress-check-card { border-left: 3px solid rgba(74,126,156,.52); }
+.cc-final-check-card { border-left: 3px solid rgba(181,155,97,.52); }
+.cc-failure-outcome-block { padding-top: 8px; }
+
+@media (max-width: 700px) {
+  .crafting-core-tab .cc-profession-layout { grid-template-columns: minmax(150px, 38%) minmax(0,1fr); }
+  .cc-failure-choice-grid { grid-template-columns: 1fr; }
+  .cc-project-actions { grid-template-columns: 1fr; }
+}

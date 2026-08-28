@@ -27,7 +27,8 @@ The Recipe Builder is a GM-only workbench. Drafts are temporary authoring record
 - name/image;
 - 1..N Item requirements and quantities;
 - one complete result Item snapshot and output quantity;
-- real-time crafting duration in seconds;
+- crafting mode: real-time seconds or rest-gated Project Work Periods;
+- optional Progress Check and Final Crafting Check policies, including Project regression/failure consequences;
 - Knowledge Source presentation type: Recipe / Formula / Blueprint / Manual.
 
 Any D&D5e Item can be an input or output. There is no exclusive Ingredient Item or Product Item type.
@@ -71,21 +72,34 @@ v0.0.3 migrates legacy recipe-ID-only knowledge from v0.0.1/v0.0.2 into this sel
 
 Players do not receive a standalone Crafting Core administration application.
 
-The module adds a `Crafting` tab to the official D&D5e Character Sheet after `Effects`. It reads the recipe snapshots stored on that Actor, checks live Item quantities and shows `N×` crafts possible in the Recipe dropdown.
+The module adds a `Crafting` tab to the official D&D5e Character Sheet after `Effects`. It reads the recipe snapshots stored on that Actor, checks live Item quantities and shows `N×` crafts possible in the left Recipe list. The right-hand profession workspace presents the selected Recipe or active Project.
 
-Recipes with zero possible crafts remain selectable so the player can inspect missing materials.
+Recipes with zero possible crafts remain selectable so the player can inspect missing materials. While one Project is active, other Recipes remain inspectable for planning but cannot be started.
 
 ## Crafting transaction
 
 The active GM is authoritative.
 
+### Timed Recipes
+
 1. Player requests a craft from the Character Sheet.
-2. Active GM validates ownership, learned recipe and current inventory.
+2. Active GM validates ownership, learned recipe, configured final check and current inventory.
 3. Requirements are consumed at job start.
 4. Crafting progress is based on synchronized server time.
 5. At completion, the frozen output snapshot is embedded into the Character inventory.
 
-This means closing/reopening the sheet does not reset crafting time.
+Closing/reopening the sheet does not reset timed crafting.
+
+### Crafting Projects
+
+1. Player requests **Start Project**. The active GM validates the learned Recipe, proficiency access and required inventory.
+2. Required materials are removed from normal inventory and persisted as reserved material snapshots inside one active Actor Project.
+3. Starting immediately performs the first Work Attempt. Optional Progress Checks can stall, regress, or fail the Project according to the frozen Recipe policy.
+4. A compatible D&D5e rest only unlocks the next Work Attempt; it never increments progress by itself.
+5. Reaching the required Work Periods either completes automatically or enters the Final Crafting Check flow.
+6. Success creates the frozen output snapshot. Project failure returns reserved materials minus any explicitly configured failure loss. Cancellation returns all still-reserved materials.
+
+The Project stores a complete Recipe snapshot, so later Builder edits do not rewrite an active Project.
 
 ## Private Compendium libraries
 

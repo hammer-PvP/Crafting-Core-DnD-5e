@@ -1,16 +1,20 @@
 # Crafting Core (DnD 5e)
 
-## v0.0.18a — Crafting Resolution polish
+## v0.0.19 — Crafting Projects & Rest Progress
 
-v0.0.18a keeps the v0.0.18 Crafting Resolution scope and deliberately does **not** introduce the rest-based Crafting Projects reserved for v0.0.19. The validated v0.0.17 Harvest pipeline remains unchanged.
+v0.0.19 adds persistent, rest-gated Crafting Projects while retaining the existing seconds-based Timed crafting path and the live-validated v0.0.18a resolution/visibility behavior. The Harvest, Scanner, Essence, Item Piles and gear-normalization pipeline remains unchanged.
 
-Recipes may define one or two relevant native D&D5e Skill/Tool proficiencies, Any/All matching, Anyone/Requires Proficiency access, and Roll Normally/Automatic Success behavior. An optional native Ability Check, Skill Check, Tool Check, or Saving Throw can use a GM-configured DC, with configurable 0–100% material loss on failure. A failed Crafting Check never creates the output.
+A Project is measured in **Work Periods**. Starting a Project is already the first Work Attempt; later compatible rests only unlock one new opportunity to work, which the player can spend at any appropriate point afterward. Long-Rest Projects require a Long Rest for the next opportunity, while Short-Rest Projects can be unlocked by either Short or Long Rest. One Character can have one active Project at a time, but other known Recipes remain browsable for planning.
 
-The GM now also controls **Player Visibility** for output, ingredients, ingredient quantities, proficiencies, attempt rules, Crafting Check, DC, failure consequences, exact loss percentage, crafting time, and optional descriptive text. Published Recipe/Formula/Blueprint/Manual Items automatically build their visible Description from the Recipe snapshot. Skill and Tool IDs are never intentionally presented as raw internal keys; standard tool references resolve to their D&D5e Item names such as **Smith's Tools**.
+Project ingredients are reserved from the Actor at Start and stored with a frozen Recipe snapshot. Cancelling returns the reserved materials. Optional native D&D5e **Progress Checks** can run Every Work Period or at the midpoint. A failed Progress Check either stalls, regresses a configurable number of Work Periods, or fails the Project. Materials can only be lost when the Project itself fails, with a GM-configured percentage; otherwise they return.
 
-Knowledge Sources can use **Follow Crafting Eligibility** or **Anyone Can Learn**. When eligibility is required, Crafting Core validates the Character before the Knowledge Activity is used; an ineligible attempt does not consume the source. The scoped D&D5e usage button reads **Learn** for Crafting Core Knowledge Activities.
+The existing v0.0.18 **Final Crafting Check** remains a separate final validation. In Project mode, failure can stay ready for a later attempt, regress the Project, or fail it with optional material loss. A retry that stays ready requires another compatible rest. Relevant-proficiency Automatic Success still applies to the Final Crafting Check, while Progress Checks remain independent.
 
-The Recipe Builder also preserves its scroll position when Ingredients/Output are dropped, and the Recipe sidebar selection layout is tightened to match the selected row. Existing Recipes remain backward compatible. Existing seconds-based Crafting Time is unchanged; rest-based Crafting Projects are still the next development step.
+The Character Crafting tab now uses a profession-style two-column workspace: known Recipes on the left and a selected Recipe/active Project panel on the right. The live **`N×` craftable count** is restored beside each known Recipe. The player can inspect another Recipe during an active Project, but cannot start it until the current Project completes or is cancelled. Project details, checks, DCs, consequences, materials, output, cadence and progress continue to obey the GM's Player Visibility settings.
+
+Knowledge Source publication is also idempotent in this release. Republishing or renaming the same stable Recipe updates the existing managed Compendium Item when possible and reconciles its Activities to exactly one canonical **Learn Recipe**, repairing previously accumulated duplicates.
+
+**Extra Effort is deliberately not part of v0.0.19.** The voluntary acceleration minigame remains the scoped target for v0.0.20.
 
 ## v0.0.17 — Immersive Corpse Loot hotfix
 

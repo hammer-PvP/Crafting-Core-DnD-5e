@@ -57,6 +57,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     }));
     const proficiencyValues = (this.draft?.craftingResolution?.proficiencies ?? []).map(row => `${row.type}:${row.id}`);
     const checkValue = `${this.draft?.craftingResolution?.check?.type ?? "skill"}:${this.draft?.craftingResolution?.check?.id ?? ""}`;
+    const progressCheckValue = `${this.draft?.project?.progressCheck?.type ?? "tool"}:${this.draft?.project?.progressCheck?.id ?? ""}`;
     return {
       recipeCount: recipes.length,
       recipes: recipes.map(recipe => ({
@@ -76,7 +77,8 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
         skillOptions, toolOptions, abilityOptions, saveOptions,
         proficiency1: proficiencyValues[0] ?? "",
         proficiency2: proficiencyValues[1] ?? "",
-        checkValue
+        checkValue,
+        progressCheckValue
       }
     };
   }
@@ -140,6 +142,9 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const lossSlider = root.querySelector('[name="failureLossPercent"]');
     const lossOutput = root.querySelector('[data-failure-loss-output]');
     if (lossSlider && lossOutput) lossSlider.addEventListener("input", () => { lossOutput.textContent = `${lossSlider.value}%`; });
+    const progressLossSlider = root.querySelector('[name="progressFailLossPercent"]');
+    const progressLossOutput = root.querySelector('[data-progress-failure-loss-output]');
+    if (progressLossSlider && progressLossOutput) progressLossSlider.addEventListener("input", () => { progressLossOutput.textContent = `${progressLossSlider.value}%`; });
 
     if (this.pendingContentScroll !== null) {
       const scrollTop = this.pendingContentScroll;
@@ -162,19 +167,29 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       id: foundry.utils.randomID(20),
       name: "New Recipe",
       description: "",
+      craftingMode: "timed",
       craftingTime: 10,
+      project: {
+        requiredWork: 2,
+        cadence: "long",
+        progressCheck: {
+          required: false, timing: "every", type: "tool", id: "smith", dc: 12,
+          failure: { mode: "noProgress", regressBy: 1, loseMaterials: false, lossPercent: 50 }
+        }
+      },
       craftingResolution: {
         proficiencies: [],
         proficiencyMatch: "any",
         attemptPolicy: "anyone",
         proficientPolicy: "rollNormally",
         check: { required: false, type: "skill", id: "arc", dc: 15 },
-        failure: { loseMaterials: false, lossPercent: 50 }
+        failure: { mode: "failProject", regressBy: 1, loseMaterials: false, lossPercent: 50 }
       },
       learning: { access: "followCraftingEligibility" },
       playerVisibility: {
-        output: true, ingredients: true, ingredientQuantities: true, proficiencies: true, attemptPolicy: true,
-        craftingCheck: true, craftingDC: true, failure: true, failurePercent: true, craftingTime: true, description: true
+        output: true, ingredients: true, ingredientQuantities: true, craftCount: true, proficiencies: true, attemptPolicy: true,
+        craftingCheck: true, craftingDC: true, failure: true, failurePercent: true, craftingTime: true,
+        projectProgress: true, progressCheck: true, progressDC: true, progressFailure: true, progressFailurePercent: true, description: true
       },
       ingredients: [],
       result: null,
@@ -195,7 +210,38 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this.draft.name = root.querySelector('[name="name"]')?.value ?? this.draft.name;
     this.draft.img = root.querySelector('[name="img"]')?.value ?? this.draft.img;
     this.draft.description = root.querySelector('[name="description"]')?.value ?? this.draft.description ?? "";
-    this.draft.craftingTime = Math.max(0, Math.floor(Number(root.querySelector('[name="craftingTime"]')?.value) || 0));
+    this.draft.craftingMode = root.querySelector('[name="craftingMode"]')?.value === "project" ? "project" : "timed";
+    const craftingTimeInput = root.querySelector('[name="craftingTime"]');
+    if (craftingTimeInput) this.draft.craftingTime = Math.max(0, Math.floor(Number(craftingTimeInput.value) || 0));
+    const project = foundry.utils.deepClone(this.draft.project ?? {});
+    const requiredWorkInput = root.querySelector('[name="requiredWork"]');
+    const cadenceInput = root.querySelector('[name="projectCadence"]');
+    if (requiredWorkInput) project.requiredWork = Math.clamp(Math.floor(Number(requiredWorkInput.value) || 1), 1, 99);
+    if (cadenceInput) project.cadence = cadenceInput.value === "short" ? "short" : "long";
+    project.progressCheck ??= {};
+    const requireProgressInput = root.querySelector('[name="requireProgressCheck"]');
+    if (requireProgressInput) project.progressCheck.required = Boolean(requireProgressInput.checked);
+    const progressTimingInput = root.querySelector('[name="progressCheckTiming"]');
+    if (progressTimingInput) project.progressCheck.timing = progressTimingInput.value === "midpoint" ? "midpoint" : "every";
+    const progressCheckInput = root.querySelector('[name="progressCheck"]');
+    if (progressCheckInput) {
+      const [progressCheckType, progressCheckId] = String(progressCheckInput.value || "tool:smith").split(":", 2);
+      project.progressCheck.type = progressCheckType;
+      project.progressCheck.id = progressCheckId;
+    }
+    const progressDCInput = root.querySelector('[name="progressDC"]');
+    if (progressDCInput) project.progressCheck.dc = Math.clamp(Math.floor(Number(progressDCInput.value) || 10), 1, 40);
+    project.progressCheck.failure ??= {};
+    const progressFailureMode = root.querySelector('[name="progressFailureMode"]:checked');
+    if (progressFailureMode) project.progressCheck.failure.mode = progressFailureMode.value;
+    const progressRegressInput = root.querySelector('[name="progressRegressBy"]');
+    if (progressRegressInput) project.progressCheck.failure.regressBy = Math.max(1, Math.floor(Number(progressRegressInput.value) || 1));
+    const progressLoseInput = root.querySelector('[name="progressFailLoseMaterials"]');
+    if (progressLoseInput) project.progressCheck.failure.loseMaterials = Boolean(progressLoseInput.checked);
+    else if (project.progressCheck.failure.mode !== "failProject") project.progressCheck.failure.loseMaterials = false;
+    const progressLossInput = root.querySelector('[name="progressFailLossPercent"]');
+    if (progressLossInput) project.progressCheck.failure.lossPercent = Math.clamp(Math.round(Number(progressLossInput.value) || 0), 0, 100);
+    this.draft.project = RecipeService.normalizeProject(project);
     const resolution = foundry.utils.deepClone(this.draft.craftingResolution ?? {});
     const parseProficiency = value => {
       const [type, id] = String(value || "").split(":", 2);
@@ -215,6 +261,8 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     resolution.check.id = checkId;
     resolution.check.dc = Math.clamp(Math.floor(Number(root.querySelector('[name="craftingDC"]')?.value) || 10), 1, 40);
     resolution.failure ??= {};
+    resolution.failure.mode = root.querySelector('[name="finalFailureMode"]:checked')?.value ?? resolution.failure.mode ?? "failProject";
+    resolution.failure.regressBy = Math.max(1, Math.floor(Number(root.querySelector('[name="finalRegressBy"]')?.value) || 1));
     resolution.failure.loseMaterials = Boolean(root.querySelector('[name="loseMaterialsOnFailure"]')?.checked);
     resolution.failure.lossPercent = Math.clamp(Math.round(Number(root.querySelector('[name="failureLossPercent"]')?.value) || 0), 0, 100);
     this.draft.craftingResolution = RecipeService.normalizeCraftingResolution(resolution);
@@ -224,8 +272,9 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const currentVisibility = RecipeService.normalizePlayerVisibility(this.draft.playerVisibility);
     const visibility = {};
     for (const key of [
-      "output", "ingredients", "ingredientQuantities", "proficiencies", "attemptPolicy", "craftingCheck",
-      "craftingDC", "failure", "failurePercent", "craftingTime", "description"
+      "output", "ingredients", "ingredientQuantities", "craftCount", "proficiencies", "attemptPolicy", "craftingCheck",
+      "craftingDC", "failure", "failurePercent", "craftingTime", "projectProgress", "progressCheck",
+      "progressDC", "progressFailure", "progressFailurePercent", "description"
     ]) {
       const input = root.querySelector(`[name="visibility.${key}"]`);
       visibility[key] = input ? Boolean(input.checked) : currentVisibility[key];
@@ -304,6 +353,10 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     }
     if (resolution.check.required && !resolution.check.id) {
       throw new Error("Choose a valid Crafting Check.");
+    }
+    if (this.draft.craftingMode === "project") {
+      const project = RecipeService.normalizeProject(this.draft.project);
+      if (project.progressCheck.required && !project.progressCheck.id) throw new Error("Choose a valid Progress Check.");
     }
   }
 
