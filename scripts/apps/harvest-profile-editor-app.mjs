@@ -8,7 +8,7 @@ export class HarvestProfileEditorApp extends HandlebarsApplicationMixin(Applicat
     id: "crafting-core-harvest-profile-editor",
     classes: ["crafting-core", "crafting-core-profile-editor-app", "standard-form"],
     tag: "form",
-    position: { width: 820, height: 760 },
+    position: { width: 940, height: 780 },
     window: { title: "Crafting Core — Harvest Profile", resizable: true }
   };
 
@@ -27,20 +27,35 @@ export class HarvestProfileEditorApp extends HandlebarsApplicationMixin(Applicat
     const hydrated = await HarvestProfileService.hydrateProfile(this.draft);
     const autoOptions = await HarvestProfileService.materialOptions({ nature: hydrated.creatureType });
     const allOptions = await HarvestProfileService.materialOptions({ includeAll: true });
-    const decorate = (options, selected) => [
-      { value: "", label: "— Empty Slot —", selected: !selected, chance: 0, quantity: "1", rarity: "common" },
+    const decoratePinpoint = (options, selected) => [
+      { value: "", label: "— Empty —", selected: !selected, chance: 0, quantity: "1", rarity: "common" },
       ...options.map(option => ({ ...option, selected: option.value === selected }))
     ];
 
     return {
       profile: {
         ...hydrated,
-        slots: hydrated.slots.map(slot => ({ ...slot, options: decorate(autoOptions, slot.materialId) })),
-        pinpointOverrides: hydrated.pinpointOverrides.map(row => ({ ...row, options: decorate(allOptions, row.materialId) }))
+        slots: hydrated.slots.map(slot => {
+          const selected = new Set(slot.materialIds ?? []);
+          const options = autoOptions
+            .filter(option => (slot.rarities ?? []).includes(option.rarity))
+            .map(option => ({ ...option, selected: selected.has(option.value) }));
+          const selectedRows = options.filter(option => option.selected);
+          return {
+            ...slot,
+            options,
+            selectedCount: selectedRows.length,
+            selectionSummary: selectedRows.length
+              ? `${selectedRows.length} selected · ${selectedRows.slice(0, 3).map(row => row.name).join(", ")}${selectedRows.length > 3 ? "…" : ""}`
+              : "No material selected"
+          };
+        }),
+        pinpointOverrides: hydrated.pinpointOverrides.map(row => ({ ...row, options: decoratePinpoint(allOptions, row.materialId) }))
       },
       anatomy: hydrated.analysis.anatomy.map(tag => ({ tag, label: HarvestProfileService.title(tag) })),
       anatomyText: hydrated.analysis.anatomy.join(", "),
       reasons: hydrated.analysis.reasons,
+      harvestSignals: (hydrated.analysis.harvestSignals ?? []).map(tag => ({ tag, label: HarvestProfileService.title(tag) })),
       essenceReasons: hydrated.analysis.essenceReasons ?? [],
       essenceEnabled: hydrated.essenceSlot?.enabled === true,
       essenceAffinities: hydrated.essenceSlot?.affinities ?? [],
@@ -55,6 +70,7 @@ export class HarvestProfileEditorApp extends HandlebarsApplicationMixin(Applicat
     root.querySelector('[data-action="reanalyze-profile"]')?.addEventListener("click", event => this.#reanalyze(event));
     root.querySelector('[data-action="add-pinpoint"]')?.addEventListener("click", event => this.#addPinpoint(event));
     root.querySelectorAll('[data-action="remove-pinpoint"]').forEach(button => button.addEventListener("click", event => this.#removePinpoint(event, Number(button.dataset.index))));
+    root.querySelectorAll('[data-pool-material]').forEach(input => input.addEventListener("change", event => this.#poolChanged(event)));
     root.querySelectorAll("select[data-material-select]").forEach(select => select.addEventListener("change", event => this.#materialChanged(event)));
   }
 
@@ -64,17 +80,20 @@ export class HarvestProfileEditorApp extends HandlebarsApplicationMixin(Applicat
     const anatomyText = root.querySelector('[name="analysis.anatomy"]')?.value ?? "";
     this.draft.analysis ??= {};
     this.draft.analysis.anatomy = [...new Set(String(anatomyText).split(",").map(value => value.trim().toLowerCase()).filter(Boolean))].sort();
+
     root.querySelectorAll("[data-slot-index]").forEach(row => {
       const index = Number(row.dataset.slotIndex);
       const slot = this.draft.slots[index];
       if (!slot) return;
-      const select = row.querySelector("select[data-material-select]");
-      const option = select?.selectedOptions?.[0];
-      slot.materialId = select?.value ?? "";
-      slot.rarity = option?.dataset?.rarity ?? slot.rarity;
+      slot.materialIds = [...row.querySelectorAll('[data-pool-material]:checked')].map(input => String(input.value)).filter(Boolean);
+      slot.materialId = slot.materialIds[0] ?? ""; // compatibility alias for older integrations
       slot.chance = Math.clamp(Number(row.querySelector('[name="slot.chance"]')?.value ?? 0) || 0, 0, 100);
-      slot.quantity = String(row.querySelector('[name="slot.quantity"]')?.value || "1").trim() || "1";
+      slot.quantityOverrides ??= {};
+      for (const materialId of Object.keys(slot.quantityOverrides)) {
+        if (!slot.materialIds.includes(materialId)) delete slot.quantityOverrides[materialId];
+      }
     });
+
     root.querySelectorAll("[data-pinpoint-index]").forEach(row => {
       const index = Number(row.dataset.pinpointIndex);
       const pinpoint = this.draft.pinpointOverrides[index];
@@ -89,13 +108,28 @@ export class HarvestProfileEditorApp extends HandlebarsApplicationMixin(Applicat
     this.draft.pinpointOverrides = this.draft.pinpointOverrides.filter(row => row.materialId);
   }
 
+  #poolChanged(event) {
+    const row = event.currentTarget.closest("[data-slot-index]");
+    if (!row) return;
+    const checked = [...row.querySelectorAll('[data-pool-material]:checked')];
+    const summary = row.querySelector('[data-pool-summary]');
+    if (summary) {
+      const names = checked.slice(0, 3).map(input => input.dataset.materialName || input.value);
+      summary.textContent = checked.length
+        ? `${checked.length} selected · ${names.join(", ")}${checked.length > 3 ? "…" : ""}`
+        : "No material selected";
+    }
+    const count = row.querySelector('[data-pool-count]');
+    if (count) count.textContent = String(checked.length);
+  }
+
   #materialChanged(event) {
     const select = event.currentTarget;
-    const row = select.closest("[data-slot-index], [data-pinpoint-index]");
+    const row = select.closest("[data-pinpoint-index]");
     if (!row) return;
     const option = select.selectedOptions?.[0];
-    const chance = row.querySelector('[name="slot.chance"], [name="pinpoint.chance"]');
-    const quantity = row.querySelector('[name="slot.quantity"], [name="pinpoint.quantity"]');
+    const chance = row.querySelector('[name="pinpoint.chance"]');
+    const quantity = row.querySelector('[name="pinpoint.quantity"]');
     if (chance && option?.dataset?.chance !== undefined) chance.value = option.dataset.chance;
     if (quantity && option?.dataset?.quantity) quantity.value = option.dataset.quantity;
     const badge = row.querySelector("[data-row-rarity]");
@@ -127,7 +161,7 @@ export class HarvestProfileEditorApp extends HandlebarsApplicationMixin(Applicat
     event.preventDefault();
     const confirmed = await foundry.applications.api.DialogV2.confirm({
       window: { title: "Reanalyze Creature" },
-      content: "<p>Rebuild the four automatic slots and the Essence slot from the current source Actor data?</p><p>Pinpoint Overrides are preserved. Unsaved automatic-slot edits are replaced.</p>",
+      content: "<p>Rebuild the four automatic rarity pools and the Essence slot from the current source Actor data?</p><p>Pinpoint Overrides are preserved. Unsaved pool edits are replaced.</p>",
       yes: { label: "Reanalyze", icon: "fa-solid fa-wand-magic-sparkles" },
       no: { label: "Cancel" }
     });

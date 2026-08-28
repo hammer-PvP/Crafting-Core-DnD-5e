@@ -239,6 +239,9 @@ export class MaterialCatalogService {
       wood: "Wood & Resin",
       mineral: "Minerals & Geological",
       forage: "Wild Foraging",
+      "game-small": "Game Hunt / Small Game",
+      "game-medium": "Game Hunt / Medium Game",
+      "game-large": "Game Hunt / Large Game",
       cultivated: "Cultivated & Domestic",
       food: "Food & Cooking",
       metalworking: "Metalworking",
@@ -256,6 +259,11 @@ export class MaterialCatalogService {
     if (family === "creature") return nature || "other";
     if (family === "essence") return "essence";
     if (family === "gathering") {
+      if (tags.has("game-hunt")) {
+        if (tags.has("small-game")) return "game-small";
+        if (tags.has("large-game")) return "game-large";
+        return "game-medium";
+      }
       if (nature === "mineral") return "mineral";
       if (tags.has("forage")) return "forage";
       if (tags.has("root")) return "roots";
@@ -293,6 +301,10 @@ export class MaterialCatalogService {
     for (const nature of creatureTypes) defs.push({ key: `creature:${nature}`, name: this.#title(nature), parent: "creature" });
     for (const [key, name] of [["flora","Flora"],["roots","Roots"],["fungi","Fungi"],["wood","Wood & Resin"],["forage","Wild Foraging"],["mineral","Minerals & Geological"]]) {
       defs.push({ key: `gathering:${key}`, name, parent: "gathering" });
+    }
+    defs.push({ key: "gathering:game", name: "Game Hunt", parent: "gathering" });
+    for (const [key, name] of [["game-small","Small Game"],["game-medium","Medium Game"],["game-large","Large Game"]]) {
+      defs.push({ key: `gathering:${key}`, name, parent: "gathering:game" });
     }
     for (const [key, name] of [["cultivated","Cultivated & Domestic"],["food","Food & Cooking"],["metalworking","Metalworking"],["leatherworking","Leatherworking"],["alchemy","Alchemy"],["gemcutting","Gemcutting & Crystals"],["general","General Materials"]]) {
       defs.push({ key: `profession:${key}`, name, parent: "profession" });

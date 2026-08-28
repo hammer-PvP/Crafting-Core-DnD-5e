@@ -37,7 +37,8 @@ export class CreatureScannerApp extends HandlebarsApplicationMixin(ApplicationV2
       profiles: filtered.map(profile => ({
         ...profile,
         anatomyLabel: profile.analysis?.anatomy?.join(", ") || "No anatomy tags",
-        slotCount: profile.slots?.filter(slot => slot.materialId).length ?? 0,
+        slotCount: profile.slots?.filter(slot => (slot.materialIds?.length ?? 0) > 0 || slot.materialId).length ?? 0,
+        candidateCount: profile.slots?.reduce((sum, slot) => sum + (slot.materialIds?.length ?? (slot.materialId ? 1 : 0)), 0) ?? 0,
         essenceCount: profile.essenceSlot?.enabled ? 1 : 0,
         essenceLabel: profile.essenceSlot?.enabled
           ? (profile.essenceSlot.affinities?.length
@@ -182,7 +183,7 @@ export class CreatureScannerApp extends HandlebarsApplicationMixin(ApplicationV2
     button.disabled = true;
     try {
       const profile = await HarvestProfileService.reanalyze(id);
-      ui.notifications.info(`Reanalyzed ${profile.name}. Pinpoint Overrides were preserved.`);
+      ui.notifications.info(`Reanalyzed ${profile.name}. Rarity pools rebuilt; Pinpoint Overrides were preserved.`);
       this.render({ force: true });
     } catch (error) {
       console.error(`${MODULE_ID} | Profile reanalysis failed.`, error);

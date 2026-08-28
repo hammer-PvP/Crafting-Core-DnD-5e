@@ -15,6 +15,13 @@ export class HarvestProfileService {
   static ESSENCE_DAMAGE_TYPES = Object.freeze([
     "acid", "cold", "fire", "force", "lightning", "necrotic", "poison", "psychic", "radiant", "thunder"
   ]);
+  static HARVEST_POOL_SPECS = Object.freeze([
+    Object.freeze({ id: "common", position: 1, label: "Common", rarities: Object.freeze(["common"]) }),
+    Object.freeze({ id: "uncommon", position: 2, label: "Uncommon", rarities: Object.freeze(["uncommon"]) }),
+    Object.freeze({ id: "rare", position: 3, label: "Rare", rarities: Object.freeze(["rare"]) }),
+    Object.freeze({ id: "high", position: 4, label: "Very Rare / Legendary", rarities: Object.freeze(["veryRare", "legendary"]) })
+  ]);
+  static MAX_AUTO_POOL_CANDIDATES = 5;
 
   static BASE_ANATOMY = Object.freeze({
     aberration: ["flesh", "blood", "bone", "eye"],
@@ -134,6 +141,23 @@ export class HarvestProfileService {
     delete all[String(id)];
     await game.settings.set(MODULE_ID, SETTINGS.HARVEST_PROFILES, all);
     Hooks.callAll(`${MODULE_ID}.harvestProfilesChanged`, String(id));
+  }
+
+  static async migrateStoredProfilesToPools() {
+    if (!game.user?.isGM) return { migrated: 0 };
+    const all = this.raw();
+    let migrated = 0;
+    for (const [id, profile] of Object.entries(all)) {
+      const legacy = Array.isArray(profile?.slots) && profile.slots.some(slot => slot?.materialId && !Array.isArray(slot?.materialIds));
+      if (!legacy) continue;
+      all[id] = this.#normalizeProfile(profile);
+      migrated += 1;
+    }
+    if (migrated) {
+      await game.settings.set(MODULE_ID, SETTINGS.HARVEST_PROFILES, all);
+      Hooks.callAll(`${MODULE_ID}.harvestProfilesChanged`, null);
+    }
+    return { migrated };
   }
 
   /** Return Actor Compendiums which are compatible or not explicitly system-bound elsewhere. */
@@ -362,7 +386,7 @@ export class HarvestProfileService {
     return this.save(profile);
   }
 
-  /** Analyze one D&D5e NPC into deterministic anatomy, four automatic slots, and one Essence slot. */
+  /** Analyze one D&D5e NPC into deterministic anatomy, four rarity pools, and one separate Essence slot. */
   static async analyzeActor(actor, { materials=null, previous=null }={}) {
     const entries = materials ?? await MaterialCatalogService.allEntries();
     const nature = String(actor.system?.details?.type?.value ?? "").toLowerCase();
@@ -378,8 +402,10 @@ export class HarvestProfileService {
       || Number(actor.system?.resources?.legact?.max ?? 0) > 0
       || Number(actor.system?.resources?.legres?.max ?? 0) > 0
       || Boolean(actor.system?.resources?.lair?.value);
-    if (legendarySource) analysis.reasons.push("High-tier source detected from CR, Legendary Actions/Resistance, or Lair data; the fourth automatic slot targets Legendary materials.");
-    const slots = this.#buildAutomaticSlots(available, analysis.anatomy, legendarySource);
+    if (legendarySource) analysis.reasons.push("High-tier source detected from CR, Legendary Actions/Resistance, or Lair data; Legendary materials may enter the Very Rare / Legendary pool.");
+    analysis.legendarySource = legendarySource;
+    analysis.harvestSignals = this.#inferHarvestSignals(actor, essenceAnalysis.affinities);
+    const slots = this.#buildAutomaticPools(available, analysis, legendarySource);
     const essenceSlot = this.#buildEssenceSlot(analysis.essenceAffinities);
     const oldPinpoint = Array.isArray(previous?.pinpointOverrides) ? previous.pinpointOverrides : [];
 
@@ -449,7 +475,21 @@ export class HarvestProfileService {
     const normalized = this.#normalizeProfile(profile);
     const materials = await MaterialCatalogService.allEntries();
     const map = new Map(materials.map(entry => [entry.id, entry]));
-    normalized.slots = normalized.slots.map((slot, index) => this.#hydrateRow(slot, map, index + 1));
+    normalized.slots = normalized.slots.map((slot, index) => ({
+      ...slot,
+      index: index + 1,
+      selectedMaterials: slot.materialIds.map(materialId => {
+        const material = map.get(String(materialId));
+        return {
+          materialId: String(materialId),
+          name: material?.name ?? "Missing Material",
+          img: material?.img ?? "icons/svg/item-bag.svg",
+          rarity: material?.rarity ?? "common",
+          rarityLabel: material?.rarityLabel ?? "Missing",
+          missing: !material
+        };
+      })
+    }));
     normalized.essenceSlot = {
       ...normalized.essenceSlot,
       affinities: normalized.essenceSlot.affinities.map(row => ({ ...row, label: this.damageTypeLabel(row.type) }))
@@ -478,76 +518,40 @@ export class HarvestProfileService {
     };
   }
 
-  static #buildAutomaticSlots(materials, anatomy, legendarySource=false) {
-    const anatomySet = new Set(anatomy);
-    const used = new Set();
-    const highTier = legendarySource ? "legendary" : "veryRare";
-    const rarityIndex = new Map(MaterialCatalogService.RARITIES.map((rarity, index) => [rarity, index]));
-    const specs = [
-      { id: "common", label: "Common", rarities: ["common"], fallbackMax: "common" },
-      { id: "secondary", label: "Common / Uncommon", rarities: ["uncommon", "common"], fallbackMax: "uncommon" },
-      { id: "rare", label: "Rare", rarities: ["rare"], fallbackMax: "rare" },
-      { id: "high", label: legendarySource ? "Legendary" : "Very Rare", rarities: [highTier], fallbackMax: legendarySource ? "legendary" : "veryRare" }
-    ];
+  static #buildAutomaticPools(materials, analysis, legendarySource=false) {
+    const anatomySet = new Set(analysis?.anatomy ?? []);
+    const signalSet = new Set(analysis?.harvestSignals ?? []);
 
-    const rows = specs.map((spec, index) => {
+    return this.HARVEST_POOL_SPECS.map(spec => {
+      const allowedRarities = spec.id === "high" && !legendarySource ? ["veryRare"] : [...spec.rarities];
       const candidates = materials
-        .filter(material => spec.rarities.includes(material.rarity))
-        .filter(material => !used.has(material.id))
+        .filter(material => allowedRarities.includes(material.rarity))
         .filter(material => this.#requirementsSatisfied(material.requires, anatomySet))
-        .sort((a, b) => this.#materialScore(b, anatomySet, spec.rarities) - this.#materialScore(a, anatomySet, spec.rarities)
-          || a.id.localeCompare(b.id));
-      const material = candidates[0] ?? null;
-      if (material) used.add(material.id);
+        .filter(material => this.#specialtySatisfied(material, signalSet))
+        .sort((a, b) => this.#materialScore(b, anatomySet, signalSet, allowedRarities) - this.#materialScore(a, anatomySet, signalSet, allowedRarities)
+          || a.id.localeCompare(b.id))
+        .slice(0, this.MAX_AUTO_POOL_CANDIDATES);
+      const chance = candidates.length ? Math.max(...candidates.map(material => Number(material.chance ?? 0) || 0)) : 0;
       return {
         id: spec.id,
-        position: index + 1,
+        position: spec.position,
         label: spec.label,
-        materialId: material?.id ?? "",
-        rarity: material?.rarity ?? spec.rarities[0],
-        chance: material?.chance ?? 0,
-        quantity: material?.quantity ?? "1",
-        generated: true,
-        fallback: false
+        rarities: [...spec.rarities],
+        materialIds: candidates.map(material => material.id),
+        materialId: candidates[0]?.id ?? "",
+        chance,
+        quantityOverrides: {},
+        generated: true
       };
     });
+  }
 
-    // Second pass: if a preferred rarity has no coherent candidate, backfill from another
-    // unused material in the same creature family at the same-or-lower tier. Anatomy-specific
-    // materials still outrank generic family materials. This improves profile completeness without
-    // inventing body tags or promoting ordinary sources into higher rarities.
-    for (let index = 0; index < rows.length; index += 1) {
-      const row = rows[index];
-      if (row.materialId) continue;
-      const spec = specs[index];
-      const maxIndex = rarityIndex.get(spec.fallbackMax) ?? 0;
-      const targetIndex = Math.max(...spec.rarities.map(rarity => rarityIndex.get(rarity) ?? 0));
-      const candidates = materials
-        .filter(material => !used.has(material.id))
-        .filter(material => (rarityIndex.get(material.rarity) ?? 99) <= maxIndex)
-        .filter(material => material.rarity !== "legendary" || (spec.id === "high" && legendarySource))
-        .filter(material => this.#requirementsSatisfied(material.requires, anatomySet))
-        .sort((a, b) => {
-          const aReq = (a.requires ?? []).length ? this.#materialScore(a, anatomySet, [a.rarity]) : 0;
-          const bReq = (b.requires ?? []).length ? this.#materialScore(b, anatomySet, [b.rarity]) : 0;
-          if (aReq !== bReq) return bReq - aReq;
-          const aDistance = Math.abs(targetIndex - (rarityIndex.get(a.rarity) ?? 0));
-          const bDistance = Math.abs(targetIndex - (rarityIndex.get(b.rarity) ?? 0));
-          if (aDistance !== bDistance) return aDistance - bDistance;
-          return a.id.localeCompare(b.id);
-        });
-      const material = candidates[0] ?? null;
-      if (!material) continue;
-      used.add(material.id);
-      row.materialId = material.id;
-      row.rarity = material.rarity;
-      row.chance = material.chance ?? 0;
-      row.quantity = material.quantity ?? "1";
-      row.label = `${spec.label} / Family Fallback`;
-      row.fallback = true;
-    }
-
-    return rows;
+  static #specialtySatisfied(material, signalSet) {
+    const tags = new Set((material?.tags ?? []).map(value => String(value).toLowerCase()));
+    // Specialty organ materials should require evidence; generic anatomical materials remain broadly eligible.
+    if (tags.has("psionic") && !signalSet.has("psionic")) return false;
+    if (material?.id === "monstrosity-arcane-organ" && !signalSet.has("arcane")) return false;
+    return true;
   }
 
   static #requirementsSatisfied(requires, anatomySet) {
@@ -555,11 +559,13 @@ export class HarvestProfileService {
     return !list.length || list.every(requirement => anatomySet.has(requirement));
   }
 
-  static #materialScore(material, anatomySet, rarityOrder) {
+  static #materialScore(material, anatomySet, signalSet, rarityOrder) {
     const requires = material.requires ?? [];
+    const tags = material.tags ?? [];
     const rarityPriority = Math.max(0, rarityOrder.length - rarityOrder.indexOf(material.rarity));
-    const requirementScore = requires.reduce((score, requirement) => score + (anatomySet.has(requirement) ? 25 : 0), 0);
-    return requirementScore + requires.length * 10 + rarityPriority;
+    const requirementScore = requires.reduce((score, requirement) => score + (anatomySet.has(requirement) ? 30 : 0), 0);
+    const signalScore = tags.reduce((score, tag) => score + (signalSet.has(String(tag).toLowerCase()) ? 12 : 0), 0);
+    return requirementScore + requires.length * 12 + signalScore + rarityPriority;
   }
 
   static #buildEssenceSlot(affinities=[]) {
@@ -700,6 +706,26 @@ export class HarvestProfileService {
     return [];
   }
 
+  static #inferHarvestSignals(actor, essenceAffinities=[]) {
+    const signals = new Set();
+    const corpus = this.#actorCorpus(actor);
+    const all = `${corpus.identity} | ${corpus.structural} | ${corpus.attacks}`;
+    const addIf = (signal, terms) => { if (terms.some(term => all.includes(term))) signals.add(signal); };
+    addIf("psionic", ["psionic", "psychic", "telepathy", "telepathic", "mind blast", "mind", "psi"]);
+    addIf("arcane", ["arcane", "magic resistance", "magic weapon", "spellcasting", "innate spellcasting", "rune", "runic"]);
+    addIf("elemental", ["elemental", "flame", "fire", "frost", "lightning", "thunder", "acid"]);
+    for (const row of essenceAffinities ?? []) {
+      const type = String(row?.type ?? "").toLowerCase();
+      if (type === "psychic") signals.add("psionic");
+      if (["acid","cold","fire","lightning","thunder"].includes(type)) signals.add("elemental");
+    }
+    // Native spell activities are strong enough evidence that a creature is magically active,
+    // but do not by themselves invent a physical organ. They only unlock specialty candidates
+    // whose anatomical requirement is independently satisfied.
+    if ((actor.items ?? []).some(item => String(item.type ?? "").toLowerCase() === "spell")) signals.add("arcane");
+    return [...signals].sort();
+  }
+
   static #inferAnatomy(actor, nature) {
     const anatomy = new Set(this.BASE_ANATOMY[nature] ?? []);
     const reasons = [];
@@ -735,10 +761,14 @@ export class HarvestProfileService {
       ["tentacle", ["tentacle", "tentacles", "tentaculo", "tentaculos"]]
     ];
     for (const [tag, patterns] of signals) {
-      if (bodyHas(patterns)) add(tag, `${this.title(tag)} anatomy detected from identity, structural features, or attack data.`);
+      // NPC natural attacks are sometimes stored as Weapon Items whose names carry the only
+      // anatomical clue (Beak, Claw, Bite, Talon). Use equipment text only for these explicit
+      // anatomy patterns; it is not added to the general body corpus.
+      if (bodyHas(patterns) || contains(corpus.equipment, patterns)) add(tag, `${this.title(tag)} anatomy detected from identity, structural features, or natural-attack data.`);
     }
 
-    if (attackHas(["venom", "poison", "sting", "stinger", "veneno", "venenoso", "ferrao"])) {
+    if (attackHas(["venom", "poison", "sting", "stinger", "veneno", "venenoso", "ferrao"])
+      || contains(corpus.equipment, ["venom", "poison", "sting", "stinger", "veneno", "venenoso", "ferrao"])) {
       add("venom", "Venom/poison delivery detected in an attack or activity.");
     }
 
@@ -789,7 +819,7 @@ export class HarvestProfileService {
         || structuralHas(["flesh construct", "flesh body"]);
       const stoneConstruct = bodyHas(["stone golem", "stone", "rock", "granite", "pedra", "rocha"]);
       const crystalConstruct = bodyHas(["crystal", "crystalline", "cristal"]);
-      const metalConstruct = bodyHas(["iron golem", "iron", "steel", "metal", "clockwork", "automaton", "mechanical", "ferro", "aco", "metalico", "mecanico", "automato"]);
+      const metalConstruct = bodyHas(["iron golem", "iron", "steel", "metal", "clockwork", "automaton", "mechanical", "animated armor", "armadura animada", "ferro", "aco", "metalico", "mecanico", "automato"]);
       if (fleshConstruct) {
         add("flesh", "Flesh-construct morphology detected.");
         add("blood", "Flesh-construct morphology detected.");
@@ -825,6 +855,10 @@ export class HarvestProfileService {
 
     const fly = Number(actor.system?.attributes?.movement?.fly ?? 0) || 0;
     if (fly > 0 && anatomy.has("feather")) add("wing", "Flying movement supports explicit feathered anatomy.");
+    if (fly > 0 && anatomy.has("beak") && !anatomy.has("feather")) {
+      add("feather", "A flying creature with explicit beak anatomy is treated as feathered unless stronger morphology says otherwise.");
+      add("wing", "Flying movement plus avian anatomy supports wings.");
+    }
 
     // Record that weak magical text was observed but intentionally did not drive morphology.
     if (contains(corpus.weak, ["spirit", "spectral", "phantom", "ghost", "incorporeal", "espirito", "espectral"])) {
@@ -903,11 +937,51 @@ export class HarvestProfileService {
   }
 
   static #normalizeProfile(profile) {
-    const slots = Array.isArray(profile?.slots) ? profile.slots.slice(0, 4) : [];
-    while (slots.length < 4) {
-      const position = slots.length + 1;
-      slots.push({ id: `slot-${position}`, position, label: `Slot ${position}`, materialId: "", rarity: "common", chance: 0, quantity: "1", generated: true });
+    const sourceSlots = Array.isArray(profile?.slots) ? profile.slots.slice(0, 4) : [];
+    const specs = this.HARVEST_POOL_SPECS;
+    const hasPoolSchema = sourceSlots.some(slot => Array.isArray(slot?.materialIds));
+    const pools = specs.map(spec => ({
+      id: spec.id,
+      position: spec.position,
+      label: spec.label,
+      rarities: [...spec.rarities],
+      materialIds: [],
+      materialId: "",
+      chance: 0,
+      quantityOverrides: {},
+      generated: true
+    }));
+
+    if (hasPoolSchema) {
+      for (let index = 0; index < pools.length; index += 1) {
+        const source = sourceSlots.find(slot => String(slot?.id ?? "") === pools[index].id) ?? sourceSlots[index] ?? {};
+        const ids = [...new Set((source.materialIds ?? []).map(String).filter(Boolean))];
+        pools[index] = {
+          ...pools[index],
+          materialIds: ids,
+          materialId: ids[0] ?? "",
+          chance: Math.clamp(Number(source.chance ?? 0) || 0, 0, 100),
+          quantityOverrides: source.quantityOverrides && typeof source.quantityOverrides === "object" ? foundry.utils.deepClone(source.quantityOverrides) : {},
+          generated: source.generated !== false
+        };
+      }
+    } else {
+      // v0.0.19d migration: group each legacy single-material slot into its rarity pool.
+      for (const source of sourceSlots) {
+        const materialId = String(source?.materialId ?? "");
+        if (!materialId) continue;
+        const rarity = String(source?.rarity ?? "common");
+        const targetIndex = rarity === "common" ? 0 : rarity === "uncommon" ? 1 : rarity === "rare" ? 2 : 3;
+        const pool = pools[targetIndex];
+        if (!pool.materialIds.includes(materialId)) pool.materialIds.push(materialId);
+        pool.materialId ||= materialId;
+        pool.chance = Math.max(pool.chance, Math.clamp(Number(source?.chance ?? 0) || 0, 0, 100));
+        const quantity = String(source?.quantity || "1").trim() || "1";
+        if (quantity !== "1") pool.quantityOverrides[materialId] = quantity;
+        pool.generated = source?.generated !== false;
+      }
     }
+
     return {
       ...foundry.utils.deepClone(profile ?? {}),
       id: String(profile?.id || foundry.utils.randomID(20)),
@@ -928,6 +1002,8 @@ export class HarvestProfileService {
       analysis: {
         anatomy: [...new Set((profile?.analysis?.anatomy ?? []).map(String).filter(Boolean))].sort(),
         reasons: [...new Set((profile?.analysis?.reasons ?? []).map(String).filter(Boolean))],
+        harvestSignals: [...new Set((profile?.analysis?.harvestSignals ?? []).map(String).filter(Boolean))].sort(),
+        legendarySource: Boolean(profile?.analysis?.legendarySource),
         essenceAffinities: (profile?.analysis?.essenceAffinities ?? []).map(row => ({
           type: String(row?.type ?? "").toLowerCase(),
           score: Math.max(1, Number(row?.score ?? row?.weight ?? 1) || 1),
@@ -936,17 +1012,7 @@ export class HarvestProfileService {
         })).filter(row => this.ESSENCE_DAMAGE_TYPES.includes(row.type)),
         essenceReasons: [...new Set((profile?.analysis?.essenceReasons ?? []).map(String).filter(Boolean))]
       },
-      slots: slots.map((slot, index) => ({
-        id: String(slot?.id ?? `slot-${index + 1}`),
-        position: index + 1,
-        label: String(slot?.label ?? `Slot ${index + 1}`),
-        materialId: String(slot?.materialId ?? ""),
-        rarity: String(slot?.rarity ?? "common"),
-        chance: Math.clamp(Number(slot?.chance ?? 0) || 0, 0, 100),
-        quantity: String(slot?.quantity || "1"),
-        generated: slot?.generated !== false,
-        fallback: Boolean(slot?.fallback)
-      })),
+      slots: pools,
       essenceSlot: {
         enabled: profile?.essenceSlot?.enabled === true,
         position: 5,

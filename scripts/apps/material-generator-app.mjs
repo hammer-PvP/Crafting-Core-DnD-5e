@@ -25,18 +25,20 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
     biome: "forest",
     resource: "flora",
     abundance: "normal",
+    huntAttempts: 1,
     essenceAffinities: []
   };
 
   lastResult = null;
 
   async _prepareContext() {
-    const { entries, creatureNatures, biomes } = await MaterialGenerationService.options();
+    const { entries, creatureNatures, biomes, huntBiomes } = await MaterialGenerationService.options();
     if (!creatureNatures.includes(this.state.nature)) this.state.nature = creatureNatures.includes("undead") ? "undead" : (creatureNatures[0] ?? "");
     const profiles = MaterialGenerationService.profilesFor(this.state.nature);
     if (!profiles.some(p => p.id === this.state.profileId)) this.state.profileId = profiles[0]?.id ?? "general";
 
-    if (!biomes.includes(this.state.biome)) this.state.biome = biomes.includes("forest") ? "forest" : (biomes[0] ?? "");
+    const activeBiomes = this.state.source === "hunt" ? huntBiomes : biomes;
+    if (!activeBiomes.includes(this.state.biome)) this.state.biome = activeBiomes.includes("forest") ? "forest" : (activeBiomes[0] ?? "");
     const resources = MaterialGenerationService.resourceCategories(entries, this.state.biome);
     if (!resources.includes(this.state.resource)) this.state.resource = resources.includes("flora") ? "flora" : (resources[0] ?? "");
 
@@ -44,9 +46,10 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
       state: foundry.utils.deepClone(this.state),
       isCreature: this.state.source === "creature",
       isEnvironment: this.state.source === "environment",
+      isHunt: this.state.source === "hunt",
       creatureOptions: creatureNatures.map(value => ({ value, label: MaterialGenerationService.title(value), selected: value === this.state.nature })),
       profileOptions: profiles.map(profile => ({ ...profile, selected: profile.id === this.state.profileId })),
-      biomeOptions: biomes.map(value => ({ value, label: MaterialGenerationService.title(value), selected: value === this.state.biome })),
+      biomeOptions: activeBiomes.map(value => ({ value, label: MaterialGenerationService.title(value), selected: value === this.state.biome })),
       resourceOptions: resources.map(value => ({ value, label: MaterialCatalogService.categoryLabel("gathering", value), selected: value === this.state.resource })),
       abundanceOptions: Object.entries(MaterialGenerationService.ABUNDANCE).map(([value, row]) => ({ value, label: row.label, selected: value === this.state.abundance })),
       essenceOptions: MaterialGenerationService.essenceAffinityOptions(this.state.essenceAffinities),
@@ -73,6 +76,7 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
       });
     }
     root.querySelector('[name="sources"]')?.addEventListener("change", () => this.#syncState());
+    root.querySelector('[name="huntAttempts"]')?.addEventListener("change", () => this.#syncState());
     root.querySelectorAll('[name="essenceAffinity"]').forEach(input => input.addEventListener("change", () => {
       this.#syncState();
       this.lastResult = null;
@@ -94,13 +98,15 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
     }
     const sources = root.querySelector('[name="sources"]');
     if (sources) this.state.sources = Math.clamp(Math.floor(Number(sources.value) || 1), 1, 100);
+    const huntAttempts = root.querySelector('[name="huntAttempts"]');
+    if (huntAttempts) this.state.huntAttempts = Math.clamp(Math.floor(Number(huntAttempts.value) || 1), 1, 100);
     this.state.essenceAffinities = [...root.querySelectorAll('[name="essenceAffinity"]:checked')].map(input => input.value);
   }
 
   #request() {
-    return this.state.source === "environment"
-      ? { source: "environment", biome: this.state.biome, resource: this.state.resource, abundance: this.state.abundance }
-      : { source: "creature", nature: this.state.nature, profileId: this.state.profileId, sources: this.state.sources, essenceAffinities: [...this.state.essenceAffinities] };
+    if (this.state.source === "environment") return { source: "environment", biome: this.state.biome, resource: this.state.resource, abundance: this.state.abundance };
+    if (this.state.source === "hunt") return { source: "hunt", biome: this.state.biome, abundance: this.state.abundance, attempts: this.state.huntAttempts };
+    return { source: "creature", nature: this.state.nature, profileId: this.state.profileId, sources: this.state.sources, essenceAffinities: [...this.state.essenceAffinities] };
   }
 
   async #generate(event) {
@@ -109,8 +115,6 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
     const button = event.currentTarget;
     button.disabled = true;
     try {
-      // v0.0.5: generation is preview-only. Nothing is written to the Item Directory
-      // until the GM explicitly accepts the preview with Create Loot Folder.
       this.lastResult = await MaterialGenerationService.generate(this.#request());
       this.render({ force: true });
     } catch (error) {
@@ -126,13 +130,9 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
     const button = event.currentTarget;
     button.disabled = true;
     try {
-      // Materialize the exact preview already shown to the GM. This does not reroll.
       this.lastResult = await MaterialGenerationService.createWorldLoot(this.lastResult);
-      if (this.lastResult.folder) {
-        ui.notifications.info(`Created loot folder: ${this.lastResult.folder.name}.`);
-      } else {
-        ui.notifications.warn("No loot folder was created.");
-      }
+      if (this.lastResult.folder) ui.notifications.info(`Created loot folder: ${this.lastResult.folder.name}.`);
+      else ui.notifications.warn("No loot folder was created.");
       this.render({ force: true });
     } catch (error) {
       console.error(`${MODULE_ID} | Loot folder creation failed.`, error);

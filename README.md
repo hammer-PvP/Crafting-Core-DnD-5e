@@ -1,5 +1,21 @@
 # Crafting Core (DnD 5e)
 
+## v0.0.19d — Harvest Rarity Pools & Game Hunt
+
+v0.0.19d deepens harvesting without changing the stable Crafting Project engine. Scanned Creature Harvest Profiles no longer store one fixed material in each of four slots. They now expose **Common, Uncommon, Rare, and Very Rare / Legendary rarity pools**, and each pool can contain several plausible materials selected through a checkbox multi-select. The fifth Essence Pool remains separate.
+
+A rarity pool rolls its configured chance once. If it succeeds, Crafting Core chooses **exactly one** checked material with equal probability. Four Common candidates under a 65% Common pool therefore still produce at most one Common drop; the four candidates only diversify which Common material can appear. Existing v0.0.19c profiles migrate automatically into the new pool schema.
+
+Creature Scanner normalization is broader and more anatomy-aware. Natural Weapon/Activity names such as Beak, Claw, Bite, Talon, and Sting can establish anatomy when the D&D5e Actor stores those clues outside descriptive traits. Monstrosities gain additional bridge materials — Monstrous Flesh, Monstrous Blood, Monster Fang, Monstrous Bone, Monstrous Eye, and Monstrous Gland — while specialty materials remain gated: Monstrous Venom Gland requires poison/venom evidence and Arcane Organ requires an arcane signal. Scanner rows show active pools and total material candidates so sparse profiles are easier to notice.
+
+**Game Hunt** is now a dedicated manual generation origin, separate from both targeted Creature Harvest and ordinary Environment Gathering. It represents abstract time spent hunting a biome rather than harvesting a selected Actor. Seven prey species are included: Rabbit, Hare, Game Bird, Wild Boar, Wild Goat, Deer, and Elk. Every species has Basic (Common), Rich (Rare), and Premium (Very Rare) meat, stored as normal Items in nested `Gathering → Game Hunt` Compendium folders for Recipes, manual drag-and-drop, and future Vendor/Supplier use.
+
+Abundance affects whether prey is found, the chance of Small/Medium/Large game, and meat quality. Standard Environment Gathering deliberately excludes Game Hunt categories, so meat is only generated through the dedicated hunting flow.
+
+The built-in Material Catalog now contains **229 materials**, every one retaining the three-candidate Core Icon curation model. Crafting Core references native Foundry `icons/...` paths only and does not redistribute Core artwork.
+
+**Extra Effort remains scoped for v0.0.20.**
+
 ## v0.0.19c — Cultivated, Trade & Refinement Catalog
 
 v0.0.19c continues the visual/catalog consolidation of the stable v0.0.19 Crafting Projects line. It does not change Project, Progress Check, Harvest, Scanner, Essence, Item Piles, or gear-normalization mechanics.

@@ -112,9 +112,15 @@ Hooks.once("ready", async () => {
     }
     try {
       const materialMigration = await MaterialCatalogService.migrateCuratedCatalogIfNeeded();
-      if (materialMigration.migrated) console.info(`${MODULE_TITLE} | Applied v0.0.19a curated material icon migration.`, materialMigration);
+      if (materialMigration.migrated) console.info(`${MODULE_TITLE} | Applied curated material catalog migration.`, materialMigration);
     } catch (error) {
       console.error(`${MODULE_TITLE} | Curated material icon migration failed.`, error);
+    }
+    try {
+      const harvestMigration = await HarvestProfileService.migrateStoredProfilesToPools();
+      if (harvestMigration.migrated) console.info(`${MODULE_TITLE} | Migrated legacy Harvest Profile slots to v0.0.19d rarity pools.`, harvestMigration);
+    } catch (error) {
+      console.error(`${MODULE_TITLE} | Harvest Profile rarity-pool migration failed.`, error);
     }
   }
 });

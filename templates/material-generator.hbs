@@ -10,7 +10,7 @@
 
   <div class="cc-generator-body">
     <section class="cc-form-card cc-generator-config">
-      <label class="cc-generator-source"><span>Source / Origin</span><select name="source"><option value="creature" {{#if isCreature}}selected{{/if}}>Creature Harvest</option><option value="environment" {{#if isEnvironment}}selected{{/if}}>Environment Gathering</option></select></label>
+      <label class="cc-generator-source"><span>Source / Origin</span><select name="source"><option value="creature" {{#if isCreature}}selected{{/if}}>Creature Harvest</option><option value="environment" {{#if isEnvironment}}selected{{/if}}>Environment Gathering</option><option value="hunt" {{#if isHunt}}selected{{/if}}>Game Hunt</option></select></label>
 
       {{#if isCreature}}
       <div class="cc-grid three cc-generator-fields">
@@ -38,6 +38,15 @@
         <label><span>Resource</span><select name="resource">{{#each resourceOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
         <label><span>Abundance</span><select name="abundance">{{#each abundanceOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
       </div>
+      {{/if}}
+
+      {{#if isHunt}}
+      <div class="cc-grid three cc-generator-fields">
+        <label><span>Biome</span><select name="biome">{{#each biomeOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
+        <label><span>Abundance</span><select name="abundance">{{#each abundanceOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
+        <label><span>Hunting Attempts</span><input type="number" name="huntAttempts" min="1" max="100" step="1" value="{{state.huntAttempts}}"></label>
+      </div>
+      <p class="cc-note"><i class="fa-solid fa-crosshairs"></i> Game Hunt is pool-based and never targets an Actor. Abundance shifts the odds toward larger game and Rich/Premium meat.</p>
       {{/if}}
 
       <button type="button" class="cc-primary-action cc-generator-button" data-action="generate"><i class="fa-solid fa-dice"></i> Generate Materials</button>

@@ -1134,3 +1134,63 @@
   .cc-icon-choice { width: 38px; height: 38px; flex-basis: 38px; }
   .cc-icon-choice img { width: 34px; height: 34px; }
 }
+
+/* v0.0.19d — Harvest rarity pools + Game Hunt */
+.cc-profile-pool-list { display: grid; gap: 7px; }
+.cc-profile-pool {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 4px;
+  background: rgba(0,0,0,.14);
+}
+.cc-pool-head { display: grid; grid-template-columns: minmax(0,1fr) 115px; gap: 9px; align-items: end; }
+.cc-pool-chance { display: grid; gap: 3px; }
+.cc-pool-chance > span { font-size: 9px !important; text-transform: uppercase; opacity: .65; font-weight: 800; }
+.cc-pool-selector { border: 1px solid rgba(255,255,255,.07); border-radius: 4px; background: rgba(255,255,255,.018); }
+.cc-pool-selector > summary {
+  list-style: none;
+  cursor: pointer;
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 20px minmax(0,1fr) 18px;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 8px;
+  color: #eee;
+}
+.cc-pool-selector > summary::-webkit-details-marker { display: none; }
+.cc-pool-selector > summary > i:first-child { color: #8de901; opacity: .8; }
+.cc-pool-selector > summary > i:last-child { opacity: .45; transition: transform .15s ease; }
+.cc-pool-selector[open] > summary > i:last-child { transform: rotate(180deg); }
+.cc-pool-options {
+  max-height: 230px;
+  overflow-y: auto;
+  display: grid;
+  gap: 3px;
+  padding: 5px;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.cc-pool-option {
+  display: grid !important;
+  grid-template-columns: 18px 30px minmax(0,1fr);
+  gap: 7px;
+  align-items: center;
+  min-height: 36px;
+  padding: 3px 5px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: rgba(255,255,255,.015);
+}
+.cc-pool-option:hover { border-color: rgba(141,233,1,.2); background: rgba(141,233,1,.035); }
+.cc-pool-option input { margin: 0; }
+.cc-pool-option img { width: 28px; height: 28px; object-fit: cover; border-radius: 3px; border: 1px solid rgba(209,176,107,.23); }
+.cc-pool-option span { min-width: 0; }
+.cc-pool-option strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.cc-pool-option small { display: inline-block; margin-top: 1px; font-size: 8px; }
+.cc-profile-counts { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 900px) {
+  .cc-pool-head { grid-template-columns: minmax(0,1fr) 105px; }
+  .cc-profile-counts { grid-template-columns: repeat(2, 1fr); }
+}

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.0.19d
+
+Harvest variety and Game Hunt expansion on the stable v0.0.19 line. Crafting Projects, Progress Checks, Knowledge, Item Piles gear handling, and normalization are otherwise unchanged.
+
+- Replaced scanned Harvest Profiles' old one-material-per-slot model with four **multi-material rarity pools**: Common, Uncommon, Rare, and Very Rare / Legendary. The separate fifth **Essence Pool** and GM Pinpoint Overrides remain independent.
+- Each rarity pool now uses a checkbox multi-select. A successful pool produces **exactly one** of its selected materials, chosen with equal probability. Adding candidates increases variety without increasing the number of drops from that rarity.
+- Added an automatic migration for stored legacy Harvest Profiles. Existing single-material slots are grouped into their matching rarity pools while preserving pool chances and non-default quantity overrides where possible.
+- Reworked Creature Scanner normalization to populate several plausible candidates per rarity from D&D5e anatomy, creature type, natural attacks/features, magical signals, rarity, and specialty requirements. Scanner rows now show both active-pool count and total candidate count.
+- Improved natural anatomy inference for NPCs whose Beak, Claw, Bite, Talon, Sting, or similar anatomy exists only in native Weapon/Activity data. Flying creatures with explicit avian anatomy can infer feathers/wings without treating incidental spell text as morphology.
+- Expanded Monstrosity bridge materials with **Monstrous Flesh, Monstrous Blood, Monster Fang, Monstrous Bone, Monstrous Eye, and Monstrous Gland** so rich anatomy no longer collapses into only Hide/Arcane Organ. `Monstrous Venom Gland` still requires venom/poison evidence, and `Arcane Organ` requires an arcane signal.
+- Added **Game Hunt** as a third manual material-generation origin alongside Creature Harvest and Environment Gathering. It is pool-based and never requires an Actor/Token target.
+- Added 21 Game Hunt materials across seven species: Rabbit, Hare, Game Bird, Wild Boar, Wild Goat, Deer, and Elk. Every species has **Basic (Common), Rich (Rare), and Premium (Very Rare)** meat.
+- Game Hunt Abundance now controls three separate pressures: chance to find game, Small/Medium/Large prey distribution, and Basic/Rich/Premium quality distribution. Prey size is rolled before species so the configured size weights remain stable even when a biome contains different numbers of species.
+- Game Hunt materials live in dedicated nested Materials Compendium folders: **Gathering → Game Hunt → Small Game / Medium Game / Large Game**. Standard Environment Gathering excludes these categories.
+- Expanded the curated Material Catalog from **202 to 229 built-ins** and bumped the catalog schema to version **8**.
+- Every built-in material still has exactly three Foundry Core icon candidates with one curated default. All icon paths are references to native `icons/...` assets; Crafting Core bundles no Foundry artwork.
+- Extra Effort remains reserved for v0.0.20.
+
 ## 0.0.19c
 
 Cultivated/Domestic and Profession & Trade catalog expansion on the stable v0.0.19 line. Crafting Projects, Creature Harvest, Scanner, Essence, Item Piles, and gear normalization are unchanged.

@@ -9,8 +9,8 @@
 const creature = (id, name, nature, rarity, {tags=[], requires=[], quantity="1", chance=null}={}) => ({
   id, name, family: "creature", nature, rarity, tags, requires, quantity, chance
 });
-const gathering = (id, name, nature, rarity, {biomes=[], tags=[], quantity="1", chance=null}={}) => ({
-  id, name, family: "gathering", nature, rarity, biomes, tags, quantity, chance
+const gathering = (id, name, nature, rarity, {biomes=[], tags=[], quantity="1", chance=null, category=null}={}) => ({
+  id, name, family: "gathering", nature, rarity, biomes, tags, quantity, chance, ...(category ? {category} : {})
 });
 const profession = (id, name, nature, rarity, {tags=[], quantity="1", chance=null}={}) => ({
   id, name, family: "profession", nature, rarity, tags, quantity, chance
@@ -20,7 +20,7 @@ const essence = (id, name, nature, {tags=[], quantity="1"}={}) => ({
   tags: ["essence", ...tags], requires: [], biomes: [], quantity, chance: 100
 });
 
-export const MATERIAL_CATALOG_VERSION = 7;
+export const MATERIAL_CATALOG_VERSION = 8;
 
 export const DEFAULT_MATERIALS = Object.freeze([
   // Aberration
@@ -106,9 +106,15 @@ export const DEFAULT_MATERIALS = Object.freeze([
   // Monstrosity
   creature("monstrosity-hide", "Monstrous Hide", "monstrosity", "common", {requires:["hide"]}),
   creature("monstrosity-claw", "Monster Claw", "monstrosity", "common", {requires:["claw"]}),
+  creature("monstrosity-flesh", "Monstrous Flesh", "monstrosity", "common", {requires:["flesh"]}),
+  creature("monstrosity-blood", "Monstrous Blood", "monstrosity", "common", {requires:["blood"]}),
+  creature("monstrosity-fang", "Monster Fang", "monstrosity", "common", {requires:["fang"]}),
   creature("monstrosity-feather", "Monster Feather", "monstrosity", "uncommon", {requires:["feather"]}),
-  creature("monstrosity-arcane-organ", "Arcane Organ", "monstrosity", "rare", {requires:["flesh"], tags:["arcane"]}),
-  creature("monstrosity-venom-gland", "Monstrous Venom Gland", "monstrosity", "veryRare", {requires:["venom"]}),
+  creature("monstrosity-bone", "Monstrous Bone", "monstrosity", "uncommon", {requires:["bone"]}),
+  creature("monstrosity-eye", "Monstrous Eye", "monstrosity", "uncommon", {requires:["eye"]}),
+  creature("monstrosity-gland", "Monstrous Gland", "monstrosity", "rare", {requires:["flesh"], tags:["organ","gland"]}),
+  creature("monstrosity-arcane-organ", "Arcane Organ", "monstrosity", "rare", {requires:["flesh"], tags:["arcane","organ"]}),
+  creature("monstrosity-venom-gland", "Monstrous Venom Gland", "monstrosity", "veryRare", {requires:["venom"], tags:["venom","gland"]}),
   creature("monstrosity-essence", "Monstrous Essence", "monstrosity", "legendary", {tags:["monstrous","arcane"]}),
 
   // Ooze
@@ -223,6 +229,32 @@ export const DEFAULT_MATERIALS = Object.freeze([
   gathering("gathering-gem-geode", "Gem-Bearing Geode", "mineral", "rare", {biomes:["cave","mountain","ravine"], tags:["gem","stone"]}),
   gathering("gathering-adamantine-ore", "Adamantine Ore", "mineral", "veryRare", {biomes:["underdark","mountain","cave"], tags:["metal","fantastic"]}),
   gathering("gathering-starstone", "Starstone Shard", "mineral", "legendary", {biomes:["mountain","desert"], tags:["stone","arcane"]}),
+
+  // Game Hunt — abstract environmental hunting, never a targeted Actor harvest.
+  // Basic / Rich / Premium quality maps to Common / Rare / Very Rare.
+  gathering("hunt-rabbit-basic", "Basic Rabbit Meat", "game", "common", {category:"game-small", biomes:["forest","grassland","mountain"], tags:["game-hunt","small-game","rabbit","meat","basic"], quantity:"1d2"}),
+  gathering("hunt-rabbit-rich", "Rich Rabbit Meat", "game", "rare", {category:"game-small", biomes:["forest","grassland","mountain"], tags:["game-hunt","small-game","rabbit","meat","rich"], quantity:"1d2"}),
+  gathering("hunt-rabbit-premium", "Premium Rabbit Meat", "game", "veryRare", {category:"game-small", biomes:["forest","grassland","mountain"], tags:["game-hunt","small-game","rabbit","meat","premium"], quantity:"1"}),
+  gathering("hunt-hare-basic", "Basic Hare Meat", "game", "common", {category:"game-small", biomes:["grassland","forest","mountain","arctic"], tags:["game-hunt","small-game","hare","meat","basic"], quantity:"1d2"}),
+  gathering("hunt-hare-rich", "Rich Hare Meat", "game", "rare", {category:"game-small", biomes:["grassland","forest","mountain","arctic"], tags:["game-hunt","small-game","hare","meat","rich"], quantity:"1d2"}),
+  gathering("hunt-hare-premium", "Premium Hare Meat", "game", "veryRare", {category:"game-small", biomes:["grassland","forest","mountain","arctic"], tags:["game-hunt","small-game","hare","meat","premium"], quantity:"1"}),
+  gathering("hunt-game-bird-basic", "Basic Game Bird Meat", "game", "common", {category:"game-small", biomes:["forest","grassland","swamp","coast"], tags:["game-hunt","small-game","game-bird","meat","basic"], quantity:"1d2"}),
+  gathering("hunt-game-bird-rich", "Rich Game Bird Meat", "game", "rare", {category:"game-small", biomes:["forest","grassland","swamp","coast"], tags:["game-hunt","small-game","game-bird","meat","rich"], quantity:"1d2"}),
+  gathering("hunt-game-bird-premium", "Premium Game Bird Meat", "game", "veryRare", {category:"game-small", biomes:["forest","grassland","swamp","coast"], tags:["game-hunt","small-game","game-bird","meat","premium"], quantity:"1"}),
+
+  gathering("hunt-wild-boar-basic", "Basic Wild Boar Meat", "game", "common", {category:"game-medium", biomes:["forest","grassland","swamp"], tags:["game-hunt","medium-game","wild-boar","meat","basic"], quantity:"1d4"}),
+  gathering("hunt-wild-boar-rich", "Rich Wild Boar Meat", "game", "rare", {category:"game-medium", biomes:["forest","grassland","swamp"], tags:["game-hunt","medium-game","wild-boar","meat","rich"], quantity:"1d3"}),
+  gathering("hunt-wild-boar-premium", "Premium Wild Boar Meat", "game", "veryRare", {category:"game-medium", biomes:["forest","grassland","swamp"], tags:["game-hunt","medium-game","wild-boar","meat","premium"], quantity:"1d2"}),
+  gathering("hunt-wild-goat-basic", "Basic Wild Goat Meat", "game", "common", {category:"game-medium", biomes:["mountain","grassland","ravine"], tags:["game-hunt","medium-game","wild-goat","meat","basic"], quantity:"1d3"}),
+  gathering("hunt-wild-goat-rich", "Rich Wild Goat Meat", "game", "rare", {category:"game-medium", biomes:["mountain","grassland","ravine"], tags:["game-hunt","medium-game","wild-goat","meat","rich"], quantity:"1d3"}),
+  gathering("hunt-wild-goat-premium", "Premium Wild Goat Meat", "game", "veryRare", {category:"game-medium", biomes:["mountain","grassland","ravine"], tags:["game-hunt","medium-game","wild-goat","meat","premium"], quantity:"1d2"}),
+
+  gathering("hunt-deer-basic", "Basic Deer Meat", "game", "common", {category:"game-large", biomes:["forest","grassland","mountain"], tags:["game-hunt","large-game","deer","meat","basic"], quantity:"1d6"}),
+  gathering("hunt-deer-rich", "Rich Deer Meat", "game", "rare", {category:"game-large", biomes:["forest","grassland","mountain"], tags:["game-hunt","large-game","deer","meat","rich"], quantity:"1d4"}),
+  gathering("hunt-deer-premium", "Premium Deer Meat", "game", "veryRare", {category:"game-large", biomes:["forest","grassland","mountain"], tags:["game-hunt","large-game","deer","meat","premium"], quantity:"1d3"}),
+  gathering("hunt-elk-basic", "Basic Elk Meat", "game", "common", {category:"game-large", biomes:["forest","mountain","grassland","arctic"], tags:["game-hunt","large-game","elk","meat","basic"], quantity:"1d8"}),
+  gathering("hunt-elk-rich", "Rich Elk Meat", "game", "rare", {category:"game-large", biomes:["forest","mountain","grassland","arctic"], tags:["game-hunt","large-game","elk","meat","rich"], quantity:"1d6"}),
+  gathering("hunt-elk-premium", "Premium Elk Meat", "game", "veryRare", {category:"game-large", biomes:["forest","mountain","grassland","arctic"], tags:["game-hunt","large-game","elk","meat","premium"], quantity:"1d4"}),
 
   // Cultivated / Domestic — ordinary farm, orchard, apiary and livestock products. These are
   // intentionally Profession & Trade materials rather than Environment Gathering results.
