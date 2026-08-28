@@ -119,42 +119,51 @@ export class ItemPilesBridge {
     if (typeof api.createItemPile !== "function") {
       throw new Error("The active Item Piles version does not expose createItemPile().");
     }
+    if (typeof api.addItems !== "function") {
+      throw new Error("The active Item Piles version does not expose addItems().");
+    }
 
     const documents = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
-    const items = [];
+    const batchId = `generated-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const payload = [];
+    const expected = [];
     const missing = [];
+
     for (const row of result.items) {
-      const source = documents.get(String(row.materialId));
+      const materialId = String(row?.materialId ?? "").trim();
+      const source = documents.get(materialId);
       if (!source) {
-        missing.push(String(row.materialId));
+        missing.push(materialId);
         continue;
       }
+
+      const quantity = Math.max(1, Math.floor(Number(row?.quantity) || 1));
       const data = source.toObject();
       delete data._id;
       delete data._stats;
       delete data.folder;
       data.sort = 0;
       data.system ??= {};
-      // Item Piles createItemPile() expects each generated entry in the same
-      // { item, quantity } shape used by addItems(). Keep the cloned source Item
-      // at quantity 1 and pass the requested stack separately; passing raw Item
-      // data here can be interpreted as one transformed entry and collapse a
-      // multi-item preview down to the final row in D&D5e.
+      // Item Piles addItems() owns the stack quantity. Keeping the source clone
+      // at one mirrors the already-live-validated Token Harvest path and avoids
+      // D&D5e quantity transforms multiplying the requested stack.
       data.system.quantity = 1;
       data.flags ??= {};
       data.flags[MODULE_ID] = {
         ...(data.flags[MODULE_ID] ?? {}),
         generatedLoot: true,
+        generatedLootBatch: batchId,
+        generatedLootMaterialId: materialId,
         generatedAt: Date.now(),
         generationSource: String(result.source ?? "manual-generation")
       };
-      items.push({
-        item: data,
-        quantity: Math.max(1, Math.floor(Number(row.quantity) || 1))
-      });
+
+      payload.push({ item: data, quantity });
+      expected.push({ materialId, name: String(data.name ?? row?.name ?? materialId), quantity });
     }
+
     if (missing.length) throw new Error(`Crafting Core material Items are missing (${missing.join(", ")}). Run Materials → Sync Catalog and retry.`);
-    if (!items.length) throw new Error("No generated material Items could be resolved.");
+    if (!payload.length) throw new Error("No generated material Items could be resolved.");
 
     const dominant = [...result.items].sort((a, b) => (Number(b.quantity) || 0) - (Number(a.quantity) || 0))[0] ?? null;
     const icon = String(dominant?.img || "icons/svg/item-bag.svg");
@@ -172,15 +181,140 @@ export class ItemPilesBridge {
     }
 
     const name = String(result.sourceLabel || "Generated Materials");
-    const uuid = await api.createItemPile({
-      sceneId: targetSceneId,
-      position: pilePosition,
-      items,
-      tokenOverrides: { name, hidden: Boolean(hidden), texture: { src: icon } },
-      actorOverrides: { name, img: icon },
-      itemPileFlags: { displayOne: false, showItemName: false }
-    });
-    return { uuid, icon, position: pilePosition, itemCount: items.length, hidden: Boolean(hidden), sceneId: targetSceneId };
+    const defaultDeleteWhenEmpty = api.PILE_DEFAULTS?.deleteWhenEmpty;
+    let createdUuid = null;
+    let pileTarget = null;
+
+    try {
+      // Deliberately create an empty pile first. Passing a multi-item array to
+      // createItemPile() is avoided here because the Generate Materials live
+      // path showed that the D&D5e / Item Piles creation transform could retain
+      // only the final entry. Inventory population is delegated to addItems(),
+      // the same API path already proven by Token Harvest.
+      createdUuid = await api.createItemPile({
+        sceneId: targetSceneId,
+        position: pilePosition,
+        tokenOverrides: { name, hidden: Boolean(hidden), texture: { src: icon } },
+        actorOverrides: { name, img: icon },
+        itemPileFlags: {
+          displayOne: false,
+          showItemName: false,
+          deleteWhenEmpty: false
+        }
+      });
+
+      pileTarget = await this.#resolveGeneratedPileTarget(createdUuid, targetSceneId);
+      const added = await api.addItems(pileTarget, payload) ?? [];
+
+      // Re-resolve after the Item Piles transaction so validation reads the
+      // authoritative embedded inventory rather than a potentially stale view.
+      const refreshed = await this.#resolveGeneratedPileTarget(createdUuid, targetSceneId);
+      const validation = this.#validateGeneratedPileContents(refreshed, expected, batchId);
+      if (!validation.ok) {
+        const detail = validation.problems.length ? ` ${validation.problems.join("; ")}` : "";
+        throw new Error(`Item Piles created the pile, but Crafting Core could not verify the complete generated inventory.${detail}`);
+      }
+
+      if (typeof api.updateItemPile === "function" && defaultDeleteWhenEmpty !== undefined) {
+        try { await api.updateItemPile(refreshed, { deleteWhenEmpty: defaultDeleteWhenEmpty }); }
+        catch (error) { console.warn(`${MODULE_ID} | Could not restore generated Item Pile deleteWhenEmpty default.`, error); }
+      }
+
+      console.debug(`${MODULE_ID} | Generated Item Pile populated transactionally: expected=${expected.length}; added=${Array.isArray(added) ? added.length : 0}; uuid=${createdUuid}.`);
+      return {
+        uuid: createdUuid,
+        icon,
+        position: pilePosition,
+        itemCount: expected.length,
+        hidden: Boolean(hidden),
+        sceneId: targetSceneId
+      };
+    } catch (error) {
+      if (createdUuid || pileTarget) {
+        try { await this.#deleteGeneratedPileTarget(pileTarget ?? await this.#resolveGeneratedPileTarget(createdUuid, targetSceneId)); }
+        catch (cleanupError) {
+          console.error(`${MODULE_ID} | Could not remove an incomplete generated Item Pile after population failed.`, cleanupError);
+        }
+      }
+      throw error;
+    }
+  }
+
+  static async #resolveGeneratedPileTarget(uuid, sceneId) {
+    const rawUuid = String(uuid ?? "").trim();
+    if (!rawUuid) throw new Error("Item Piles did not return a UUID for the generated pile.");
+
+    const resolver = globalThis.fromUuid ?? foundry.utils?.fromUuid;
+    let resolved = null;
+    if (typeof resolver === "function") {
+      try { resolved = await resolver(rawUuid); }
+      catch (_) { resolved = null; }
+    }
+
+    const direct = resolved?.document ?? resolved;
+    if (direct?.documentName === "Token" || direct?.documentName === "Actor") return direct;
+    if (direct?.actor) return direct;
+
+    // createItemPile() with a Scene position normally returns a Token UUID.
+    // Keep a deterministic Scene lookup fallback in case the resolver has not
+    // hydrated that embedded document yet on the current client.
+    const tokenMatch = rawUuid.match(/^Scene\.([^.]+)\.Token\.([^.]+)$/i);
+    if (tokenMatch) {
+      const scene = game.scenes?.get?.(tokenMatch[1]) ?? (String(sceneId) === tokenMatch[1] ? canvas?.scene : null);
+      const token = scene?.tokens?.get?.(tokenMatch[2]);
+      if (token) return token;
+    }
+
+    throw new Error(`Crafting Core could not resolve the generated Item Pile document (${rawUuid}).`);
+  }
+
+  static #validateGeneratedPileContents(target, expected, batchId) {
+    const actor = target?.documentName === "Actor" ? target : target?.actor;
+    const actorItems = [...(actor?.items?.contents ?? actor?.items ?? [])];
+    if (!actor || !actorItems.length) {
+      return { ok: false, problems: ["the created pile has no readable Item inventory"] };
+    }
+
+    const expectedById = new Map(expected.map(row => [String(row.materialId), row]));
+    const expectedByName = new Map(expected.map(row => [String(row.name).trim().toLowerCase(), row]));
+    const actual = new Map();
+
+    for (const item of actorItems) {
+      const flags = item?.flags?.[MODULE_ID] ?? {};
+      if (flags.generatedLootBatch && String(flags.generatedLootBatch) !== String(batchId)) continue;
+
+      let materialId = String(flags.generatedLootMaterialId ?? "").trim();
+      if (!materialId || !expectedById.has(materialId)) {
+        const byName = expectedByName.get(String(item?.name ?? "").trim().toLowerCase());
+        materialId = String(byName?.materialId ?? "").trim();
+      }
+      if (!materialId || !expectedById.has(materialId)) continue;
+
+      const quantity = Math.max(0, Math.floor(Number(item?.system?.quantity) || 0));
+      actual.set(materialId, (actual.get(materialId) ?? 0) + quantity);
+    }
+
+    const problems = [];
+    for (const row of expected) {
+      const actualQuantity = actual.get(String(row.materialId)) ?? 0;
+      if (actualQuantity !== row.quantity) {
+        problems.push(`${row.name}: expected ×${row.quantity}, found ×${actualQuantity}`);
+      }
+    }
+
+    return { ok: problems.length === 0, problems };
+  }
+
+  static async #deleteGeneratedPileTarget(target) {
+    const document = target?.document ?? target;
+    if (document?.documentName === "Token" && typeof document.delete === "function") {
+      await document.delete();
+      return;
+    }
+    // Never delete an Actor fallback here: createGeneratedLootPile() uses the
+    // shared default Item Piles actor unless explicitly told otherwise. Deleting
+    // it would be destructive. A positioned generated pile should resolve to a
+    // TokenDocument, so reaching this branch is intentionally a safe no-op.
   }
 
   static async turnTokenIntoLootPile(tokenDocument, result) {

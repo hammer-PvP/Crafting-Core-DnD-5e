@@ -1,11 +1,13 @@
 # Changelog
 
 ## 0.0.19f1
-- Fixed generated Item Piles created from Generate Materials so **every preview Item is transferred**, not only the last row.
-- Corrected the Item Piles `createItemPile()` payload to use the module API's `{ item, quantity }` entry shape for each generated material instead of passing raw Item data objects directly.
-- Generated source Item data now stays at quantity 1 while the requested stack size is supplied through the Item Piles payload, matching the already-stable Token Harvest `addItems()` integration and avoiding system quantity transformation issues.
-- The fix is shared by drag-to-scene and the secondary center-of-scene fallback, so Creature Harvest, Environment Gathering, and Game Hunt all use the same corrected multi-item path.
-- No generation probabilities, multi-select UX, hidden-pile behavior, Crafting Projects, Harvest rarity pools, or catalog data were changed.
+- Rebuilt the generated Item Pile fix from the user-supplied stable **v0.0.19f** baseline; the previous f1 attempt is not part of this build.
+- Changed Generate Materials Item Pile creation to a two-stage transaction: create the hidden pile empty first, then populate its inventory through Item Piles `addItems()` using `{ item, quantity }` entries, matching the already-live-validated Token Harvest integration.
+- Added a unique generated-loot batch/material marker to cloned Items and post-transaction verification that every Preview material and quantity exists in the created pile.
+- If Item Piles creation succeeds but population or verification fails, Crafting Core removes the newly created Token instead of silently leaving a partial pile.
+- Temporarily disables `deleteWhenEmpty` only while the empty pile is being populated, then restores the Item Piles default when available.
+- Drag-to-scene and **Create Hidden at Scene Center** share the same corrected population path, so Creature Harvest manual, Environment Gathering, and Game Hunt receive the same fix.
+- No generation probabilities, yield, dropdown UX, Harvest pools, Essence rules, Game Hunt behavior, or Crafting Project mechanics changed.
 
 ## 0.0.19f
 - Converted Generate Materials checkbox multi-selects into true anchored **popover/dropdown controls**. Biomes, Resources, Abundance, Creature Types, Harvest Profiles, and Essence Affinities now open over the Application instead of expanding/reflowing the window.

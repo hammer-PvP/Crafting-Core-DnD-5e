@@ -1,8 +1,12 @@
 # Crafting Core (DnD 5e)
 
-## v0.0.19f1 — Popover UX & Hidden Drag-to-Scene Loot
+## v0.0.19f1 — Transactional Generated Item Pile Population
 
-v0.0.19f1 keeps the approved Generate Materials 2.0 mathematics intact and polishes the session workflow. Multi-select selectors now behave like real dropdowns: the closed field stays compact and its checkbox list opens in an anchored top-layer popover, so choosing Biomes, Resources, Abundance, Creature Types, Harvest Profiles, Essence Affinities, or rarity-pool materials no longer stretches the Application.
+v0.0.19f1 is a narrow hotfix rebuilt directly from the user-supplied stable v0.0.19f baseline. Generated Loot no longer asks `createItemPile()` to create a pile and a multi-item inventory in the same operation. Crafting Core now creates the hidden pile first, resolves that pile, then uses the same Item Piles `addItems()` transaction pattern already proven by Token Harvest. The result is verified against the Preview before Crafting Core reports success; incomplete generated piles are removed rather than left silently on the Scene.
+
+## v0.0.19f — Popover UX & Hidden Drag-to-Scene Loot
+
+v0.0.19f keeps the approved Generate Materials 2.0 mathematics intact and polishes the session workflow. Multi-select selectors now behave like real dropdowns: the closed field stays compact and its checkbox list opens in an anchored top-layer popover, so choosing Biomes, Resources, Abundance, Creature Types, Harvest Profiles, Essence Affinities, or rarity-pool materials no longer stretches the Application.
 
 When Item Piles is active, a successful Generate Materials preview now exposes a **draggable Generated Loot card**. Drag it onto the Scene and Crafting Core creates the pile at the exact drop location. Generated piles are **Hidden by default**, allowing the GM to prepare gathering or hunting results while players are roleplaying and reveal them only when appropriate. A secondary `Create Hidden at Scene Center` action remains available as a fallback.
 
