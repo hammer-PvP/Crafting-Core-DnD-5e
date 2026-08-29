@@ -262,8 +262,8 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const extraEffortGainInput = root.querySelector('[name="extraEffortProgressGain"]');
     if (extraEffortGainInput) project.extraEffort.progressGain = Math.clamp(Math.floor(Number(extraEffortGainInput.value) || 1), 1, 9);
     project.extraEffort.failure ??= {};
-    const extraFailureMode = root.querySelector('[name="extraEffortFailureMode"]:checked');
-    if (extraFailureMode) project.extraEffort.failure.mode = extraFailureMode.value;
+    const extraLoseProgressInput = root.querySelector('[name="extraEffortLoseProgress"]');
+    if (extraLoseProgressInput) project.extraEffort.failure.mode = extraLoseProgressInput.checked ? "regress" : "noProgress";
     const extraRegressInput = root.querySelector('[name="extraEffortRegressBy"]');
     if (extraRegressInput) project.extraEffort.failure.regressBy = Math.max(1, Math.floor(Number(extraRegressInput.value) || 1));
     this.draft.project = RecipeService.normalizeProject(project);

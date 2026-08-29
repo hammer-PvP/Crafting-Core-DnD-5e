@@ -139,12 +139,9 @@
           <label><span>Progress on Success</span><input type="number" min="1" max="9" step="1" name="extraEffortProgressGain" value="{{draft.project.extraEffort.progressGain}}"></label>
         </div>
         <div class="cc-resolution-section cc-failure-outcome-block">
-          <div class="cc-resolution-heading"><strong>On Extra Effort Failure</strong><small>The Extra Effort opportunity is spent. It never consumes more materials.</small></div>
-          <div class="cc-failure-choice-grid cc-extra-effort-failure-grid">
-            <label class="cc-choice-card"><input type="radio" name="extraEffortFailureMode" value="noProgress" data-resolution-rerender {{#if (eq draft.project.extraEffort.failure.mode "noProgress")}}checked{{/if}}><span><strong>No Extra Progress</strong><small>The project stays where it is.</small></span></label>
-            <label class="cc-choice-card"><input type="radio" name="extraEffortFailureMode" value="regress" data-resolution-rerender {{#if (eq draft.project.extraEffort.failure.mode "regress")}}checked{{/if}}><span><strong>Regress Progress</strong><small>The overexertion costs existing progress.</small></span></label>
-          </div>
-          {{#if (eq draft.project.extraEffort.failure.mode "regress")}}<label><span>Progress Lost</span><input type="number" min="1" max="99" step="1" name="extraEffortRegressBy" value="{{draft.project.extraEffort.failure.regressBy}}"></label>{{/if}}
+          <div class="cc-resolution-heading"><strong>On Extra Effort Failure</strong><small>A failed Extra Effort always spends the opportunity and grants no extra progress. It never consumes more materials.</small></div>
+          <label class="cc-resolution-toggle"><input type="checkbox" name="extraEffortLoseProgress" data-resolution-rerender {{#if (eq draft.project.extraEffort.failure.mode "regress")}}checked{{/if}}><span><strong>Lose Progress on Failure</strong><small>Unchecked: failure has no penalty beyond spending this Extra Effort opportunity.</small></span></label>
+          {{#if (eq draft.project.extraEffort.failure.mode "regress")}}<label><span>Progress Lost on Failure</span><input type="number" min="1" max="99" step="1" name="extraEffortRegressBy" value="{{draft.project.extraEffort.failure.regressBy}}"></label>{{/if}}
         </div>
         {{/if}}
       </section>

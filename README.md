@@ -1,5 +1,9 @@
 # Crafting Core (DnD 5e)
 
+## v0.0.20a — Extra Effort Failure UX Polish
+
+v0.0.20a is a focused UI follow-up to v0.0.20. The Extra Effort mechanics are unchanged, but the Recipe Builder now presents failure configuration as a single optional **Lose Progress on Failure** checkbox. With it unchecked, a failed Extra Effort simply spends that opportunity and grants no extra progress; with it checked, the GM configures how much existing Work Progress is lost.
+
 ## v0.0.20 — Extra Effort, Material Stacking & Result Feedback
 
 v0.0.20 adds **Extra Effort** to the live-validated Crafting Project loop. After the normal Work Attempt for a Work Period, a Recipe may allow one optional Extra Effort attempt using its own GM-configured Ability, Skill, Tool, or Saving Throw check. Success grants configurable extra Work Progress; failure normally grants no extra progress and can optionally regress progress. Extra Effort never consumes the reserved ingredients again.

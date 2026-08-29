@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.20a
+- Simplified Extra Effort failure configuration in the Recipe Builder.
+- Removed the redundant `No Extra Progress` / `Regress Progress` radio choice.
+- A failed Extra Effort now reads naturally: it always grants no extra progress; an optional `Lose Progress on Failure` checkbox enables regression.
+- When regression is enabled, `Progress Lost on Failure` configures the amount.
+- No mechanics changed: existing `noProgress` / `regress` project data remains fully compatible.
+
 ## 0.0.20
 - Added **Extra Effort** for Crafting Projects. A Recipe can allow one optional second work attempt after each normal Work Attempt.
 - Extra Effort uses its own GM-configured D&D5e check: Ability, Skill, Tool, or Saving Throw, with an independent DC.
