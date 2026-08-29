@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0 - Consolidation Release
+
+- Promotes the live-tested Crafting Core feature set to the v0.1.x milestone.
+- Preserves the validated crafting, harvesting, generation, stacking, Item Piles, and Extra Effort mechanics from v0.0.20a.
+- Fixes Project result dialogs being visually hidden behind a D&D5e Actor Sheet by awaiting the sheet refresh before opening the Crafting Core result dialog.
+- Adds the shared Hammer-PvP **Support the Creator** block to Crafting Core Settings with a direct **Buy Me a Coffee** button.
+- Adds a separate **Report a Bug / Request a Feature** GitHub Issues button in the Settings footer.
+- Updates public README and architecture documentation to describe the implemented v0.1.0 system without stale roadmap items.
+- Adds the complete v0.1.0 manual, Foundry listing copy, and reusable Support/Feedback UI standard as release-side documentation artifacts.
+
 ## 0.0.20a
 - Simplified Extra Effort failure configuration in the Recipe Builder.
 - Removed the redundant `No Extra Progress` / `Regress Progress` radio choice.

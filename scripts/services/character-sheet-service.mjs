@@ -163,7 +163,10 @@ export class CharacterSheetService {
       event.preventDefault(); button.disabled = true;
       try {
         const result = await handler(app.actor ?? app.document);
-        app.render({ force: true });
+        // ApplicationV2 rendering is asynchronous. Await the sheet refresh before
+        // opening the result dialog so the sheet cannot finish rendering afterward
+        // and steal the foreground from the Crafting Core message.
+        await app.render({ force: true });
         if (result?.feedback) await ResultDialog.show(result.feedback);
         else if (result?.outcome === "failure") ui.notifications.warn("Crafting failed.");
       } catch (error) {
