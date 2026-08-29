@@ -118,8 +118,7 @@ export class RecipeService {
         pack: String(recipe.publication.pack || ""),
         sourceType: String(recipe.publication.sourceType || recipe.knowledge?.label || "Recipe"),
         publishedAt: Number(recipe.publication.publishedAt) || 0,
-        updatedAt: Number(recipe.publication.updatedAt) || 0,
-        revision: Math.max(0, Math.floor(Number(recipe.publication.revision) || 0))
+        updatedAt: Number(recipe.publication.updatedAt) || 0
       } : null,
       createdAt: Number(recipe.createdAt) || Date.now(),
       updatedAt: Date.now()

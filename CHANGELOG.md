@@ -1,31 +1,16 @@
 # Changelog
 
-## 0.1.1 - Published Recipe Lifecycle
-
-- Rebuilds the published Recipe / learned Recipe lifecycle from the clean v0.1.0 stable baseline.
-- Makes the private **Crafting Core — Learn Sources** Compendium authoritative after first publication. Recipe Builder edits remain private editor drafts until the GM explicitly uses **Update / Save to Compendium**.
-- Published updates keep the same Compendium Item UUID, increment a published revision, verify the saved source after the write, and reconcile the Knowledge Source back to exactly one canonical **Learn Recipe** Activity.
-- Characters who already know a Recipe receive the newly published snapshot automatically. Draft-only edits never change Character knowledge.
-- Existing active Crafting Projects remain frozen on the Recipe snapshot they started with; future crafts/projects use the latest published revision.
-- Adds a live freshness gate: if the currently viewed Recipe changes while selected, Crafting Core preserves what the player was reading but blocks the next Craft/Start action, loads the new revision, and asks the player to review it before trying again.
-- Adds **Unlearn Recipe** for players and GMs with a foreground modal, case-insensitive `I AGREE` confirmation, persistent post-write verification, double-click protection, and active-Project protection.
-- Deleting the authoritative Compendium Knowledge Source immediately removes that Recipe from Characters who know it. Startup reconciliation is a safety net for deletions or old data that occurred while the module was unavailable.
-- Deleting/consuming a distributed Knowledge Source copy does not make a Character forget an already learned Recipe, and an orphan copy can no longer teach after its authoritative publication is removed.
-- Adds one-time v0.1.0 knowledge reconciliation: existing learned snapshots are linked to their matching published Compendium source by stable Recipe ID; orphan legacy knowledge is removed rather than silently re-created.
-- Downstream Character/copy synchronization failures no longer report the authoritative Compendium update itself as failed. The GM receives a clear **sync pending** result and reconciliation retries later.
-- Strengthens Crafting Core Result/confirmation dialogs with modal foreground behavior and repeated native `bringToFront()` calls.
-- Compacts the Recipe Builder and Crafting Core Settings layouts without changing their configuration semantics.
-- Preserves the live-validated crafting engine, Short/Long Rest Project flow, Progress/Final Checks, Extra Effort runtime, material stacking, harvesting, Generate Materials, and Item Piles pipeline from v0.1.0.
-
-## 0.1.0 - Consolidation Release
-
-- Promotes the live-tested Crafting Core feature set to the v0.1.x milestone.
-- Preserves the validated crafting, harvesting, generation, stacking, Item Piles, and Extra Effort mechanics from v0.0.20a.
-- Fixes Project result dialogs being visually hidden behind a D&D5e Actor Sheet by awaiting the sheet refresh before opening the Crafting Core result dialog.
-- Adds the shared Hammer-PvP **Support the Creator** block to Crafting Core Settings with a direct **Buy Me a Coffee** button.
-- Adds a separate **Report a Bug / Request a Feature** GitHub Issues button in the Settings footer.
-- Updates public README and architecture documentation to describe the implemented v0.1.0 system without stale roadmap items.
-- Adds the complete v0.1.0 manual, Foundry listing copy, and reusable Support/Feedback UI standard as release-side documentation artifacts.
+## 0.0.21
+- Stabilized the **Knowledge Lifecycle** around the private `Crafting Core — Learn Sources` Compendium as the publication authority.
+- Republishing a Recipe continues updating the same managed Knowledge Source in place and now records a compact published-revision fingerprint used to validate distributed copies.
+- Characters who already know a Recipe are reconciled to the newly published snapshot. Partial Actor/index synchronization no longer reports publication itself as failed; the GM receives an explicit **Published — Sync Pending** result and startup reconciliation retries the remaining work.
+- The Character Crafting tab now preserves the Recipe revision currently being inspected. If a newer revision is published, **Craft** / **Start Project** first reloads the Recipe and stops before any roll, material consumption, reservation, or Project progress; the player must review and click again.
+- Added **Unlearn Recipe** for Character owners and GMs with typed `I AGREE` confirmation. A Recipe cannot be manually forgotten while its own Crafting Project is active.
+- Deleting the authoritative published Knowledge Source from `Learn Sources` now unpublishes that stable Recipe ID, removes it from Characters who knew it, clears stale Builder publication metadata, and makes distributed copies orphaned.
+- Outdated distributed copies are blocked before consumption when their stored Recipe snapshot no longer matches the current published revision. Orphaned copies are also blocked before consumption.
+- Added GM-startup reconciliation to rebuild the publication index from the private Compendium, repair missed learned-Recipe updates, forget unpublished knowledge, and recover from interrupted synchronization.
+- Active Crafting Projects remain isolated from Knowledge lifecycle changes: they continue using their frozen Recipe snapshot even if the Recipe is later updated, forgotten through unpublication, or its Builder draft is deleted.
+- No Crafting Project progression, material reservation, rest cadence, Extra Effort, Harvest, gathering, or material-generation mathematics were changed.
 
 ## 0.0.20a
 - Simplified Extra Effort failure configuration in the Recipe Builder.

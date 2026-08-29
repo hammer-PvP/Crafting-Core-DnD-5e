@@ -77,7 +77,7 @@ Hooks.once("init", () => {
   // the Crafting Core button unusable.
   exposeApi();
   runInitStep("recipe settings", () => RecipeService.registerSettings());
-  runInitStep("published Recipe index", () => KnowledgeItemService.registerSettings());
+  runInitStep("knowledge lifecycle settings", () => KnowledgeItemService.registerSettings());
   runInitStep("material settings", () => MaterialCatalogService.registerSettings());
   runInitStep("harvest profile settings", () => HarvestProfileService.registerSettings());
   runInitStep("gear normalization settings", () => GearNormalizationService.registerSettings());
@@ -106,14 +106,22 @@ Hooks.once("ready", async () => {
   try { CraftingService.ready(); }
   catch (error) { console.error(`${MODULE_TITLE} | Crafting runtime failed to become ready.`, error); }
 
-  // One GM reconciles published Knowledge Sources, legacy Actor knowledge, and authoritative Recipe mirrors.
+  // One GM upgrades v0.0.1/v0.0.2 Character knowledge to self-contained recipe snapshots.
   const activeGM = game.users?.activeGM ?? game.users?.contents?.find(user => user.active && user.isGM);
   if (game.user?.isGM && (!activeGM || activeGM.id === game.user.id)) {
     try {
-      const migrated = await KnowledgeItemService.reconcilePublishedKnowledge();
-      if (migrated.actors || migrated.sources || migrated.removed || migrated.copies) console.info(`${MODULE_TITLE} | Reconciled published Recipe knowledge:`, migrated);
+      const migrated = await KnowledgeItemService.migrateLegacyKnowledge();
+      if (migrated.actors || migrated.items) console.info(`${MODULE_TITLE} | Migrated legacy knowledge:`, migrated);
     } catch (error) {
-      console.error(`${MODULE_TITLE} | Published Recipe knowledge reconciliation failed.`, error);
+      console.error(`${MODULE_TITLE} | Legacy knowledge migration failed.`, error);
+    }
+    try {
+      const knowledge = await KnowledgeItemService.reconcilePublishedKnowledge();
+      if (knowledge.refreshed || knowledge.forgotten || knowledge.draftsUpdated || knowledge.indexChanged) {
+        console.info(`${MODULE_TITLE} | Reconciled published knowledge lifecycle:`, knowledge);
+      }
+    } catch (error) {
+      console.error(`${MODULE_TITLE} | Published knowledge reconciliation failed.`, error);
     }
     try {
       const materialMigration = await MaterialCatalogService.migrateCuratedCatalogIfNeeded();

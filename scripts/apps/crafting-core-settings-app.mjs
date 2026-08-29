@@ -4,15 +4,12 @@ import { GearNormalizationService } from "../services/gear-normalization-service
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
-const SUPPORT_URL = "https://buymeacoffee.com/hammer.pvp";
-const ISSUES_URL = "https://github.com/hammer-PvP/Crafting-Core-DnD-5e/issues";
-
 export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(ApplicationV2) {
   static DEFAULT_OPTIONS = {
     id: "crafting-core-settings",
     classes: ["crafting-core", "crafting-core-settings-app", "standard-form"],
     tag: "form",
-    position: { width: 720, height: 760 },
+    position: { width: 760, height: 760 },
     window: { title: "Crafting Core — Settings", resizable: true }
   };
 
@@ -150,20 +147,7 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
       this.render({ force: true });
     });
 
-    root.querySelector('[data-action="open-buy-me-a-coffee"]')?.addEventListener("click", event => {
-      event.preventDefault();
-      this.#openExternal(SUPPORT_URL);
-    });
-    root.querySelector('[data-action="open-github-issues"]')?.addEventListener("click", event => {
-      event.preventDefault();
-      this.#openExternal(ISSUES_URL);
-    });
     root.querySelector('[data-action="save-settings"]')?.addEventListener("click", event => this.#save(event));
-  }
-
-  #openExternal(url) {
-    const opened = globalThis.open?.(url, "_blank", "noopener,noreferrer");
-    if (!opened) ui.notifications.info(url);
   }
 
   #moveScanner(id, delta) {

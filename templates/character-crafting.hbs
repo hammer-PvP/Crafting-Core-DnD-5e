@@ -7,7 +7,7 @@
         {{#each craftingCore.recipes}}
         <button type="button" class="cc-profession-recipe {{#if selected}}selected{{/if}} {{#if active}}active-project{{/if}}" data-action="select-recipe" data-recipe-id="{{id}}">
           <img src="{{img}}" alt="">
-          <span class="cc-profession-recipe-name"><strong>{{name}}</strong><small>{{modeLabel}}{{#if active}} · Active Project{{/if}}</small></span>
+          <span class="cc-profession-recipe-name"><strong>{{name}}</strong><small>{{modeLabel}}{{#if active}} · Active Project{{/if}}{{#if knowledgeUnavailable}} · Source Unpublished{{/if}}</small></span>
           {{#if playerVisibility.craftCount}}<span class="cc-profession-count">{{craftCount}}×</span>{{else}}<span></span>{{/if}}
         </button>
         {{/each}}
@@ -26,8 +26,11 @@
       <header class="cc-profession-detail-header">
         <img src="{{img}}" alt="">
         <div><span class="cc-kicker">{{#if (eq craftingMode "project")}}Crafting Project{{else}}Timed Recipe{{/if}}</span><h2>{{name}}</h2>{{#if ../craftingCore.selectedIsActiveProject}}<small class="cc-active-project-label"><i class="fa-solid fa-hammer"></i> Active Project</small>{{/if}}</div>
-        <button type="button" class="cc-unlearn-recipe" data-action="unlearn-recipe" {{#if ../craftingCore.selectedIsActiveProject}}disabled data-tooltip="Complete or cancel the active Project before forgetting this Recipe."{{/if}}><i class="fa-solid fa-book"></i> Unlearn</button>
       </header>
+
+      {{#if ../craftingCore.selectedStale}}
+      <div class="cc-recipe-stale-note"><i class="fa-solid fa-arrows-rotate"></i><span>A newer published revision exists. This view is intentionally holding the version you were reading; Craft or Start Project will reload it before any transaction.</span></div>
+      {{/if}}
 
       {{#if playerVisibility.description}}{{#if description}}<section class="cc-profession-block"><h3>Description</h3><p class="cc-sheet-description">{{description}}</p></section>{{/if}}{{/if}}
 
@@ -87,6 +90,10 @@
           {{/if}}{{/if}}
           <button type="button" class="cc-project-cancel" data-action="cancel-project"><i class="fa-solid fa-ban"></i> Cancel Project</button>
         </div>
+        {{#if ../craftingCore.selectedKnown}}
+        <button type="button" class="cc-sheet-unlearn" disabled><i class="fa-solid fa-book-open"></i> Unlearn Recipe</button>
+        <div class="cc-unlearn-lock-note"><i class="fa-solid fa-lock"></i><span>Finish or cancel this active Project before forgetting its Recipe.</span></div>
+        {{/if}}
         {{/with}}
       {{else}}
         {{#if playerVisibility.ingredients}}
@@ -121,6 +128,9 @@
           <button type="button" class="cc-sheet-craft" data-action="start-project" {{#unless ../craftingCore.selectedCanStart}}disabled{{/unless}}><i class="fa-solid fa-hammer"></i> Start Project</button>
         {{else}}
           <button type="button" class="cc-sheet-craft" data-action="craft" {{#unless ../craftingCore.selectedCanStart}}disabled{{/unless}}><i class="fa-solid {{#if resolution.rollRequired}}fa-dice-d20{{else}}fa-hammer{{/if}}"></i> {{#if resolution.rollRequired}}Attempt Craft{{else}}Craft{{/if}}</button>
+        {{/if}}
+        {{#if ../craftingCore.selectedKnown}}
+          <button type="button" class="cc-sheet-unlearn" data-action="unlearn-recipe"><i class="fa-solid fa-book-open"></i> Unlearn Recipe</button>
         {{/if}}
       {{/if}}
       {{/with}}
