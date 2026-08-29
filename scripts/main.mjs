@@ -12,6 +12,7 @@ import { CraftingCoreSettingsApp } from "./apps/crafting-core-settings-app.mjs";
 import { TokenHarvestService } from "./services/token-harvest-service.mjs";
 import { ItemPilesBridge } from "./services/item-piles-bridge.mjs";
 import { GearNormalizationService } from "./services/gear-normalization-service.mjs";
+import { MaterialStackService } from "./services/material-stack-service.mjs";
 
 let app = null;
 let generatorApp = null;
@@ -53,7 +54,8 @@ const API = {
   get harvestProfiles() { return game.user?.isGM ? HarvestProfileService : undefined; },
   get tokenHarvest() { return game.user?.isGM ? TokenHarvestService : undefined; },
   get itemPiles() { return game.user?.isGM ? ItemPilesBridge : undefined; },
-  get gearNormalization() { return game.user?.isGM ? GearNormalizationService : undefined; }
+  get gearNormalization() { return game.user?.isGM ? GearNormalizationService : undefined; },
+  materialStacking: MaterialStackService
 };
 
 function exposeApi() {
@@ -91,6 +93,7 @@ Hooks.once("init", () => {
   runInitStep("Knowledge Item hooks", () => KnowledgeItemService.installHooks());
   runInitStep("Token Harvest hooks", () => TokenHarvestService.installHooks());
   runInitStep("Generated loot drag/drop", () => ItemPilesBridge.installGeneratedLootDropHook());
+  runInitStep("Crafting material auto-stacking", () => MaterialStackService.installHooks());
 
   console.info(`${MODULE_TITLE} | Initialized.`);
 });

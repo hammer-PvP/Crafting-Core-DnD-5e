@@ -7,6 +7,7 @@ import {
 } from "../constants.mjs";
 import { CompendiumService } from "./compendium-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
+import { ResultDialog } from "../ui/result-dialog.mjs";
 
 export class KnowledgeItemService {
   static PACK_NAME = "crafting-core-learn-sources";
@@ -306,6 +307,15 @@ export class KnowledgeItemService {
         }
         lines.push(`<p><strong>Progress Failure:</strong> ${escape(text)}</p>`);
       }
+      if (visibility.extraEffort && project.extraEffort.enabled) {
+        let text = `One Extra Effort attempt is available after each normal Work Attempt. Success grants +${project.extraEffort.progressGain} Work Progress.`;
+        if (visibility.extraEffortCheck) text += ` Check: ${RecipeService.checkLabel(project.extraEffort)}`;
+        if (visibility.extraEffortCheck && visibility.extraEffortDC) text += ` · DC ${project.extraEffort.dc}`;
+        if (visibility.extraEffortFailure) text += project.extraEffort.failure.mode === "regress"
+          ? ` · Failure regresses ${project.extraEffort.failure.regressBy} Work Period${project.extraEffort.failure.regressBy === 1 ? "" : "s"}.`
+          : " · Failure grants no extra progress.";
+        lines.push(`<p><strong>Extra Effort:</strong> ${escape(text)}</p>`);
+      }
     }
 
     return lines.join("\n");
@@ -475,7 +485,15 @@ export class KnowledgeItemService {
         const reason = visibility.proficiencies
           ? eligibility.reason
           : `${actor.name} does not meet the requirements to learn this recipe.`;
-        ui.notifications.warn(reason);
+        void ResultDialog.show({
+          title: "Unable to Learn Recipe",
+          message: reason,
+          facts: visibility.proficiencies && eligibility.rows?.length
+            ? eligibility.rows.filter(row => !row.proficient).map(row => `Missing proficiency: ${row.label}`)
+            : [],
+          tone: "warning",
+          icon: "fa-solid fa-book"
+        });
         return false;
       }
 

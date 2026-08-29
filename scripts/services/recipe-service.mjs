@@ -176,6 +176,14 @@ export class RecipeService {
     const failureMode = ["noProgress", "regress", "failProject"].includes(String(failure.mode))
       ? String(failure.mode)
       : "noProgress";
+
+    const extraSource = source.extraEffort && typeof source.extraEffort === "object" ? source.extraEffort : {};
+    const extraType = ["ability", "skill", "tool", "save"].includes(String(extraSource.type))
+      ? String(extraSource.type)
+      : "ability";
+    const extraFailure = extraSource.failure && typeof extraSource.failure === "object" ? extraSource.failure : {};
+    const extraFailureMode = extraFailure.mode === "regress" ? "regress" : "noProgress";
+
     return {
       requiredWork: Math.clamp(Math.floor(Number(source.requiredWork) || 1), 1, 99),
       cadence: source.cadence === "short" ? "short" : "long",
@@ -190,6 +198,17 @@ export class RecipeService {
           regressBy: Math.max(1, Math.floor(Number(failure.regressBy) || 1)),
           loseMaterials: Boolean(failureMode === "failProject" && failure.loseMaterials),
           lossPercent: Math.clamp(Math.round(Number(failure.lossPercent) || 0), 0, 100)
+        }
+      },
+      extraEffort: {
+        enabled: Boolean(extraSource.enabled),
+        type: extraType,
+        id: String(extraSource.id || (extraType === "save" ? "con" : extraType === "ability" ? "con" : extraType === "skill" ? "ath" : "smith")),
+        dc: Math.clamp(Math.floor(Number(extraSource.dc) || 12), 1, 40),
+        progressGain: Math.clamp(Math.floor(Number(extraSource.progressGain) || 1), 1, 9),
+        failure: {
+          mode: extraFailureMode,
+          regressBy: Math.max(1, Math.floor(Number(extraFailure.regressBy) || 1))
         }
       }
     };
@@ -215,6 +234,10 @@ export class RecipeService {
       progressDC: visibleByDefault("progressDC"),
       progressFailure: visibleByDefault("progressFailure"),
       progressFailurePercent: visibleByDefault("progressFailurePercent"),
+      extraEffort: visibleByDefault("extraEffort"),
+      extraEffortCheck: visibleByDefault("extraEffortCheck"),
+      extraEffortDC: visibleByDefault("extraEffortDC"),
+      extraEffortFailure: visibleByDefault("extraEffortFailure"),
       description: visibleByDefault("description")
     };
   }

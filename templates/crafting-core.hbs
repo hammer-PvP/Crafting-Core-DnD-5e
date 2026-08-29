@@ -123,6 +123,31 @@
         </div>
         {{/if}}
       </section>
+
+      <section class="cc-form-card cc-extra-effort-config-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Extra Effort</span><h3>Optional Second Work Attempt</h3></div><small>After the normal Work Attempt for a cycle, the crafter may push once more. Extra Effort uses its own check and never reserves or consumes materials again.</small></div>
+        <label class="cc-resolution-toggle"><input type="checkbox" name="enableExtraEffort" data-resolution-rerender {{#if draft.project.extraEffort.enabled}}checked{{/if}}><span><strong>Enable Extra Effort</strong><small>Allows one additional effort attempt after each normal Work Attempt.</small></span></label>
+        {{#if draft.project.extraEffort.enabled}}
+        <div class="cc-grid three">
+          <label><span>Extra Effort Check</span><select name="extraEffortCheck">
+            <optgroup label="Ability Checks">{{#each craftingResolutionOptions.abilityOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.extraEffortCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            <optgroup label="Skills">{{#each craftingResolutionOptions.skillOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.extraEffortCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            <optgroup label="Tools">{{#each craftingResolutionOptions.toolOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.extraEffortCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            <optgroup label="Saving Throws">{{#each craftingResolutionOptions.saveOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.extraEffortCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+          </select></label>
+          <label><span>Difficulty Class (DC)</span><input type="number" min="1" max="40" step="1" name="extraEffortDC" value="{{draft.project.extraEffort.dc}}"></label>
+          <label><span>Progress on Success</span><input type="number" min="1" max="9" step="1" name="extraEffortProgressGain" value="{{draft.project.extraEffort.progressGain}}"></label>
+        </div>
+        <div class="cc-resolution-section cc-failure-outcome-block">
+          <div class="cc-resolution-heading"><strong>On Extra Effort Failure</strong><small>The Extra Effort opportunity is spent. It never consumes more materials.</small></div>
+          <div class="cc-failure-choice-grid cc-extra-effort-failure-grid">
+            <label class="cc-choice-card"><input type="radio" name="extraEffortFailureMode" value="noProgress" data-resolution-rerender {{#if (eq draft.project.extraEffort.failure.mode "noProgress")}}checked{{/if}}><span><strong>No Extra Progress</strong><small>The project stays where it is.</small></span></label>
+            <label class="cc-choice-card"><input type="radio" name="extraEffortFailureMode" value="regress" data-resolution-rerender {{#if (eq draft.project.extraEffort.failure.mode "regress")}}checked{{/if}}><span><strong>Regress Progress</strong><small>The overexertion costs existing progress.</small></span></label>
+          </div>
+          {{#if (eq draft.project.extraEffort.failure.mode "regress")}}<label><span>Progress Lost</span><input type="number" min="1" max="99" step="1" name="extraEffortRegressBy" value="{{draft.project.extraEffort.failure.regressBy}}"></label>{{/if}}
+        </div>
+        {{/if}}
+      </section>
       {{/if}}
 
       <section class="cc-form-card cc-final-check-card">
@@ -171,6 +196,10 @@
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.progressDC" {{#if draft.playerVisibility.progressDC}}checked{{/if}}><span><strong>Progress DC</strong><small>Reveal its exact DC.</small></span></label>
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.progressFailure" {{#if draft.playerVisibility.progressFailure}}checked{{/if}}><span><strong>Progress Failure</strong><small>Reveal stall/regression/project-failure consequences.</small></span></label>
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.progressFailurePercent" {{#if draft.playerVisibility.progressFailurePercent}}checked{{/if}}><span><strong>Progress Material Loss %</strong><small>Reveal the exact loss percentage when a Progress Check can fail the Project.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.extraEffort" {{#if draft.playerVisibility.extraEffort}}checked{{/if}}><span><strong>Extra Effort</strong><small>Reveal whether the Recipe supports Extra Effort.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.extraEffortCheck" {{#if draft.playerVisibility.extraEffortCheck}}checked{{/if}}><span><strong>Extra Effort Check</strong><small>Reveal the roll used for Extra Effort.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.extraEffortDC" {{#if draft.playerVisibility.extraEffortDC}}checked{{/if}}><span><strong>Extra Effort DC</strong><small>Reveal its target DC.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.extraEffortFailure" {{#if draft.playerVisibility.extraEffortFailure}}checked{{/if}}><span><strong>Extra Effort Failure</strong><small>Reveal whether failure stalls or regresses progress.</small></span></label>
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingCheck" {{#if draft.playerVisibility.craftingCheck}}checked{{/if}}><span><strong>Final Crafting Check</strong><small>Reveal the final roll type.</small></span></label>
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingDC" {{#if draft.playerVisibility.craftingDC}}checked{{/if}}><span><strong>Final Crafting DC</strong><small>Reveal its target DC.</small></span></label>
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.failure" {{#if draft.playerVisibility.failure}}checked{{/if}}><span><strong>Final Failure Consequence</strong><small>Reveal what a failed final attempt does.</small></span></label>

@@ -58,6 +58,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const proficiencyValues = (this.draft?.craftingResolution?.proficiencies ?? []).map(row => `${row.type}:${row.id}`);
     const checkValue = `${this.draft?.craftingResolution?.check?.type ?? "skill"}:${this.draft?.craftingResolution?.check?.id ?? ""}`;
     const progressCheckValue = `${this.draft?.project?.progressCheck?.type ?? "tool"}:${this.draft?.project?.progressCheck?.id ?? ""}`;
+    const extraEffortCheckValue = `${this.draft?.project?.extraEffort?.type ?? "ability"}:${this.draft?.project?.extraEffort?.id ?? ""}`;
     return {
       recipeCount: recipes.length,
       recipes: recipes.map(recipe => ({
@@ -78,7 +79,8 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
         proficiency1: proficiencyValues[0] ?? "",
         proficiency2: proficiencyValues[1] ?? "",
         checkValue,
-        progressCheckValue
+        progressCheckValue,
+        extraEffortCheckValue
       }
     };
   }
@@ -175,6 +177,10 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
         progressCheck: {
           required: false, timing: "every", type: "tool", id: "smith", dc: 12,
           failure: { mode: "noProgress", regressBy: 1, loseMaterials: false, lossPercent: 50 }
+        },
+        extraEffort: {
+          enabled: false, type: "ability", id: "con", dc: 12, progressGain: 1,
+          failure: { mode: "noProgress", regressBy: 1 }
         }
       },
       craftingResolution: {
@@ -189,7 +195,8 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       playerVisibility: {
         output: true, ingredients: true, ingredientQuantities: true, craftCount: true, proficiencies: true, attemptPolicy: true,
         craftingCheck: true, craftingDC: true, failure: true, failurePercent: true, craftingTime: true,
-        projectProgress: true, progressCheck: true, progressDC: true, progressFailure: true, progressFailurePercent: true, description: true
+        projectProgress: true, progressCheck: true, progressDC: true, progressFailure: true, progressFailurePercent: true,
+        extraEffort: true, extraEffortCheck: true, extraEffortDC: true, extraEffortFailure: true, description: true
       },
       ingredients: [],
       result: null,
@@ -241,6 +248,24 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     else if (project.progressCheck.failure.mode !== "failProject") project.progressCheck.failure.loseMaterials = false;
     const progressLossInput = root.querySelector('[name="progressFailLossPercent"]');
     if (progressLossInput) project.progressCheck.failure.lossPercent = Math.clamp(Math.round(Number(progressLossInput.value) || 0), 0, 100);
+    project.extraEffort ??= {};
+    const enableExtraEffort = root.querySelector('[name="enableExtraEffort"]');
+    if (enableExtraEffort) project.extraEffort.enabled = Boolean(enableExtraEffort.checked);
+    const extraEffortCheckInput = root.querySelector('[name="extraEffortCheck"]');
+    if (extraEffortCheckInput) {
+      const [extraType, extraId] = String(extraEffortCheckInput.value || "ability:con").split(":", 2);
+      project.extraEffort.type = extraType;
+      project.extraEffort.id = extraId;
+    }
+    const extraEffortDCInput = root.querySelector('[name="extraEffortDC"]');
+    if (extraEffortDCInput) project.extraEffort.dc = Math.clamp(Math.floor(Number(extraEffortDCInput.value) || 12), 1, 40);
+    const extraEffortGainInput = root.querySelector('[name="extraEffortProgressGain"]');
+    if (extraEffortGainInput) project.extraEffort.progressGain = Math.clamp(Math.floor(Number(extraEffortGainInput.value) || 1), 1, 9);
+    project.extraEffort.failure ??= {};
+    const extraFailureMode = root.querySelector('[name="extraEffortFailureMode"]:checked');
+    if (extraFailureMode) project.extraEffort.failure.mode = extraFailureMode.value;
+    const extraRegressInput = root.querySelector('[name="extraEffortRegressBy"]');
+    if (extraRegressInput) project.extraEffort.failure.regressBy = Math.max(1, Math.floor(Number(extraRegressInput.value) || 1));
     this.draft.project = RecipeService.normalizeProject(project);
     const resolution = foundry.utils.deepClone(this.draft.craftingResolution ?? {});
     const parseProficiency = value => {
@@ -274,7 +299,8 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     for (const key of [
       "output", "ingredients", "ingredientQuantities", "craftCount", "proficiencies", "attemptPolicy", "craftingCheck",
       "craftingDC", "failure", "failurePercent", "craftingTime", "projectProgress", "progressCheck",
-      "progressDC", "progressFailure", "progressFailurePercent", "description"
+      "progressDC", "progressFailure", "progressFailurePercent", "extraEffort", "extraEffortCheck",
+      "extraEffortDC", "extraEffortFailure", "description"
     ]) {
       const input = root.querySelector(`[name="visibility.${key}"]`);
       visibility[key] = input ? Boolean(input.checked) : currentVisibility[key];
@@ -357,6 +383,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (this.draft.craftingMode === "project") {
       const project = RecipeService.normalizeProject(this.draft.project);
       if (project.progressCheck.required && !project.progressCheck.id) throw new Error("Choose a valid Progress Check.");
+      if (project.extraEffort.enabled && !project.extraEffort.id) throw new Error("Choose a valid Extra Effort Check.");
     }
   }
 

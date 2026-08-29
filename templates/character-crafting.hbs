@@ -52,6 +52,14 @@
         </section>
         {{/if}}{{/if}}
 
+        {{#if visibility.extraEffort}}{{#if config.extraEffort.enabled}}
+        <section class="cc-profession-block cc-extra-effort-block"><h3>Extra Effort</h3>
+          {{#if visibility.extraEffortCheck}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-person-running"></i><span>Check</span><strong>{{extraEffortCheckLabel}}{{#if visibility.extraEffortDC}} · DC {{config.extraEffort.dc}}{{/if}}</strong></div>{{/if}}
+          <div class="cc-sheet-resolution-row"><i class="fa-solid fa-forward"></i><span>Success</span><strong>+{{config.extraEffort.progressGain}} Work Progress</strong></div>
+          {{#if visibility.extraEffortFailure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{extraEffortFailureLabel}}</strong></div>{{/if}}
+        </section>
+        {{/if}}{{/if}}
+
         {{#if visibility.craftingCheck}}{{#if resolution.check.required}}
         <section class="cc-profession-block"><h3>Final Crafting Check</h3>
           <div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>Check</span><strong>{{#if finalPolicy.automaticSuccess}}Automatic Success{{else}}{{finalCheckLabel}}{{#if visibility.craftingDC}} · DC {{resolution.check.dc}}{{/if}}{{/if}}</strong></div>
@@ -69,6 +77,13 @@
               {{else}}<button type="button" class="cc-sheet-craft" disabled><i class="fa-solid fa-moon"></i> {{#if visibility.craftingTime}}Waiting for {{cadenceLabel}}{{else}}Not Available Yet{{/if}}</button>{{/if}}
             {{/if}}
           {{/if}}
+          {{#if (eq phase "working")}}{{#if config.extraEffort.enabled}}
+            {{#if extraEffortAvailable}}
+              <button type="button" class="cc-sheet-craft cc-extra-effort-action" data-action="extra-effort"><i class="fa-solid fa-person-running"></i> Extra Effort</button>
+            {{else}}
+              <button type="button" class="cc-sheet-craft cc-extra-effort-action" disabled><i class="fa-solid fa-person-running"></i> {{extraEffortStateLabel}}</button>
+            {{/if}}
+          {{/if}}{{/if}}
           <button type="button" class="cc-project-cancel" data-action="cancel-project"><i class="fa-solid fa-ban"></i> Cancel Project</button>
         </div>
         {{/with}}
@@ -92,6 +107,8 @@
         {{#if (eq craftingMode "project")}}
           {{#if playerVisibility.progressCheck}}{{#if project.progressCheck.required}}<section class="cc-profession-block"><h3>Progress Checks</h3><div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>Check</span><strong>{{projectDisplay.progressCheckLabel}}{{#if playerVisibility.progressDC}} · DC {{project.progressCheck.dc}}{{/if}}</strong></div><div class="cc-sheet-resolution-row"><i class="fa-solid fa-route"></i><span>When</span><strong>{{#if (eq project.progressCheck.timing "midpoint")}}Midpoint Only{{else}}Every Work Period{{/if}}</strong></div>{{#if playerVisibility.progressFailure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{projectDisplay.progressFailureLabel}}</strong></div>{{/if}}</section>{{/if}}{{/if}}
         {{/if}}
+
+        {{#if playerVisibility.extraEffort}}{{#if project.extraEffort.enabled}}<section class="cc-profession-block cc-extra-effort-block"><h3>Extra Effort</h3>{{#if playerVisibility.extraEffortCheck}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-person-running"></i><span>Check</span><strong>{{projectDisplay.extraEffortCheckLabel}}{{#if playerVisibility.extraEffortDC}} · DC {{project.extraEffort.dc}}{{/if}}</strong></div>{{/if}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-forward"></i><span>Success</span><strong>+{{project.extraEffort.progressGain}} Work Progress</strong></div>{{#if playerVisibility.extraEffortFailure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{projectDisplay.extraEffortFailureLabel}}</strong></div>{{/if}}</section>{{/if}}{{/if}}
 
         {{#if playerVisibility.craftingCheck}}{{#if resolution.check.required}}<section class="cc-profession-block"><h3>Final Crafting Check</h3><div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>Check</span><strong>{{#if resolution.automaticSuccess}}Automatic Success{{else}}{{resolution.checkLabel}}{{#if playerVisibility.craftingDC}} · DC {{resolution.check.dc}}{{/if}}{{/if}}</strong></div>{{#if playerVisibility.failure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{projectDisplay.finalFailureLabel}}</strong></div>{{/if}}</section>{{/if}}{{/if}}
 

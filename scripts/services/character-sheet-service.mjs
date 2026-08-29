@@ -2,6 +2,7 @@ import { FLAGS, MODULE_ID } from "../constants.mjs";
 import { CraftingService } from "./crafting-service.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
+import { ResultDialog } from "../ui/result-dialog.mjs";
 
 export class CharacterSheetService {
   static #selection = new Map();
@@ -127,6 +128,7 @@ export class CharacterSheetService {
       return CraftingService.requestStartProject(actor, recipeId);
     });
     this.#bindAsync(root, app, "work-project", actor => CraftingService.requestWorkOnProject(actor));
+    this.#bindAsync(root, app, "extra-effort", actor => CraftingService.requestExtraEffort(actor));
     this.#bindAsync(root, app, "final-project", actor => CraftingService.requestFinalCheck(actor));
 
     const cancel = root.querySelector('.crafting-core-tab [data-action="cancel-project"]');
@@ -161,11 +163,12 @@ export class CharacterSheetService {
       event.preventDefault(); button.disabled = true;
       try {
         const result = await handler(app.actor ?? app.document);
-        if (result?.outcome === "failure" || result?.outcome === "project-failure") ui.notifications.warn("Crafting failed.");
         app.render({ force: true });
+        if (result?.feedback) await ResultDialog.show(result.feedback);
+        else if (result?.outcome === "failure") ui.notifications.warn("Crafting failed.");
       } catch (error) {
         console.error(`${MODULE_ID} | Crafting action failed.`, error);
-        ui.notifications.error(error.message ?? "Crafting Core could not perform that crafting action.");
+        await ResultDialog.error(error.message ?? "Crafting Core could not perform that crafting action.");
         button.disabled = false;
       }
     });

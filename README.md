@@ -1,5 +1,14 @@
 # Crafting Core (DnD 5e)
 
+## v0.0.20 — Extra Effort, Material Stacking & Result Feedback
+
+v0.0.20 adds **Extra Effort** to the live-validated Crafting Project loop. After the normal Work Attempt for a Work Period, a Recipe may allow one optional Extra Effort attempt using its own GM-configured Ability, Skill, Tool, or Saving Throw check. Success grants configurable extra Work Progress; failure normally grants no extra progress and can optionally regress progress. Extra Effort never consumes the reserved ingredients again.
+
+Crafting Project outcomes now use centered Crafting Core result dialogs with an explicit **OK** button instead of relying on transient notifications for important Work/Final results. Learning rejection also uses this dialog and explains the unmet requirement when Player Visibility allows it.
+
+Crafting Core materials now stack forward-only by their stable `materialId` when they enter an Actor inventory. Embedded Actor Item UUIDs remain naturally unique; they are no longer treated as the material identity. Existing duplicate stacks are not migrated, and the Ingredient Resolver continues to aggregate them correctly.
+
+
 ## v0.0.19f2 — Generated Item Pile Population Hotfix
 
 v0.0.19f2 is rebuilt directly from the clean v0.0.19f baseline. It keeps the approved popover UX and hidden drag-to-scene workflow unchanged while correcting the shared generated-loot Item Piles transaction.

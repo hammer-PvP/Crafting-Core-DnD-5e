@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.20
+- Added **Extra Effort** for Crafting Projects. A Recipe can allow one optional second work attempt after each normal Work Attempt.
+- Extra Effort uses its own GM-configured D&D5e check: Ability, Skill, Tool, or Saving Throw, with an independent DC.
+- Successful Extra Effort grants configurable extra Work Progress (default +1). Failure defaults to no extra progress and can optionally regress a configured number of Work Periods. Extra Effort never consumes or reserves materials a second time.
+- Extra Effort is cycle-safe: it unlocks only after the normal Work Attempt, can be used once for that Work Period, expires when the next compatible rest unlocks normal work, and becomes available again only after that next normal Work Attempt.
+- Added Player Visibility controls for Extra Effort, its check, DC, and failure consequence. Published Knowledge Sources and the Character Crafting tab follow the same visibility rules.
+- Added centered **Crafting Core result dialogs** with an explicit OK button for Work Period success/failure, Extra Effort success/failure, Final Check outcomes, Project failure, and successful Project completion. Dialog facts respect Player Visibility.
+- Successful completion now clearly reports the crafted Item, output quantity, and that it was added to the Character inventory.
+- Learning rejection now opens a centered Crafting Core dialog explaining why the Character cannot learn the Recipe; hidden requirements remain hidden. Rejected learning still does not consume the Knowledge Source.
+- Added forward-only **Crafting Material auto-stacking**. When a Crafting Core material enters an Actor from the Materials Compendium, Item Piles, or Crafting Core output, stable `materialId` + container context is used to add to an existing stack instead of relying on the new Embedded Item UUID.
+- No historical inventory migration/consolidation is performed. Existing duplicate stacks remain valid, and the already-live-tested Ingredient Resolver continues summing them correctly.
+- Preserved the v0.0.19f2 generated-loot Item Piles pipeline and the live-validated Short/Long Rest Project progression semantics.
+
 ## 0.0.19f2
 - Rebuilt the generated Item Pile population fix **from the clean v0.0.19f baseline**; no code from the unsuccessful f1 attempts was reused.
 - Updated the generated-loot bridge for the current Item Piles `createItemPile()` return shape, which provides `{ tokenUuid, actorUuid }` rather than the older documented string-only result.

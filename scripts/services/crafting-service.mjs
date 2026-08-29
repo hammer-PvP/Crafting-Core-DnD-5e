@@ -1,10 +1,12 @@
 import { FLAGS, MODULE_ID, SOCKET_CHANNEL } from "../constants.mjs";
 import { RecipeService } from "./recipe-service.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
+import { MaterialStackService } from "./material-stack-service.mjs";
 
 const REQUEST_TIMED = "craft-request";
 const REQUEST_PROJECT_START = "craft-project-start";
 const REQUEST_PROJECT_WORK = "craft-project-work";
+const REQUEST_PROJECT_EXTRA = "craft-project-extra-effort";
 const REQUEST_PROJECT_FINAL = "craft-project-final";
 const REQUEST_PROJECT_CANCEL = "craft-project-cancel";
 const REST_UNLOCK = "craft-project-rest-unlock";
@@ -117,6 +119,29 @@ export class CraftingService {
     return this.#submitRequest(gm, payload);
   }
 
+  static async requestExtraEffort(actor) {
+    this.#assertCharacter(actor);
+    const gm = this.#requireActiveGM();
+    const project = this.project(actor);
+    if (!project || project.status !== "active") throw new Error("There is no active Crafting Project.");
+    if (project.phase !== "working") throw new Error("Extra Effort is only available while the Project is still in progress.");
+    const recipe = RecipeService.snapshot(project.recipe);
+    const config = RecipeService.normalizeProject(recipe.project);
+    const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
+    if (!config.extraEffort.enabled) throw new Error("This Recipe does not allow Extra Effort.");
+    if (!project.extraEffortAvailable) throw new Error("Extra Effort is not available for the current Work Period.");
+
+    const payload = this.#baseRequest(REQUEST_PROJECT_EXTRA, actor, recipe.id, project.id);
+    const roll = await this.#performRoll(actor, recipe, config.extraEffort, "extra", payload.requestId, {
+      projectId: project.id,
+      revealCheck: visibility.extraEffortCheck,
+      revealDc: visibility.extraEffortDC
+    });
+    if (!roll) throw new Error("The Extra Effort Check was cancelled.");
+    payload.rollMessageId = roll.messageId;
+    return this.#submitRequest(gm, payload);
+  }
+
   static async requestFinalCheck(actor) {
     this.#assertCharacter(actor);
     const gm = this.#requireActiveGM();
@@ -181,6 +206,10 @@ export class CraftingService {
         cadenceLabel: this.#cadenceLabel(project.cadence),
         progressCheckLabel: RecipeService.checkLabel(project.progressCheck, actor),
         progressFailureLabel: this.#failureLabel(project.progressCheck.failure, { revealPercent: visibility.progressFailurePercent }),
+        extraEffortCheckLabel: RecipeService.checkLabel(project.extraEffort, actor),
+        extraEffortFailureLabel: project.extraEffort.failure.mode === "regress"
+          ? `Regress ${project.extraEffort.failure.regressBy} Work Period${project.extraEffort.failure.regressBy === 1 ? "" : "s"}`
+          : "No Extra Progress",
         finalFailureLabel: recipe.craftingMode === "project"
           ? this.#failureLabel(resolution.failure, { final: true, revealPercent: visibility.failurePercent })
           : (resolution.failure.loseMaterials ? `Lose ${resolution.failure.lossPercent}% materials` : "No materials lost")
@@ -203,7 +232,8 @@ export class CraftingService {
     if (project.phase === "readyFinal") {
       if (project.finalAvailable) stateLabel = visibility.craftingCheck ? "Ready for Final Check" : "Ready to Complete";
       else stateLabel = visibility.craftingTime ? `Waiting for ${this.#cadenceLabel(project.cadence)}` : "Not Available Yet";
-    } else if (project.workAvailable) stateLabel = "Work Available";
+    } else if (project.extraEffortAvailable && config.extraEffort.enabled) stateLabel = visibility.extraEffort ? "Extra Effort Available" : "In Progress";
+    else if (project.workAvailable) stateLabel = "Work Available";
     else stateLabel = visibility.craftingTime ? `Waiting for ${this.#cadenceLabel(project.cadence)}` : "Work Not Available Yet";
     return {
       ...project,
@@ -218,6 +248,14 @@ export class CraftingService {
       cadenceLabel: this.#cadenceLabel(project.cadence),
       progressCheckLabel: RecipeService.checkLabel(config.progressCheck, actor),
       progressFailureLabel: this.#failureLabel(config.progressCheck.failure, { revealPercent: visibility.progressFailurePercent }),
+      extraEffortCheckLabel: RecipeService.checkLabel(config.extraEffort, actor),
+      extraEffortFailureLabel: config.extraEffort.failure.mode === "regress"
+        ? `Regress ${config.extraEffort.failure.regressBy} Work Period${config.extraEffort.failure.regressBy === 1 ? "" : "s"}`
+        : "No Extra Progress",
+      extraEffortStateLabel: project.extraEffortAvailable ? "Extra Effort Available"
+        : project.workAvailable ? "Complete normal work first"
+          : project.extraEffortUsedThisPeriod ? "Extra Effort Used"
+            : "Extra Effort Not Available",
       finalCheckLabel: RecipeService.checkLabel(resolution.check, actor),
       manualFinalRequired: Boolean(resolution.check.required && !project.finalPolicy?.automaticSuccess),
       finalFailureLabel: this.#failureLabel(resolution.failure, { final: true, revealPercent: visibility.failurePercent }),
@@ -329,7 +367,7 @@ export class CraftingService {
       catch (error) { console.warn(`${MODULE_ID} | Rest crafting unlock failed.`, error); }
       return;
     }
-    if ([REQUEST_TIMED, REQUEST_PROJECT_START, REQUEST_PROJECT_WORK, REQUEST_PROJECT_FINAL, REQUEST_PROJECT_CANCEL].includes(payload.action)) {
+    if ([REQUEST_TIMED, REQUEST_PROJECT_START, REQUEST_PROJECT_WORK, REQUEST_PROJECT_EXTRA, REQUEST_PROJECT_FINAL, REQUEST_PROJECT_CANCEL].includes(payload.action)) {
       if (!this.#isActiveGM()) return;
       const response = { action: RESPONSE, requestId: payload.requestId, requesterId: payload.requesterId, success: false };
       try {
@@ -357,6 +395,7 @@ export class CraftingService {
     if (request.action === REQUEST_TIMED) return this.#executeTimedCraft(request);
     if (request.action === REQUEST_PROJECT_START) return this.#executeProjectStart(request);
     if (request.action === REQUEST_PROJECT_WORK) return this.#executeProjectWork(request);
+    if (request.action === REQUEST_PROJECT_EXTRA) return this.#executeProjectExtraEffort(request);
     if (request.action === REQUEST_PROJECT_FINAL) return this.#executeProjectFinal(request);
     if (request.action === REQUEST_PROJECT_CANCEL) return this.#executeProjectCancel(request);
     throw new Error("Unknown Crafting Core request.");
@@ -445,6 +484,7 @@ export class CraftingService {
       recipeId: recipe.id, recipeName: recipe.name, recipe: snapshot,
       requiredWork: config.requiredWork, completedWork: 0, cadence: config.cadence,
       midpointPassed: false, workAvailable: false, finalAvailable: false,
+      extraEffortAvailable: false, extraEffortUsedThisPeriod: false,
       reservedMaterials, requesterId: requester.id, startedAt: this.serverTime(), updatedAt: this.serverTime(),
       finalPolicy: { automaticSuccess: prepared.resolution.automaticSuccess, rollRequired: prepared.resolution.rollRequired }
     };
@@ -464,9 +504,97 @@ export class CraftingService {
       ? await this.#validateRoll(actor, recipe, requester, request, config.progressCheck, "progress", project.id)
       : { success: true, total: null, message: null };
     project.workAvailable = false;
+    project.extraEffortAvailable = false;
+    project.extraEffortUsedThisPeriod = false;
     project.updatedAt = this.serverTime();
     await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
     return this.#applyProgressAttempt(actor, project, recipe, { checkApplies, rollResult, initial: false });
+  }
+
+  static async #executeProjectExtraEffort(request) {
+    const { requester, actor } = this.#requestContext(request);
+    const project = this.project(actor);
+    if (!project || project.id !== String(request.projectId ?? "") || project.status !== "active") throw new Error("The active Crafting Project changed.");
+    if (project.phase !== "working" || !project.extraEffortAvailable) throw new Error("No Extra Effort attempt is currently available for this Project.");
+
+    const recipe = RecipeService.snapshot(project.recipe);
+    const config = RecipeService.normalizeProject(recipe.project);
+    if (!config.extraEffort.enabled) throw new Error("This Recipe does not allow Extra Effort.");
+    const rollResult = await this.#validateRoll(actor, recipe, requester, request, config.extraEffort, "extra", project.id);
+    project.extraEffortAvailable = false;
+    project.extraEffortUsedThisPeriod = true;
+    project.updatedAt = this.serverTime();
+
+    const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
+    const facts = [];
+    if (visibility.extraEffortCheck && Number.isFinite(Number(rollResult.total))) {
+      facts.push(visibility.extraEffortDC
+        ? `Extra Effort Check: ${rollResult.total} vs DC ${config.extraEffort.dc}`
+        : `Extra Effort Check result: ${rollResult.total}`);
+    }
+
+    if (!rollResult.success) {
+      const failure = config.extraEffort.failure;
+      if (failure.mode === "regress") {
+        project.completedWork = Math.max(0, Number(project.completedWork || 0) - failure.regressBy);
+      }
+      project.lastAttempt = { stage: "extra", success: false, total: rollResult.total, dc: config.extraEffort.dc, at: this.serverTime() };
+      await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
+      if (visibility.extraEffortFailure) facts.push(failure.mode === "regress"
+        ? `Progress lost: ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}`
+        : "No progress was gained or lost.");
+      if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork}`);
+      await this.#postProjectMessage(actor, recipe, "Extra Effort Failed", failure.mode === "regress"
+        ? `The Project regressed by ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}.`
+        : "The additional effort produced no progress.");
+      return {
+        outcome: "extra-failure",
+        project: this.prepareProjectForActor(actor, project),
+        feedback: this.#feedback("Extra Effort Failed",
+          visibility.extraEffortFailure
+            ? (failure.mode === "regress" ? "The additional effort caused a setback." : "The additional effort did not produce progress.")
+            : "The Extra Effort attempt was unsuccessful.",
+          facts, failure.mode === "regress" && visibility.extraEffortFailure ? "warning" : "info", "fa-solid fa-person-running")
+      };
+    }
+
+    const before = Math.max(0, Number(project.completedWork) || 0);
+    project.completedWork = Math.min(project.requiredWork, before + config.extraEffort.progressGain);
+    if (config.progressCheck.required && config.progressCheck.timing === "midpoint" && !project.midpointPassed) {
+      const midpoint = Math.ceil(config.requiredWork / 2);
+      if (before < midpoint && project.completedWork >= midpoint) project.midpointPassed = true;
+    }
+    project.lastAttempt = { stage: "extra", success: true, total: rollResult.total, dc: config.extraEffort.dc, at: this.serverTime() };
+    if (visibility.extraEffort) facts.push(`Extra progress: +${project.completedWork - before}`);
+    if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork}`);
+
+    if (project.completedWork >= project.requiredWork) {
+      project.extraEffortAvailable = false;
+      if (!RecipeService.normalizeCraftingResolution(recipe.craftingResolution).check.required || project.finalPolicy?.automaticSuccess) {
+        return this.#completeProject(actor, project, recipe, rollResult, { feedbackFacts: facts, completedBy: "extra" });
+      }
+      project.phase = "readyFinal";
+      project.finalAvailable = true;
+      await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
+      await this.#postProjectMessage(actor, recipe, "Extra Effort Complete", visibility.craftingCheck
+        ? "The Project is ready for its Final Crafting Check."
+        : "The required project work is complete.");
+      return {
+        outcome: "ready-final",
+        project: this.prepareProjectForActor(actor, project),
+        feedback: this.#feedback("Extra Effort Successful",
+          visibility.craftingCheck ? "The extra effort completed the required work. The Project is ready for its Final Crafting Check." : "The extra effort completed the required project work.",
+          facts, "success", "fa-solid fa-person-running")
+      };
+    }
+
+    await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
+    await this.#postProjectMessage(actor, recipe, "Extra Effort", "The additional effort advanced the Project.");
+    return {
+      outcome: "extra-success",
+      project: this.prepareProjectForActor(actor, project),
+      feedback: this.#feedback("Extra Effort Successful", "The additional effort advanced the Project.", facts, "success", "fa-solid fa-person-running")
+    };
   }
 
   static async #executeProjectFinal(request) {
@@ -496,6 +624,14 @@ export class CraftingService {
 
   static async #applyProgressAttempt(actor, project, recipe, { checkApplies, rollResult, initial=false }) {
     const config = RecipeService.normalizeProject(recipe.project);
+    const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
+    const facts = [];
+    if (checkApplies && visibility.progressCheck && Number.isFinite(Number(rollResult.total))) {
+      facts.push(visibility.progressDC
+        ? `Progress Check: ${rollResult.total} vs DC ${config.progressCheck.dc}`
+        : `Progress Check result: ${rollResult.total}`);
+    }
+
     if (checkApplies && !rollResult.success) {
       const failure = config.progressCheck.failure;
       if (failure.mode === "failProject") {
@@ -503,47 +639,82 @@ export class CraftingService {
       }
       if (failure.mode === "regress") project.completedWork = Math.max(0, Number(project.completedWork || 0) - failure.regressBy);
       project.workAvailable = false;
+      project.extraEffortAvailable = Boolean(config.extraEffort.enabled);
+      project.extraEffortUsedThisPeriod = false;
       project.updatedAt = this.serverTime();
       project.lastAttempt = { stage: "progress", success: false, total: rollResult.total, dc: config.progressCheck.dc, at: this.serverTime(), initial };
       await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
-      const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
       const detail = visibility.progressFailure
         ? (failure.mode === "regress"
           ? `The Project regressed by ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}.`
           : "The Project did not advance.")
         : "The Work Attempt failed.";
+      if (visibility.progressFailure) facts.push(failure.mode === "regress"
+        ? `Progress lost: ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}`
+        : "No progress was gained or lost.");
+      if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork}`);
+      if (config.extraEffort.enabled && visibility.extraEffort) facts.push("Extra Effort is available for this Work Period.");
       await this.#postProjectMessage(actor, recipe, visibility.progressCheck ? "Progress Check Failed" : "Project Work", detail);
-      return { outcome: "progress-failure", project: this.prepareProjectForActor(actor, project) };
+      return {
+        outcome: "progress-failure",
+        project: this.prepareProjectForActor(actor, project),
+        feedback: this.#feedback("Work Period Failed",
+          visibility.progressFailure
+            ? (failure.mode === "regress" ? "The work attempt failed and the Project lost progress." : "The work attempt failed. The opportunity was spent, but the Project did not advance or regress.")
+            : "The Work Period was unsuccessful.",
+          facts, failure.mode === "regress" && visibility.progressFailure ? "warning" : "info", "fa-solid fa-hammer")
+      };
     }
 
     project.completedWork = Math.min(project.requiredWork, Number(project.completedWork || 0) + 1);
     if (checkApplies && config.progressCheck.timing === "midpoint") project.midpointPassed = true;
     project.workAvailable = false;
+    project.extraEffortAvailable = Boolean(config.extraEffort.enabled && project.completedWork < project.requiredWork);
+    project.extraEffortUsedThisPeriod = false;
     project.updatedAt = this.serverTime();
     project.lastAttempt = { stage: "progress", success: true, total: rollResult.total, dc: checkApplies ? config.progressCheck.dc : null, at: this.serverTime(), initial };
+    if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork}`);
+    if (project.extraEffortAvailable && visibility.extraEffort) facts.push("Extra Effort is available for this Work Period.");
 
     if (project.completedWork >= project.requiredWork) {
+      project.extraEffortAvailable = false;
       if (!RecipeService.normalizeCraftingResolution(recipe.craftingResolution).check.required || project.finalPolicy?.automaticSuccess) {
-        return this.#completeProject(actor, project, recipe, rollResult);
+        return this.#completeProject(actor, project, recipe, rollResult, { feedbackFacts: facts, completedBy: "work" });
       }
       project.phase = "readyFinal";
       project.finalAvailable = true;
       await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
-      const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
       await this.#postProjectMessage(actor, recipe, "Project Work Complete", visibility.craftingCheck
         ? "The Project is ready for its Final Crafting Check."
         : "The required project work is complete.");
-      return { outcome: "ready-final", project: this.prepareProjectForActor(actor, project) };
+      return {
+        outcome: "ready-final",
+        project: this.prepareProjectForActor(actor, project),
+        feedback: this.#feedback("Work Period Successful",
+          visibility.craftingCheck ? "The required work is complete. The Project is ready for its Final Crafting Check." : "The required project work is complete.",
+          facts, "success", "fa-solid fa-hammer")
+      };
     }
 
     await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
     await this.#postProjectMessage(actor, recipe, "Project Progress", "Work on the Project was completed.");
-    return { outcome: "progress", project: this.prepareProjectForActor(actor, project) };
+    return {
+      outcome: "progress",
+      project: this.prepareProjectForActor(actor, project),
+      feedback: this.#feedback("Work Period Successful", "The work attempt succeeded and the Project advanced.", facts, "success", "fa-solid fa-hammer")
+    };
   }
 
   static async #applyFinalFailure(actor, project, recipe, rollResult) {
     const resolution = RecipeService.normalizeCraftingResolution(recipe.craftingResolution);
     const failure = resolution.failure;
+    const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
+    const facts = [];
+    if (visibility.craftingCheck && Number.isFinite(Number(rollResult.total))) {
+      facts.push(visibility.craftingDC
+        ? `Final Crafting Check: ${rollResult.total} vs DC ${resolution.check.dc}`
+        : `Final Crafting Check result: ${rollResult.total}`);
+    }
     project.lastAttempt = { stage: "final", success: false, total: rollResult.total, dc: resolution.check.dc, at: this.serverTime() };
     if (failure.mode === "failProject") {
       return this.#failProject(actor, project, recipe, failure, { stage: "final", total: rollResult.total, dc: resolution.check.dc });
@@ -553,25 +724,45 @@ export class CraftingService {
       project.phase = "working";
       project.workAvailable = false;
       project.finalAvailable = false;
+      project.extraEffortAvailable = false;
+      project.extraEffortUsedThisPeriod = false;
       project.updatedAt = this.serverTime();
       await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
-      const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
+      if (visibility.failure) facts.push(`Progress lost: ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}`);
+      if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork}`);
       await this.#postProjectMessage(actor, recipe, visibility.craftingCheck ? "Final Check Failed" : "Completion Attempt", visibility.failure
         ? `The Project regressed by ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}.`
         : "The completion attempt failed.");
-      return { outcome: "final-regress", project: this.prepareProjectForActor(actor, project) };
+      return {
+        outcome: "final-regress",
+        project: this.prepareProjectForActor(actor, project),
+        feedback: this.#feedback("Final Check Failed",
+          visibility.failure ? "The completion attempt failed and the Project regressed." : "The completion attempt was unsuccessful.",
+          facts, visibility.failure ? "warning" : "info", "fa-solid fa-triangle-exclamation")
+      };
     }
     project.phase = "readyFinal";
     project.finalAvailable = false;
+    project.extraEffortAvailable = false;
+    project.extraEffortUsedThisPeriod = false;
     project.updatedAt = this.serverTime();
     await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
-    const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
+    if (visibility.failure) facts.push(visibility.craftingTime
+      ? `Another ${this.#cadenceLabel(project.cadence)} is required before retrying.`
+      : "Another work opportunity is required before retrying.");
+    if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork}`);
     await this.#postProjectMessage(actor, recipe, visibility.craftingCheck ? "Final Check Failed" : "Completion Attempt", visibility.failure
       ? (visibility.craftingTime
         ? `Another ${this.#cadenceLabel(project.cadence)} is required before a new Final Check attempt.`
         : "Another work opportunity is required before a new completion attempt.")
       : "The completion attempt failed.");
-    return { outcome: "final-retry", project: this.prepareProjectForActor(actor, project) };
+    return {
+      outcome: "final-retry",
+      project: this.prepareProjectForActor(actor, project),
+      feedback: this.#feedback("Final Check Failed",
+        visibility.failure ? "The completion attempt failed, but no project progress was lost." : "The completion attempt was unsuccessful.",
+        facts, "info", "fa-solid fa-hourglass-half")
+    };
   }
 
   static async #failProject(actor, project, recipe, failure, { stage, total=null, dc=null }={}) {
@@ -580,21 +771,34 @@ export class CraftingService {
     await actor.unsetFlag(MODULE_ID, FLAGS.CRAFTING_JOB);
     const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
     let detail = "The Project failed and must be restarted.";
+    const facts = [];
+    const showCheck = stage === "progress" ? visibility.progressCheck : visibility.craftingCheck;
+    const showDc = stage === "progress" ? visibility.progressDC : visibility.craftingDC;
+    if (showCheck && Number.isFinite(Number(total))) facts.push(showDc
+      ? `${stage === "progress" ? "Progress" : "Final Crafting"} Check: ${total} vs DC ${dc}`
+      : `${stage === "progress" ? "Progress" : "Final Crafting"} Check result: ${total}`);
     if ((stage === "progress" ? visibility.progressFailure : visibility.failure)) {
       if (lossPercent > 0) {
         const revealPercent = stage === "progress" ? visibility.progressFailurePercent : visibility.failurePercent;
         detail += revealPercent ? ` ${lossPercent}% of reserved materials were lost.` : " Some reserved materials were lost.";
+        facts.push(revealPercent ? `Reserved materials lost: ${lossPercent}%` : "Some reserved materials were lost.");
       }
-      else detail += " Reserved materials were returned.";
+      else {
+        detail += " Reserved materials were returned.";
+        facts.push("Reserved materials were returned.");
+      }
     }
     const title = stage === "progress"
       ? (visibility.progressCheck ? "Progress Check — Project Failed" : "Project Failed")
       : (visibility.craftingCheck ? "Final Check — Project Failed" : "Project Failed");
     await this.#postProjectMessage(actor, recipe, title, detail);
-    return { outcome: "project-failure", actorId: actor.id, recipeId: recipe.id, stage, total, dc, lossPercent };
+    return {
+      outcome: "project-failure", actorId: actor.id, recipeId: recipe.id, stage, total, dc, lossPercent,
+      feedback: this.#feedback("Project Failed", "The Project failed and must be restarted.", facts, "danger", "fa-solid fa-triangle-exclamation")
+    };
   }
 
-  static async #completeProject(actor, project, recipe, rollResult={ total: null }) {
+  static async #completeProject(actor, project, recipe, rollResult={ total: null }, { feedbackFacts=[], completedBy="final" }={}) {
     const result = recipe.result;
     let resultData = result?.snapshot ? foundry.utils.deepClone(result.snapshot) : null;
     let sourceUuid = String(result?.sourceUuid || result?.uuid || "");
@@ -606,12 +810,10 @@ export class CraftingService {
     }
     const finalizing = { ...project, status: "finalizing", updatedAt: this.serverTime() };
     await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, finalizing);
+    const outputQuantity = Math.max(1, Number(result?.quantity) || 1);
     try {
-      await this.#createResult(actor, resultData, Math.max(1, Number(result?.quantity) || 1), sourceUuid);
+      await this.#createResult(actor, resultData, outputQuantity, sourceUuid);
     } catch (error) {
-      // Do not strand reserved materials in an unrecoverable state if output creation fails.
-      // Keep the finished work ready for a direct completion retry or cancellation; this is a
-      // technical recovery state, not a new in-world Work Attempt.
       await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, {
         ...project,
         status: "active",
@@ -619,14 +821,33 @@ export class CraftingService {
         completedWork: Math.max(Number(project.completedWork) || 0, Number(project.requiredWork) || 1),
         workAvailable: false,
         finalAvailable: true,
+        extraEffortAvailable: false,
+        extraEffortUsedThisPeriod: false,
         updatedAt: this.serverTime()
       });
       throw error;
     }
     await actor.unsetFlag(MODULE_ID, FLAGS.CRAFTING_JOB);
     await this.#postProjectMessage(actor, recipe, "Crafting Successful", "The Project was completed successfully.");
-    ui.notifications.info(`${actor.name} completed ${recipe.name}.`);
-    return { outcome: "success", actorId: actor.id, recipeId: recipe.id, total: rollResult?.total ?? null };
+    const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
+    const facts = [...(feedbackFacts ?? [])];
+    if (visibility.craftingCheck && Number.isFinite(Number(rollResult?.total)) && completedBy === "final") {
+      const resolution = RecipeService.normalizeCraftingResolution(recipe.craftingResolution);
+      facts.push(visibility.craftingDC
+        ? `Final Crafting Check: ${rollResult.total} vs DC ${resolution.check.dc}`
+        : `Final Crafting Check result: ${rollResult.total}`);
+    }
+    if (visibility.output) facts.push(`Created: ${result?.name || resultData?.name || "Item"} ×${outputQuantity}`);
+    facts.push("Crafted result added to the character inventory.");
+    return {
+      outcome: "success", actorId: actor.id, recipeId: recipe.id, total: rollResult?.total ?? null,
+      resultName: result?.name || resultData?.name || "Item", resultQuantity: outputQuantity,
+      feedback: this.#feedback("Crafting Complete",
+        visibility.output
+          ? `${result?.name || resultData?.name || "The crafted item"} ×${outputQuantity} was completed successfully.`
+          : "The Project was completed successfully.",
+        facts, "success", "fa-solid fa-circle-check")
+    };
   }
 
   static async #onRestCompleted(actor, result, config) {
@@ -652,7 +873,12 @@ export class CraftingService {
     const restType = String(payload.restType || "");
     if (!this.#restUnlocks(project.cadence, restType)) return false;
     let changed = false;
-    if (project.phase === "working" && !project.workAvailable) { project.workAvailable = true; changed = true; }
+    if (project.phase === "working" && !project.workAvailable) {
+      project.workAvailable = true;
+      project.extraEffortAvailable = false;
+      project.extraEffortUsedThisPeriod = false;
+      changed = true;
+    }
     if (project.phase === "readyFinal" && !project.finalAvailable) { project.finalAvailable = true; changed = true; }
     if (!changed) return false;
     project.lastRestType = restType;
@@ -679,15 +905,16 @@ export class CraftingService {
   }
 
   static async #performRoll(actor, recipe, check, kind, requestId, { projectId="", revealCheck=true, revealDc=true }={}) {
-    if (!check?.id) throw new Error(`This recipe does not have a valid ${kind === "progress" ? "Progress" : "Crafting"} Check configured.`);
+    const kindLabel = kind === "progress" ? "Progress" : kind === "extra" ? "Extra Effort" : "Crafting";
+    if (!check?.id) throw new Error(`This recipe does not have a valid ${kindLabel} Check configured.`);
     const label = RecipeService.checkLabel(check, actor);
     const flagData = {
       requestId, requesterId: game.user.id, actorId: actor.id, recipeId: recipe.id, projectId: String(projectId || ""), kind,
       check: { type: check.type, id: check.id, dc: check.dc }, createdAt: Date.now(), consumedAt: 0
     };
     const title = revealCheck
-      ? (kind === "progress" ? "Progress Check" : "Final Crafting Check")
-      : (kind === "progress" ? "Crafting Work" : "Crafting Completion");
+      ? (kind === "progress" ? "Progress Check" : kind === "extra" ? "Extra Effort Check" : "Final Crafting Check")
+      : (kind === "progress" ? "Crafting Work" : kind === "extra" ? "Extra Effort" : "Crafting Completion");
     const revealedCheck = revealCheck ? ` · ${foundry.utils.escapeHTML(label)}` : "";
     const revealedDc = revealCheck && revealDc ? ` DC ${check.dc}` : "";
     const message = { data: { flags: { [MODULE_ID]: { [FLAGS.CRAFTING_ROLL]: flagData } }, flavor: `${title} — ${foundry.utils.escapeHTML(recipe.name)}${revealedCheck}${revealedDc}` } };
@@ -709,7 +936,7 @@ export class CraftingService {
 
   static async #validateRoll(actor, recipe, requester, request, expectedCheck, kind, projectId="") {
     const messageId = String(request.rollMessageId || "");
-    if (!messageId) throw new Error(`A validated ${kind === "progress" ? "Progress" : "Final Crafting"} Check is required.`);
+    if (!messageId) throw new Error(`A validated ${kind === "progress" ? "Progress" : kind === "extra" ? "Extra Effort" : "Final Crafting"} Check is required.`);
     const message = await this.#waitForMessage(messageId);
     if (!message) throw new Error("The crafting roll chat message could not be found.");
     const authorId = String(message.author?.id ?? message.user?.id ?? message.user ?? "");
@@ -812,7 +1039,15 @@ export class CraftingService {
         }
       }
     }
-    if (docs.length) await actor.createEmbeddedDocuments("Item", docs);
+    if (docs.length) {
+      const plain = [];
+      for (const data of docs) {
+        if (MaterialStackService.isCraftingMaterial(data) && foundry.utils.hasProperty(data, "system.quantity")) {
+          await MaterialStackService.createOrStack(actor, data, Math.max(1, Number(data.system.quantity) || 1));
+        } else plain.push(data);
+      }
+      if (plain.length) await actor.createEmbeddedDocuments("Item", plain);
+    }
   }
 
   static #reservedSummary(rows) {
@@ -904,11 +1139,14 @@ export class CraftingService {
     delete data._id; delete data.folder; delete data.ownership;
     data.flags ??= {}; data.flags[MODULE_ID] ??= {}; data.flags[MODULE_ID][FLAGS.SOURCE_UUID] = sourceUuid;
     if (foundry.utils.hasProperty(data, "system.quantity")) {
-      data.system.quantity = quantity;
-      await actor.createEmbeddedDocuments("Item", [data]);
+      await MaterialStackService.createOrStack(actor, data, quantity);
       return;
     }
     await actor.createEmbeddedDocuments("Item", Array.from({ length: quantity }, () => foundry.utils.deepClone(data)));
+  }
+
+  static #feedback(title, message, facts=[], tone="info", icon="fa-solid fa-hammer") {
+    return { title, message, facts: (facts ?? []).filter(Boolean), tone, icon };
   }
 
   static #failureLabel(failure, { final=false, revealPercent=true }={}) {
