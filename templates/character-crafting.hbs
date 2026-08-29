@@ -26,6 +26,7 @@
       <header class="cc-profession-detail-header">
         <img src="{{img}}" alt="">
         <div><span class="cc-kicker">{{#if (eq craftingMode "project")}}Crafting Project{{else}}Timed Recipe{{/if}}</span><h2>{{name}}</h2>{{#if ../craftingCore.selectedIsActiveProject}}<small class="cc-active-project-label"><i class="fa-solid fa-hammer"></i> Active Project</small>{{/if}}</div>
+        <button type="button" class="cc-recipe-unlearn" data-action="unlearn-recipe" data-tooltip="Forget this Recipe"><i class="fa-solid fa-book"></i> Unlearn</button>
       </header>
 
       {{#if playerVisibility.description}}{{#if description}}<section class="cc-profession-block"><h3>Description</h3><p class="cc-sheet-description">{{description}}</p></section>{{/if}}{{/if}}

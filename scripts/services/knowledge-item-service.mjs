@@ -107,6 +107,18 @@ export class KnowledgeItemService {
       }
       if (!item) throw new Error("D&D5e did not create the published Knowledge Source.");
 
+      // The Compendium document is the authoritative source once a Recipe is published.
+      // Stamp its own UUID into managed metadata so distributed copies keep an explicit
+      // link back to the source even after becoming embedded Actor Items.
+      if (String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED_SOURCE_UUID) ?? "") !== item.uuid) {
+        const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+        [item] = await ItemClass.updateDocuments([{
+          _id: item.id,
+          [`flags.${MODULE_ID}.${FLAGS.KNOWLEDGE_PUBLISHED_SOURCE_UUID}`]: item.uuid
+        }], { pack: pack.collection });
+        item = await pack.getDocument(item?.id) ?? item;
+      }
+
       recipe.publication = {
         uuid: item.uuid,
         pack: pack.collection,
@@ -115,7 +127,11 @@ export class KnowledgeItemService {
         updatedAt: Date.now()
       };
       recipe = await RecipeService.save(recipe);
-      await this.refreshLearnedRecipe(recipe);
+
+      // Synchronize from the document that was actually written to the private library,
+      // never directly from the mutable Builder draft. This keeps the publication button
+      // as the only boundary that can change what Characters know.
+      await this.synchronizePublishedSource(item);
       Hooks.callAll(`${MODULE_ID}.knowledgePublished`, recipe.id, item.uuid);
       return { item, recipe, pack };
     } finally {
@@ -336,6 +352,9 @@ export class KnowledgeItemService {
     const snapshot = activity?.flags?.[MODULE_ID]?.[FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT]
       ?? activity?.item?.getFlag?.(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT);
     if (snapshot && typeof snapshot === "object") return RecipeService.snapshot(snapshot);
+    // A copy that came from the published library must never fall back to the mutable
+    // Builder draft. If its authoritative source was removed, the copy becomes invalid.
+    if (this.publishedSourceUuidFromItem(activity?.item)) return null;
     const legacy = RecipeService.get(this.recipeIdFromActivity(activity));
     return legacy ? RecipeService.snapshot(legacy) : null;
   }
@@ -379,7 +398,47 @@ export class KnowledgeItemService {
     return Boolean(this.recipeForActor(actor, recipeId));
   }
 
-  static async learn(actor, recipe, { sourceName="", sourceType="Recipe" }={}) {
+  static publishedSourceUuidFromItem(item) {
+    if (!item) return "";
+    const explicit = String(item.getFlag?.(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED_SOURCE_UUID) ?? "");
+    if (explicit) return explicit;
+    if (item.pack === this.PACK_ID) return String(item.uuid || "");
+    const candidates = [
+      item.getFlag?.("dnd5e", "sourceId"),
+      item._stats?.compendiumSource,
+      item.flags?.core?.sourceId,
+      item._stats?.duplicateSource
+    ].filter(Boolean).map(String);
+    const prefix = `Compendium.${this.PACK_ID}.Item.`;
+    return candidates.find(candidate => candidate.startsWith(prefix)) ?? "";
+  }
+
+  static publishedRecipeSnapshot(item) {
+    const snapshot = item?.getFlag?.(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT);
+    if (!snapshot || typeof snapshot !== "object") return null;
+    return RecipeService.snapshot(snapshot);
+  }
+
+  static async publishedItemForRecipe(recipeId) {
+    const id = String(recipeId || "");
+    if (!id) return null;
+    const draft = RecipeService.get(id);
+    if (draft?.publication?.uuid) {
+      try {
+        const item = await fromUuid(draft.publication.uuid);
+        if (item instanceof Item && item.pack === this.PACK_ID
+          && String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "") === id
+          && Boolean(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED))) return item;
+      } catch (_) { /* fall through to pack scan */ }
+    }
+    const pack = this.pack();
+    if (!pack) return null;
+    const docs = await pack.getDocuments();
+    return docs.find(item => String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "") === id
+      && Boolean(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED))) ?? null;
+  }
+
+  static async learn(actor, recipe, { sourceName="", sourceType="Recipe", publishedSourceUuid="" }={}) {
     if (!actor || actor.type !== "character") throw new Error("Recipes can only be learned by a Character Actor.");
     if (!recipe?.id) throw new Error("This Knowledge Source does not contain a valid Crafting Core recipe.");
     const snapshot = RecipeService.snapshot(recipe);
@@ -387,6 +446,7 @@ export class KnowledgeItemService {
     if (store[snapshot.id]?.recipe) return false;
     store[snapshot.id] = {
       recipe: snapshot,
+      publishedSourceUuid: String(publishedSourceUuid || ""),
       learnedAt: Date.now(),
       sourceName: String(sourceName || ""),
       sourceType: String(sourceType || "Recipe")
@@ -395,19 +455,295 @@ export class KnowledgeItemService {
     return true;
   }
 
-  static async refreshLearnedRecipe(recipe) {
-    if (!game.user?.isGM || !recipe?.id) return 0;
-    const snapshot = RecipeService.snapshot(recipe);
+  static async unlearn(actor, recipeId) {
+    if (!actor || actor.type !== "character") throw new Error("Recipes can only be forgotten by a Character Actor.");
+    if (!game.user?.isGM && !actor.isOwner) throw new Error("You do not have permission to change this Character's known Recipes.");
+    const id = String(recipeId || "");
+    if (!id) return false;
+    const job = actor.getFlag?.(MODULE_ID, FLAGS.CRAFTING_JOB);
+    if (String(job?.recipeId ?? "") === id && ["active", "finalizing"].includes(String(job?.status ?? ""))) {
+      throw new Error(job?.mode === "project"
+        ? "This Recipe is currently being used by the active Crafting Project. Complete or cancel the Project before forgetting it."
+        : "This Recipe is currently being crafted. Wait for the current craft to finish before forgetting it.");
+    }
+
+    const store = this.learnedStore(actor);
+    const legacy = this.legacyKnownRecipeIds(actor);
+    const had = Boolean(store[id] || legacy.includes(id));
+    if (!had) return false;
+    delete store[id];
+    await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
+    if (legacy.includes(id)) await actor.setFlag(MODULE_ID, FLAGS.KNOWN_RECIPES, legacy.filter(entry => entry !== id));
+    actor.sheet?.render?.({ force: true });
+    return true;
+  }
+
+  static async removeRecipeFromAllActors(recipeId, { publishedSourceUuid="" }={}) {
+    if (!game.user?.isGM) return 0;
+    const id = String(recipeId || "");
+    const sourceUuid = String(publishedSourceUuid || "");
     let changed = 0;
     for (const actor of game.actors?.contents?.filter(a => a.type === "character") ?? []) {
       const store = this.learnedStore(actor);
-      if (!store[recipe.id]?.recipe) continue;
-      store[recipe.id] = { ...store[recipe.id], recipe: snapshot, revisedAt: Date.now() };
+      const legacy = this.legacyKnownRecipeIds(actor);
+      const entry = store[id];
+      const sourceMatches = sourceUuid && String(entry?.publishedSourceUuid || "") === sourceUuid;
+      if (!entry && !legacy.includes(id)) continue;
+      if (entry && sourceUuid && entry.publishedSourceUuid && !sourceMatches) continue;
+      delete store[id];
       await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
+      if (legacy.includes(id)) await actor.setFlag(MODULE_ID, FLAGS.KNOWN_RECIPES, legacy.filter(entryId => entryId !== id));
       actor.sheet?.render?.({ force: true });
       changed += 1;
     }
     return changed;
+  }
+
+  static async #synchronizeDistributedCopies(item, snapshot) {
+    if (!game.user?.isGM || !item || !snapshot?.id) return 0;
+    const sourceUuid = String(item.uuid || "");
+    const recipeId = String(snapshot.id);
+    let changed = 0;
+
+    const updateCopy = async copy => {
+      if (!copy || copy.pack === this.PACK_ID) return;
+      if (String(copy.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "") !== recipeId) return;
+      const linked = this.publishedSourceUuidFromItem(copy);
+      // Copies created before v0.1.1 may not carry the explicit source flag. A matching
+      // recipeId is sufficient because a Crafting Core Recipe has one authoritative source.
+      if (linked && linked !== sourceUuid) return;
+      const current = copy.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT);
+      const currentSource = String(copy.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED_SOURCE_UUID) ?? "");
+      const sameSnapshot = JSON.stringify(current ?? null) === JSON.stringify(snapshot);
+      if (sameSnapshot && currentSource === sourceUuid) return;
+      await copy.update({
+        name: item.name,
+        img: item.img,
+        "system.description.value": String(item.system?.description?.value ?? copy.system?.description?.value ?? ""),
+        "system.rarity": item.system?.rarity ?? copy.system?.rarity ?? "",
+        "system.price": foundry.utils.deepClone(item.system?.price ?? copy.system?.price ?? { value: 0, denomination: "gp" }),
+        [`flags.${MODULE_ID}.${FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT}`]: snapshot,
+        [`flags.${MODULE_ID}.${FLAGS.KNOWLEDGE_PUBLISHED_SOURCE_UUID}`]: sourceUuid
+      });
+      changed += 1;
+    };
+
+    for (const worldItem of game.items?.contents ?? []) await updateCopy(worldItem);
+    for (const actor of game.actors?.contents ?? []) for (const actorItem of actor.items ?? []) await updateCopy(actorItem);
+    return changed;
+  }
+
+  static async #invalidateDistributedCopies(recipeId, publishedSourceUuid="") {
+    if (!game.user?.isGM) return 0;
+    const id = String(recipeId || "");
+    const sourceUuid = String(publishedSourceUuid || "");
+    let changed = 0;
+    const invalidate = async copy => {
+      if (!copy || copy.pack === this.PACK_ID) return;
+      if (String(copy.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "") !== id) return;
+      const linked = this.publishedSourceUuidFromItem(copy);
+      if (sourceUuid && linked && linked !== sourceUuid) return;
+      await copy.update({
+        [`flags.${MODULE_ID}.${FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT}`]: null,
+        [`flags.${MODULE_ID}.${FLAGS.KNOWLEDGE_PUBLISHED_SOURCE_UUID}`]: sourceUuid || linked
+      });
+      changed += 1;
+    };
+    for (const worldItem of game.items?.contents ?? []) await invalidate(worldItem);
+    for (const actor of game.actors?.contents ?? []) for (const actorItem of actor.items ?? []) await invalidate(actorItem);
+    return changed;
+  }
+
+  static async synchronizePublishedSource(item) {
+    if (!game.user?.isGM || !item) return { actors: 0, copies: 0 };
+    const recipeId = String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "");
+    const snapshot = this.publishedRecipeSnapshot(item);
+    if (!recipeId || !snapshot || item.pack !== this.PACK_ID || !item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED)) {
+      throw new Error("Crafting Core could not synchronize an invalid published Knowledge Source.");
+    }
+    const sourceUuid = String(item.uuid || "");
+    let actors = 0;
+    for (const actor of game.actors?.contents?.filter(a => a.type === "character") ?? []) {
+      const store = this.learnedStore(actor);
+      const legacy = this.legacyKnownRecipeIds(actor);
+      if (!store[recipeId] && !legacy.includes(recipeId)) continue;
+      const existing = store[recipeId] ?? {};
+      store[recipeId] = {
+        ...existing,
+        recipe: snapshot,
+        publishedSourceUuid: sourceUuid,
+        revisedAt: Date.now(),
+        sourceName: String(existing.sourceName || item.name || ""),
+        sourceType: String(existing.sourceType || item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_SOURCE_TYPE) || "Recipe")
+      };
+      await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
+      if (legacy.includes(recipeId)) await actor.setFlag(MODULE_ID, FLAGS.KNOWN_RECIPES, legacy.filter(id => id !== recipeId));
+      actor.sheet?.render?.({ force: true });
+      actors += 1;
+    }
+    const copies = await this.#synchronizeDistributedCopies(item, snapshot);
+    return { actors, copies };
+  }
+
+  static async refreshLearnedRecipe(recipe) {
+    // Backward-compatible API for integrations. Published Recipes synchronize from the
+    // Compendium source; unpublished drafts are intentionally unable to change learned data.
+    if (!game.user?.isGM || !recipe?.id) return 0;
+    const item = await this.publishedItemForRecipe(recipe.id);
+    if (!item) return 0;
+    return (await this.synchronizePublishedSource(item)).actors;
+  }
+
+  static async handlePublishedSourceDeleted(item) {
+    if (!game.user?.isGM || !item || item.pack !== this.PACK_ID) return 0;
+    if (!item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED)) return 0;
+    const recipeId = String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "");
+    if (!recipeId) return 0;
+    const sourceUuid = String(item.uuid || "");
+    const removed = await this.removeRecipeFromAllActors(recipeId, { publishedSourceUuid: sourceUuid });
+    await this.#invalidateDistributedCopies(recipeId, sourceUuid);
+    const draft = RecipeService.get(recipeId);
+    if (draft?.publication?.uuid === sourceUuid) {
+      draft.publication = null;
+      await RecipeService.save(draft);
+    }
+    console.info(`${MODULE_ID} | Published Recipe ${recipeId} was deleted; removed from ${removed} Character(s).`);
+    return removed;
+  }
+
+  static async deletePublishedSource(recipeId) {
+    if (!game.user?.isGM) throw new Error("Only a GM can delete published Crafting Core Recipes.");
+    const item = await this.publishedItemForRecipe(recipeId);
+    if (!item) {
+      const draft = RecipeService.get(recipeId);
+      if (draft?.publication) {
+        draft.publication = null;
+        await RecipeService.save(draft);
+      }
+      await this.removeRecipeFromAllActors(recipeId);
+      return false;
+    }
+    const pack = this.pack();
+    const wasLocked = Boolean(pack?.locked);
+    if (wasLocked) await pack.configure({ locked: false });
+    try {
+      const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+      await ItemClass.deleteDocuments([item.id], { pack: item.pack });
+      // The deleteItem hook performs the canonical cleanup. Run an idempotent fallback
+      // as protection for Foundry/API paths that suppress hooks.
+      await this.handlePublishedSourceDeleted(item);
+      return true;
+    } finally {
+      if (wasLocked) await pack.configure({ locked: true });
+    }
+  }
+
+  static async reconcilePublishedKnowledge() {
+    if (!game.user?.isGM) return { actorsUpdated: 0, actorsRemoved: 0, draftsRecovered: 0, draftsRelinked: 0, draftsUnlinked: 0, copiesInvalidated: 0 };
+    const pack = this.pack();
+    const docs = pack ? await pack.getDocuments() : [];
+    const publishedById = new Map();
+    for (const item of docs) {
+      if (!item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED)) continue;
+      const id = String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "");
+      if (id) publishedById.set(id, item);
+    }
+
+    let actorsUpdated = 0;
+    let actorsRemoved = 0;
+    for (const actor of game.actors?.contents?.filter(a => a.type === "character") ?? []) {
+      const store = this.learnedStore(actor);
+      const legacy = this.legacyKnownRecipeIds(actor);
+      const allIds = new Set([...Object.keys(store), ...legacy]);
+      let changed = false;
+      for (const id of allIds) {
+        const item = publishedById.get(id);
+        if (!item) {
+          if (store[id]) delete store[id];
+          changed = true;
+          actorsRemoved += 1;
+          continue;
+        }
+        const snapshot = this.publishedRecipeSnapshot(item);
+        if (!snapshot) continue;
+        const existing = store[id] ?? {};
+        const sourceUuid = String(item.uuid || "");
+        if (JSON.stringify(existing.recipe ?? null) !== JSON.stringify(snapshot)
+          || String(existing.publishedSourceUuid || "") !== sourceUuid
+          || legacy.includes(id)) {
+          store[id] = {
+            ...existing,
+            recipe: snapshot,
+            publishedSourceUuid: sourceUuid,
+            revisedAt: Date.now(),
+            sourceName: String(existing.sourceName || item.name || ""),
+            sourceType: String(existing.sourceType || item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_SOURCE_TYPE) || "Recipe")
+          };
+          changed = true;
+          actorsUpdated += 1;
+        }
+      }
+      if (changed) {
+        await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
+        const keptLegacy = legacy.filter(id => publishedById.has(id) && !store[id]);
+        if (keptLegacy.length !== legacy.length) await actor.setFlag(MODULE_ID, FLAGS.KNOWN_RECIPES, keptLegacy);
+        actor.sheet?.render?.({ force: true });
+      }
+    }
+
+    let draftsRecovered = 0;
+    let draftsRelinked = 0;
+    for (const [recipeId, item] of publishedById) {
+      const snapshot = this.publishedRecipeSnapshot(item);
+      if (!snapshot) continue;
+      const publication = {
+        uuid: String(item.uuid || ""),
+        pack: String(item.pack || this.PACK_ID),
+        sourceType: String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_SOURCE_TYPE) || snapshot.knowledge?.label || "Recipe"),
+        publishedAt: Number(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED_AT)) || Date.now(),
+        updatedAt: Number(item._stats?.modifiedTime) || Date.now()
+      };
+      const draft = RecipeService.get(recipeId);
+      if (!draft) {
+        await RecipeService.save({ ...snapshot, publication });
+        draftsRecovered += 1;
+        continue;
+      }
+      if (String(draft.publication?.uuid || "") !== publication.uuid) {
+        draft.publication = publication;
+        await RecipeService.save(draft);
+        draftsRelinked += 1;
+      }
+    }
+
+    let draftsUnlinked = 0;
+    for (const draft of RecipeService.list()) {
+      if (!draft.publication?.uuid) continue;
+      const item = publishedById.get(draft.id);
+      if (item?.uuid === draft.publication.uuid) continue;
+      draft.publication = null;
+      await RecipeService.save(draft);
+      draftsUnlinked += 1;
+    }
+
+    // Safety net for a source removed while Crafting Core was disabled: invalidate any
+    // remaining distributed copies that still point at a missing authoritative UUID.
+    const validSourceUuids = new Set([...publishedById.values()].map(item => String(item.uuid || "")));
+    let copiesInvalidated = 0;
+    const inspectCopy = async copy => {
+      if (!copy || copy.pack === this.PACK_ID) return;
+      const recipeId = String(copy.getFlag?.(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "");
+      const sourceUuid = this.publishedSourceUuidFromItem(copy);
+      if (!recipeId || !sourceUuid || validSourceUuids.has(sourceUuid)) return;
+      const prefix = `Compendium.${this.PACK_ID}.Item.`;
+      if (!sourceUuid.startsWith(prefix)) return;
+      await copy.update({ [`flags.${MODULE_ID}.${FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT}`]: null });
+      copiesInvalidated += 1;
+    };
+    for (const worldItem of game.items?.contents ?? []) await inspectCopy(worldItem);
+    for (const actor of game.actors?.contents ?? []) for (const actorItem of actor.items ?? []) await inspectCopy(actorItem);
+
+    return { actorsUpdated, actorsRemoved, draftsRecovered, draftsRelinked, draftsUnlinked, copiesInvalidated };
   }
 
   static async migrateLegacyKnowledge() {
@@ -519,7 +855,8 @@ export class KnowledgeItemService {
         const item = activity.item;
         const learned = await this.learn(actor, recipe, {
           sourceName: item?.name ?? "",
-          sourceType: item?.getFlag?.(MODULE_ID, FLAGS.KNOWLEDGE_SOURCE_TYPE) ?? recipe.knowledge?.label ?? "Recipe"
+          sourceType: item?.getFlag?.(MODULE_ID, FLAGS.KNOWLEDGE_SOURCE_TYPE) ?? recipe.knowledge?.label ?? "Recipe",
+          publishedSourceUuid: this.publishedSourceUuidFromItem(item)
         });
         if (learned) {
           ui.notifications.info(`${actor.name} learned ${recipe.name}.`);
@@ -529,6 +866,16 @@ export class KnowledgeItemService {
         console.error(`${MODULE_ID} | Learn Recipe failed.`, error);
         ui.notifications.error(error.message ?? "Crafting Core could not teach that recipe.");
       }
+    });
+
+    // Deleting a distributed copy from an Actor inventory is intentionally ignored.
+    // Only deletion of the authoritative private-Compendium source makes Characters forget.
+    Hooks.on("deleteItem", (item) => {
+      if (!game.user?.isGM || item?.pack !== this.PACK_ID) return;
+      if (!item.getFlag?.(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED)) return;
+      void this.handlePublishedSourceDeleted(item).catch(error => {
+        console.error(`${MODULE_ID} | Published Knowledge Source deletion cleanup failed.`, error);
+      });
     });
   }
 }

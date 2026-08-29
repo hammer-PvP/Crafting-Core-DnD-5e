@@ -2,7 +2,7 @@
 
 Crafting Core is a GM-authoritative crafting, harvesting, and material framework for Foundry Virtual Tabletop using D&D5e 5.3.3.
 
-It supports simple timed crafts, persistent multi-rest Crafting Projects, native D&D5e crafting checks, Extra Effort, player-specific Recipe knowledge, a curated material catalog, Creature Harvest profiles, environmental resource generation, Game Hunt, and optional Item Piles integration.
+It supports simple timed crafts, persistent multi-rest Crafting Projects, native D&D5e crafting checks, Extra Effort, player-specific Recipe knowledge synchronized from authoritative published Knowledge Sources, a curated material catalog, Creature Harvest profiles, environmental resource generation, Game Hunt, and optional Item Piles integration.
 
 ## Highlights
 
@@ -12,6 +12,8 @@ It supports simple timed crafts, persistent multi-rest Crafting Projects, native
 - **Extra Effort** as one optional second work attempt per Work Period, with its own Ability/Skill/Tool/Save check and optional progress-loss penalty.
 - **Player Visibility** controls for ingredients, DCs, progress, consequences, descriptions, and more.
 - **Knowledge Sources** published as Recipe, Formula, Blueprint, or Manual Items with a Learn Recipe Activity.
+- **Authoritative published Recipe lifecycle**: save drafts freely, publish explicitly, synchronize known Recipes on update, and remove known Recipes when the authoritative source is deleted.
+- **Unlearn Recipe** for Players and GMs with an explicit `I AGREE` confirmation and active-craft protection.
 - **Learning eligibility** that can allow anyone or follow the Recipe's crafting eligibility.
 - **229 curated built-in materials** stored as native D&D5e Loot -> Trade Good Items.
 - **Three selectable Foundry Core icon candidates** for each curated material, with no Foundry artwork bundled by Crafting Core.
@@ -54,7 +56,7 @@ Create a Recipe Draft, then:
 4. choose what the player can see;
 5. drag in ingredient Items and quantities;
 6. drag in the crafted output Item and quantity;
-7. publish a Knowledge Source.
+7. save the draft, then explicitly publish the Knowledge Source.
 
 ### 3. Teach the Recipe
 
@@ -99,6 +101,26 @@ The GM configures:
 - optional **Lose Progress on Failure**.
 
 A failed Extra Effort always spends that Extra Effort opportunity and grants no extra progress. With the optional penalty disabled, it does not regress the Project. Extra Effort never consumes the reserved ingredients again.
+
+## Published Recipe Lifecycle
+
+Before publication, the Recipe Builder is a GM draft workspace. Saving the draft changes only the editor copy.
+
+After the first publication, the matching Item in the private **Crafting Core - Learn Sources** Compendium becomes the authoritative Recipe definition. The Builder remains the editor, but changes become official only when the GM clicks **Update / Save to Compendium**.
+
+When an authoritative source is updated:
+- Characters who already know the Recipe are synchronized automatically;
+- distributed Knowledge Source copies receive the current published snapshot;
+- active Crafting Projects keep the frozen snapshot they started with;
+- future crafts and Projects use the new published definition.
+
+When the authoritative Compendium source is deleted, Characters who know it forget it and old distributed copies can no longer teach it. Deleting or consuming an ordinary inventory copy does not remove learned knowledge.
+
+Players and GMs can also use **Unlearn Recipe** from the Character Crafting tab. The action requires typing `I AGREE` and cannot be used while that Recipe is actively being crafted.
+
+## Complete Manual
+
+See the [Crafting Core Complete Manual v0.1.1](docs/Crafting-Core-Complete-Manual-v0.1.1.pdf) for the full GM and Player reference.
 
 ## Materials
 

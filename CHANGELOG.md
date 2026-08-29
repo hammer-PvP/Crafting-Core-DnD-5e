@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.1 - Published Recipe Lifecycle
+
+- Makes the private **Crafting Core - Learn Sources** Compendium the authoritative definition for a Recipe after publication.
+- Keeps Recipe Builder edits as local GM draft changes until **Update / Save to Compendium** is explicitly used. Saving the editor draft alone does not change what Characters know.
+- Updates an existing published Recipe in place, preserving the same Compendium Item/UUID and the single canonical **Learn Recipe** Activity.
+- Synchronizes every Character who already knows a Recipe from the authoritative published snapshot when that Compendium source is updated; no relearning is required.
+- Synchronizes distributed Knowledge Source copies so an older Manual/Formula/Blueprint/Recipe copy teaches the current published definition after an update.
+- Keeps already-started Crafting Projects frozen to their start-time Recipe snapshot; later Compendium updates apply only to future crafts/projects.
+- Deleting the authoritative published Knowledge Source removes that Recipe from Characters who know it and invalidates distributed copies of the deleted source. A Project already in progress remains visible and finishable from its frozen snapshot. Deleting or consuming a normal inventory copy does **not** make a Character forget the Recipe.
+- Adds startup reconciliation for missing/orphaned published sources and legacy learned entries, including recovery/relinking of older published Compendium sources whose Builder draft was previously deleted.
+- Adds **Unlearn Recipe** to the Character Crafting tab for Players and GMs. Forgetting requires typing **I AGREE**, warns that the Recipe may not be obtainable again, and is blocked while that Recipe is currently being crafted.
+- Reworks published Recipe Builder messaging and footer actions so the publication boundary is explicit: **Save Editor Draft** is local; **Update / Save to Compendium** is authoritative.
+- Preserves the validated Short/Long Rest, Work Period, Progress Check, Final Check, Extra Effort, ingredient resolution, material stacking, harvesting, Generate Materials, and Item Piles runtime without mechanical changes.
+
 ## 0.1.0 - Consolidation Release
 
 - Promotes the live-tested Crafting Core feature set to the v0.1.x milestone.

@@ -34,15 +34,19 @@
     <div class="cc-content">
       <header class="cc-section-header">
         <div>
-          <span class="cc-kicker">Recipe Builder · {{#if published}}Published Draft{{else}}Draft{{/if}}</span>
+          <span class="cc-kicker">Recipe Builder · {{#if published}}Published Recipe Editor{{else}}Draft{{/if}}</span>
           <h2>{{draft.name}}</h2>
-          <p>The Builder is a GM workbench. Publish the finished Knowledge Source to the private Compendium, then this draft may be deleted safely.</p>
+          {{#if published}}
+          <p>This editor is linked to the authoritative Learn Sources Compendium entry. Editing or saving the local draft does not change what Characters know until you explicitly update the Compendium.</p>
+          {{else}}
+          <p>The Builder is a GM workbench. Until this Recipe is published, it is only a draft and cannot become authoritative Character knowledge.</p>
+          {{/if}}
         </div>
         <img class="cc-recipe-image" src="{{draft.img}}" alt="">
       </header>
 
       {{#if published}}
-      <div class="cc-publication-banner"><i class="fa-solid fa-circle-check"></i><div><strong>Published to Learn Sources</strong><small>The published Item contains a full recipe snapshot. Deleting this Builder draft will not break it or Characters who learned it.</small></div></div>
+      <div class="cc-publication-banner"><i class="fa-solid fa-circle-check"></i><div><strong>Published · Compendium Is Authoritative</strong><small>Characters who know this Recipe use the published definition. Changes in this editor become official only after Update / Save to Compendium.</small></div></div>
       {{/if}}
 
       <section class="cc-form-card">
@@ -255,17 +259,22 @@
           <span><strong>Knowledge Price</strong>{{knowledgePrice}} gp</span>
           <small>Rarity always comes from the crafted output. Price follows the D&D5e 5.3.3 magic crafting cost progression; Legendary = 100,000 gp.</small>
         </div>
-        {{#if editingExisting}}
-        <button type="button" class="cc-primary-action cc-wide" data-action="publish-recipe"><i class="fa-solid fa-upload"></i> {{#if published}}Update Published Source{{else}}Publish to Private Compendium{{/if}}</button>
+        {{#if published}}
+        <p class="cc-note"><i class="fa-solid fa-circle-info"></i> This section shows the publication settings. Use <strong>Update / Save to Compendium</strong> in the footer when the revised Recipe is ready to become official.</p>
         {{else}}
-        <p class="cc-note"><i class="fa-solid fa-circle-info"></i> Save the draft before publishing its Knowledge Source.</p>
+        <p class="cc-note"><i class="fa-solid fa-circle-info"></i> Save the draft first, then publish it from the footer when it is ready to become official Character knowledge.</p>
         {{/if}}
       </section>
     </div>
 
-    <footer class="cc-footer">
-      {{#if editingExisting}}<button type="button" class="cc-danger-action" data-action="delete-recipe"><i class="fa-solid fa-trash"></i> Delete Builder Draft</button>{{else}}<span></span>{{/if}}
-      <button type="button" class="cc-primary-action" data-action="save-recipe"><i class="fa-solid fa-floppy-disk"></i> Save Draft</button>
+    <footer class="cc-footer cc-recipe-footer">
+      {{#if editingExisting}}
+      <button type="button" class="cc-danger-action" data-action="delete-recipe"><i class="fa-solid fa-trash"></i> {{#if published}}Delete Published Recipe{{else}}Delete Draft{{/if}}</button>
+      {{else}}<span></span>{{/if}}
+      <button type="button" class="cc-primary-action" data-action="save-recipe"><i class="fa-solid fa-floppy-disk"></i> {{#if published}}Save Editor Draft{{else}}Save Draft{{/if}}</button>
+      {{#if editingExisting}}
+      <button type="button" class="cc-primary-action cc-publish-action" data-action="publish-recipe"><i class="fa-solid fa-cloud-arrow-up"></i> {{#if published}}Update / Save to Compendium{{else}}Publish to Compendium{{/if}}</button>
+      {{/if}}
     </footer>
   </main>
 </section>

@@ -68,7 +68,10 @@ export class CharacterSheetService {
     if (!preparedRecipes.some(recipe => recipe.id === selected)) selected = activeProject?.recipeId ?? preparedRecipes[0]?.id ?? null;
     if (selected) this.#selection.set(sheet.id ?? actor.id, selected);
     let prepared = selected ? preparedRecipes.find(recipe => recipe.id === selected) ?? null : null;
-    if (activeProject && prepared?.id === activeProject.recipeId) {
+    if (activeProject && selected === activeProject.recipeId) {
+      // An authoritative source can be deleted while a Project is already in progress.
+      // The Project owns a frozen snapshot and must remain visible/finishable even after
+      // the Character no longer knows the Recipe for future crafts.
       prepared = CraftingService.prepareRecipeForActor(actor, activeProject.recipe);
     }
 
@@ -89,12 +92,21 @@ export class CharacterSheetService {
       active: Boolean(activeProject && activeProject.recipeId === recipe.id),
       modeLabel: recipe.craftingMode === "project" ? "Project" : "Timed"
     }));
+    if (activeProject && !list.some(recipe => recipe.id === activeProject.recipeId)) {
+      const frozen = CraftingService.prepareRecipeForActor(actor, activeProject.recipe);
+      list.unshift({
+        ...frozen,
+        selected: activeProject.recipeId === selected,
+        active: true,
+        modeLabel: "Project"
+      });
+    }
 
     return {
       craftingCore: {
         recipes: list,
         selectedRecipe: prepared,
-        hasRecipes: preparedRecipes.length > 0,
+        hasRecipes: list.length > 0,
         busy,
         activeProject,
         selectedIsActiveProject,
@@ -131,6 +143,63 @@ export class CharacterSheetService {
     this.#bindAsync(root, app, "extra-effort", actor => CraftingService.requestExtraEffort(actor));
     this.#bindAsync(root, app, "final-project", actor => CraftingService.requestFinalCheck(actor));
 
+    const unlearn = root.querySelector('.crafting-core-tab [data-action="unlearn-recipe"]');
+    if (unlearn && !unlearn.dataset.ccBound) {
+      unlearn.dataset.ccBound = "true";
+      unlearn.addEventListener("click", async event => {
+        event.preventDefault();
+        const actor = app.actor ?? app.document;
+        const recipeId = this.#selection.get(app.id ?? actor.id);
+        const recipe = recipeId ? KnowledgeItemService.recipeForActor(actor, recipeId) : null;
+        if (!recipe) return;
+
+        const active = CraftingService.job(actor);
+        if (String(active?.recipeId ?? "") === recipe.id && ["active", "finalizing"].includes(String(active?.status ?? ""))) {
+          await ResultDialog.show({
+            title: "Unable to Unlearn Recipe",
+            message: active?.mode === "project"
+              ? "This Recipe is currently being used by the active Crafting Project. Complete or cancel the Project before forgetting it."
+              : "This Recipe is currently being crafted. Wait for the current craft to finish before forgetting it.",
+            tone: "warning",
+            icon: "fa-solid fa-lock"
+          });
+          return;
+        }
+
+        const confirmation = await this.#confirmUnlearnRecipe(recipe);
+        if (!confirmation.confirmed) {
+          if (confirmation.attempted) {
+            await ResultDialog.show({
+              title: "Confirmation Required",
+              message: 'Type "I AGREE" exactly to confirm that you want to forget this Recipe.',
+              tone: "warning",
+              icon: "fa-solid fa-triangle-exclamation"
+            });
+          }
+          return;
+        }
+
+        unlearn.disabled = true;
+        try {
+          const forgotten = await KnowledgeItemService.unlearn(actor, recipe.id);
+          if (!forgotten) return;
+          this.#selection.delete(app.id ?? actor.id);
+          await app.render({ force: true });
+          await ResultDialog.show({
+            title: "Recipe Forgotten",
+            message: `${recipe.name} has been removed from this Character's known Recipes.`,
+            facts: ["You may need to obtain another valid Knowledge Source to learn it again."],
+            tone: "success",
+            icon: "fa-solid fa-book"
+          });
+        } catch (error) {
+          console.error(`${MODULE_ID} | Unlearn Recipe failed.`, error);
+          await ResultDialog.error(error.message ?? "Crafting Core could not forget that Recipe.", "Unable to Unlearn Recipe");
+          unlearn.disabled = false;
+        }
+      });
+    }
+
     const cancel = root.querySelector('.crafting-core-tab [data-action="cancel-project"]');
     if (cancel && !cancel.dataset.ccBound) {
       cancel.dataset.ccBound = "true";
@@ -152,6 +221,48 @@ export class CharacterSheetService {
           cancel.disabled = false;
         }
       });
+    }
+  }
+
+  static async #confirmUnlearnRecipe(recipe) {
+    const DialogV2 = foundry.applications?.api?.DialogV2;
+    if (!DialogV2?.wait) return { confirmed: false, attempted: false };
+    const inputId = `cc-unlearn-${foundry.utils.randomID(12)}`;
+    const name = foundry.utils.escapeHTML(String(recipe?.name || "this Recipe"));
+    const content = `
+      <section class="cc-result-dialog cc-result-warning">
+        <div class="cc-result-dialog-icon"><i class="fa-solid fa-book"></i></div>
+        <div class="cc-result-dialog-copy">
+          <span class="cc-kicker">Crafting Core</span>
+          <h2>Unlearn Recipe</h2>
+          <p>You are about to forget <strong>${name}</strong>. You may not be able to learn this Recipe again unless you obtain another valid Knowledge Source.</p>
+          <div class="cc-unlearn-confirm">
+            <label for="${inputId}">Type I AGREE to confirm</label>
+            <input id="${inputId}" type="text" autocomplete="off" spellcheck="false" placeholder="I AGREE">
+          </div>
+        </div>
+      </section>`;
+    try {
+      const result = await DialogV2.wait({
+        window: { title: "Crafting Core — Unlearn Recipe" },
+        content,
+        buttons: [
+          { action: "cancel", label: "Cancel", icon: "fa-solid fa-xmark", callback: () => ({ confirmed: false, attempted: false }) },
+          {
+            action: "unlearn",
+            label: "Unlearn Recipe",
+            icon: "fa-solid fa-book",
+            default: true,
+            callback: () => ({
+              confirmed: String(document.getElementById(inputId)?.value ?? "").trim() === "I AGREE",
+              attempted: true
+            })
+          }
+        ]
+      });
+      return result && typeof result === "object" ? result : { confirmed: false, attempted: false };
+    } catch (_) {
+      return { confirmed: false, attempted: false };
     }
   }
 

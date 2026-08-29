@@ -115,6 +115,14 @@ Hooks.once("ready", async () => {
       console.error(`${MODULE_TITLE} | Legacy knowledge migration failed.`, error);
     }
     try {
+      const reconciled = await KnowledgeItemService.reconcilePublishedKnowledge();
+      if (reconciled.actorsUpdated || reconciled.actorsRemoved || reconciled.draftsRecovered || reconciled.draftsRelinked || reconciled.draftsUnlinked || reconciled.copiesInvalidated) {
+        console.info(`${MODULE_TITLE} | Reconciled published Recipe knowledge:`, reconciled);
+      }
+    } catch (error) {
+      console.error(`${MODULE_TITLE} | Published Recipe knowledge reconciliation failed.`, error);
+    }
+    try {
       const materialMigration = await MaterialCatalogService.migrateCuratedCatalogIfNeeded();
       if (materialMigration.migrated) console.info(`${MODULE_TITLE} | Applied curated material catalog migration.`, materialMigration);
     } catch (error) {

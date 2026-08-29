@@ -395,7 +395,9 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       const saved = await RecipeService.save(this.draft);
       this.selectedId = saved.id;
       this.draft = foundry.utils.deepClone(saved);
-      ui.notifications.info(`Saved draft: ${saved.name}.`);
+      ui.notifications.info(saved.publication?.uuid
+        ? `Saved editor draft: ${saved.name}. The published Compendium source is unchanged.`
+        : `Saved draft: ${saved.name}.`);
       this.render({ force: true });
     } catch (error) {
       console.error(`${MODULE_ID} | Save recipe failed.`, error);
@@ -413,7 +415,9 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       this.draft = foundry.utils.deepClone(saved);
       const { item, recipe } = await KnowledgeItemService.publishRecipe(saved.id);
       this.draft = foundry.utils.deepClone(recipe);
-      ui.notifications.info(`Published ${item.name} to the private Crafting Core — Learn Sources Compendium.`);
+      ui.notifications.info(saved.publication?.uuid
+        ? `Updated ${item.name} in Crafting Core — Learn Sources. Characters who know it were synchronized.`
+        : `Published ${item.name} to the private Crafting Core — Learn Sources Compendium.`);
       this.render({ force: true });
     } catch (error) {
       console.error(`${MODULE_ID} | Publish recipe failed.`, error);
@@ -427,15 +431,16 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const recipe = RecipeService.get(this.selectedId);
     const published = Boolean(recipe?.publication?.uuid);
     const content = published
-      ? `<p>Delete the Recipe Builder draft <strong>${foundry.utils.escapeHTML(recipe?.name ?? "this recipe")}</strong>?</p><p>The published Knowledge Source and any Characters who already learned it remain fully functional.</p>`
+      ? `<p>Delete the published Recipe <strong>${foundry.utils.escapeHTML(recipe?.name ?? "this recipe")}</strong>?</p><p>This removes its authoritative Learn Sources Compendium entry. Every Character who knows it will forget it, and distributed copies of that deleted source will no longer teach it.</p><p><strong>This cannot be undone.</strong></p>`
       : `<p><strong>${foundry.utils.escapeHTML(recipe?.name ?? "This draft")}</strong> has not been published to the Crafting Core library.</p><p>Deleting it now permanently destroys this draft.</p>`;
     const confirmed = await foundry.applications.api.DialogV2.confirm({
-      window: { title: published ? "Delete Published Draft" : "Delete Unpublished Draft" },
+      window: { title: published ? "Delete Published Recipe" : "Delete Unpublished Draft" },
       content,
-      yes: { label: "Delete Draft", icon: "fa-solid fa-trash" },
+      yes: { label: published ? "Delete Published Recipe" : "Delete Draft", icon: "fa-solid fa-trash" },
       no: { label: "Cancel" }
     });
     if (!confirmed) return;
+    if (published) await KnowledgeItemService.deletePublishedSource(this.selectedId);
     await RecipeService.delete(this.selectedId);
     this.#newDraft();
     this.render({ force: true });

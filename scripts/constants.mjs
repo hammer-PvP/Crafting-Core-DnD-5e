@@ -25,6 +25,7 @@ export const FLAGS = Object.freeze({
   KNOWLEDGE_SOURCE_TYPE: "knowledgeSourceType",
   KNOWLEDGE_PUBLISHED: "knowledgePublished",
   KNOWLEDGE_PUBLISHED_AT: "knowledgePublishedAt",
+  KNOWLEDGE_PUBLISHED_SOURCE_UUID: "knowledgePublishedSourceUuid",
   MATERIAL: "material",
   MATERIAL_ID: "materialId",
   MATERIAL_FAMILY: "materialFamily",
