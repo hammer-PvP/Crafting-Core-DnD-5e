@@ -12,7 +12,7 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
     id: "crafting-core-settings",
     classes: ["crafting-core", "crafting-core-settings-app", "standard-form"],
     tag: "form",
-    position: { width: 760, height: 820 },
+    position: { width: 720, height: 760 },
     window: { title: "Crafting Core — Settings", resizable: true }
   };
 

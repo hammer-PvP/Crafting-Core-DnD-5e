@@ -1,4 +1,4 @@
-# Crafting Core Architecture - v0.1.1
+# Crafting Core Architecture - v0.1.0
 
 This document describes the current runtime boundaries of Crafting Core. It is intentionally limited to implemented behavior.
 
@@ -6,7 +6,7 @@ This document describes the current runtime boundaries of Crafting Core. It is i
 
 - GM-authoritative writes for Recipe, crafting, material, scanner, and harvest state.
 - D&D5e-native Item documents for ingredients, outputs, materials, and Knowledge Sources.
-- The private Learn Sources Compendium is authoritative after publication; Actor knowledge is a synchronized cache. Active Crafting Projects remain frozen snapshots.
+- Frozen snapshots for published Knowledge Sources and active Crafting Projects.
 - Stable Crafting Core identities for materials; embedded Actor Item UUIDs are not treated as material identity.
 - Preview-first material generation.
 - Item Piles is an optional destination/container integration, not the authority for Crafting Core generation rules.
@@ -30,7 +30,7 @@ Owns timed crafting and Crafting Project runtime behavior:
 - player-facing result feedback data.
 
 ### KnowledgeItemService
-Owns the published Recipe lifecycle: Knowledge Source publication/update, stable authoritative-source identity, Learn Recipe Activities, Actor known-Recipe cache synchronization, distributed-copy synchronization/invalidation, Unlearn Recipe, published-source deletion cleanup, learning eligibility enforcement, and legacy/orphan reconciliation.
+Owns the published Recipe lifecycle, authoritative Learn Sources Compendium identity/revisions, canonical Learn Recipe Activities, Actor known-Recipe mirrors, Unlearn/removal, learning eligibility enforcement, distributed Knowledge Source synchronization, and v0.1.0 knowledge reconciliation. After publication, Builder drafts are not authoritative until explicitly pushed to the Compendium.
 
 ### MaterialCatalogService
 Owns the 229-entry curated catalog, private Materials Compendium, folder organization, rarity/economy defaults, curated overrides, three-icon curation, custom material registration, synchronization, and curated reset behavior.
@@ -68,7 +68,7 @@ Owns optional Item Piles boundaries:
 Crafting Core remains the authority for generated items and quantities.
 
 ### CharacterSheetService
-Owns the D&D5e Character Sheet Crafting-tab injection and player actions. It renders known Recipes, craftability, active Project state, and binds Craft/Start/Work/Extra Effort/Final/Cancel/Unlearn actions.
+Owns the D&D5e Character Sheet Crafting-tab injection and player actions. It renders known Recipes, craftability, active Project state, and binds Craft/Start/Work/Extra Effort/Final/Cancel actions.
 
 Important result feedback is displayed through ResultDialog after the sheet refresh has completed, preventing the Actor Sheet from stealing foreground focus.
 
@@ -87,7 +87,7 @@ World settings store:
 
 ### Actor flags
 Actor flags store:
-- synchronized known Recipe snapshots plus the authoritative published-source UUID;
+- known Recipe membership plus a mirror of the current authoritative published snapshot/revision;
 - timed crafting state when applicable;
 - the single active Crafting Project and its frozen Recipe/material state.
 
@@ -97,8 +97,6 @@ Crafting Core manages:
 - `Crafting Core - Learn Sources`
 
 They are GM-oriented libraries. Players receive Items only when the GM deliberately distributes them through gameplay.
-
-For Learn Sources, publication creates the authority boundary. Recipe Builder edits remain local until the GM explicitly updates the Compendium. Updating the authoritative source synchronizes Characters who know that Recipe; deleting it removes that knowledge and invalidates distributed copies. Startup reconciliation can recover/relink Builder entries from existing published sources created under older semantics. A Project already in progress is unaffected because its Recipe snapshot was frozen at project start; the Character Sheet keeps that frozen Project visible even if the published Recipe is removed.
 
 ## Crafting Project state machine
 

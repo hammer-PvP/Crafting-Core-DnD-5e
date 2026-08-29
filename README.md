@@ -2,7 +2,7 @@
 
 Crafting Core is a GM-authoritative crafting, harvesting, and material framework for Foundry Virtual Tabletop using D&D5e 5.3.3.
 
-It supports simple timed crafts, persistent multi-rest Crafting Projects, native D&D5e crafting checks, Extra Effort, player-specific Recipe knowledge synchronized from authoritative published Knowledge Sources, a curated material catalog, Creature Harvest profiles, environmental resource generation, Game Hunt, and optional Item Piles integration.
+It supports simple timed crafts, persistent multi-rest Crafting Projects, native D&D5e crafting checks, Extra Effort, player-specific Recipe knowledge, a curated material catalog, Creature Harvest profiles, environmental resource generation, Game Hunt, and optional Item Piles integration.
 
 ## Highlights
 
@@ -11,10 +11,9 @@ It supports simple timed crafts, persistent multi-rest Crafting Projects, native
 - **Crafting Projects** with reserved materials, Work Periods, Short/Long Rest cadence, Progress Checks, configurable regression/failure, and Final Crafting Checks.
 - **Extra Effort** as one optional second work attempt per Work Period, with its own Ability/Skill/Tool/Save check and optional progress-loss penalty.
 - **Player Visibility** controls for ingredients, DCs, progress, consequences, descriptions, and more.
-- **Knowledge Sources** published as Recipe, Formula, Blueprint, or Manual Items with a Learn Recipe Activity.
-- **Authoritative published Recipe lifecycle**: save drafts freely, publish explicitly, synchronize known Recipes on update, and remove known Recipes when the authoritative source is deleted.
-- **Unlearn Recipe** for Players and GMs with an explicit `I AGREE` confirmation and active-craft protection.
-- **Learning eligibility** that can allow anyone or follow the Recipe's crafting eligibility.
+- **Published Recipe lifecycle** where the private Learn Sources Compendium is the authoritative version after publication; editor drafts remain private until explicitly pushed.
+- **Knowledge Sources** published as Recipe, Formula, Blueprint, or Manual Items with a single canonical Learn Recipe Activity.
+- **Learning eligibility** that can allow anyone or follow the Recipe's crafting eligibility, plus player/GM Unlearn controls with explicit confirmation.
 - **229 curated built-in materials** stored as native D&D5e Loot -> Trade Good Items.
 - **Three selectable Foundry Core icon candidates** for each curated material, with no Foundry artwork bundled by Crafting Core.
 - **Stable material stacking** for supported incoming Crafting Core material flows while keeping the Ingredient Resolver tolerant of duplicate embedded stacks.
@@ -56,17 +55,19 @@ Create a Recipe Draft, then:
 4. choose what the player can see;
 5. drag in ingredient Items and quantities;
 6. drag in the crafted output Item and quantity;
-7. save the draft, then explicitly publish the Knowledge Source.
+7. publish a Knowledge Source.
 
-### 3. Teach the Recipe
+### 3. Publish and Teach the Recipe
 
-Give the published Knowledge Source Item to a Character and use its **Learn Recipe** Activity.
+Before first publication, the Recipe Builder is an editor draft. **Save Draft** never changes what Characters know.
 
-Knowledge can be configured as:
+Use **Publish to Compendium** for the first publication. After that, **Update / Save to Compendium** updates the same authoritative Knowledge Source in **Crafting Core — Learn Sources**. Characters who already know the Recipe are synchronized to the new published revision; an active Crafting Project keeps the frozen Recipe snapshot it started with.
+
+Give the published Knowledge Source Item to a Character and use its **Learn Recipe** Activity. Knowledge can be configured as:
 - **Anyone Can Learn**; or
 - **Follow Crafting Eligibility**.
 
-Rejected learning attempts do not consume the Knowledge Source.
+Rejected learning attempts do not consume the Knowledge Source. A Character or GM can later **Unlearn** a known Recipe with explicit `I AGREE` confirmation. Deleting the authoritative published source removes that Recipe from Characters who know it, while deleting or consuming a distributed copy does not erase already-learned knowledge.
 
 ### 4. Craft from the Character Sheet
 
@@ -102,31 +103,11 @@ The GM configures:
 
 A failed Extra Effort always spends that Extra Effort opportunity and grants no extra progress. With the optional penalty disabled, it does not regress the Project. Extra Effort never consumes the reserved ingredients again.
 
-## Published Recipe Lifecycle
-
-Before publication, the Recipe Builder is a GM draft workspace. Saving the draft changes only the editor copy.
-
-After the first publication, the matching Item in the private **Crafting Core - Learn Sources** Compendium becomes the authoritative Recipe definition. The Builder remains the editor, but changes become official only when the GM clicks **Update / Save to Compendium**.
-
-When an authoritative source is updated:
-- Characters who already know the Recipe are synchronized automatically;
-- distributed Knowledge Source copies receive the current published snapshot;
-- active Crafting Projects keep the frozen snapshot they started with;
-- future crafts and Projects use the new published definition.
-
-When the authoritative Compendium source is deleted, Characters who know it forget it and old distributed copies can no longer teach it. Deleting or consuming an ordinary inventory copy does not remove learned knowledge.
-
-Players and GMs can also use **Unlearn Recipe** from the Character Crafting tab. The action requires typing `I AGREE` and cannot be used while that Recipe is actively being crafted.
-
-## Complete Manual
-
-See the [Crafting Core Complete Manual v0.1.1](docs/Crafting-Core-Complete-Manual-v0.1.1.pdf) for the full GM and Player reference.
-
 ## Materials
 
 Crafting Core manages the private **Crafting Core - Materials** world Compendium.
 
-The v0.1.0 curated catalog contains 229 built-in materials across:
+The curated catalog contains 229 built-in materials across:
 - Creature Harvest
 - Essences
 - Gathering
@@ -188,7 +169,11 @@ No legacy-stack migration is performed. Existing duplicate stacks remain valid, 
 
 ## Documentation
 
-The complete v0.1.0 manual covers every current screen and workflow in detail:
+The complete manual is maintained in the repository `docs/` folder and is the primary user reference:
+
+**[Open the Complete Crafting Core Manual (PDF)](https://github.com/hammer-PvP/Crafting-Core-DnD-5e/blob/main/docs/Crafting-Core-Complete-Manual-v0.1.0.pdf)**
+
+The current published manual covers every stable screen and workflow in detail:
 - Recipe Builder
 - Knowledge Sources
 - Player Visibility

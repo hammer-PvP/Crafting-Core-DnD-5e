@@ -77,6 +77,7 @@ Hooks.once("init", () => {
   // the Crafting Core button unusable.
   exposeApi();
   runInitStep("recipe settings", () => RecipeService.registerSettings());
+  runInitStep("published Recipe index", () => KnowledgeItemService.registerSettings());
   runInitStep("material settings", () => MaterialCatalogService.registerSettings());
   runInitStep("harvest profile settings", () => HarvestProfileService.registerSettings());
   runInitStep("gear normalization settings", () => GearNormalizationService.registerSettings());
@@ -105,20 +106,12 @@ Hooks.once("ready", async () => {
   try { CraftingService.ready(); }
   catch (error) { console.error(`${MODULE_TITLE} | Crafting runtime failed to become ready.`, error); }
 
-  // One GM upgrades v0.0.1/v0.0.2 Character knowledge to self-contained recipe snapshots.
+  // One GM reconciles published Knowledge Sources, legacy Actor knowledge, and authoritative Recipe mirrors.
   const activeGM = game.users?.activeGM ?? game.users?.contents?.find(user => user.active && user.isGM);
   if (game.user?.isGM && (!activeGM || activeGM.id === game.user.id)) {
     try {
-      const migrated = await KnowledgeItemService.migrateLegacyKnowledge();
-      if (migrated.actors || migrated.items) console.info(`${MODULE_TITLE} | Migrated legacy knowledge:`, migrated);
-    } catch (error) {
-      console.error(`${MODULE_TITLE} | Legacy knowledge migration failed.`, error);
-    }
-    try {
-      const reconciled = await KnowledgeItemService.reconcilePublishedKnowledge();
-      if (reconciled.actorsUpdated || reconciled.actorsRemoved || reconciled.draftsRecovered || reconciled.draftsRelinked || reconciled.draftsUnlinked || reconciled.copiesInvalidated) {
-        console.info(`${MODULE_TITLE} | Reconciled published Recipe knowledge:`, reconciled);
-      }
+      const migrated = await KnowledgeItemService.reconcilePublishedKnowledge();
+      if (migrated.actors || migrated.sources || migrated.removed || migrated.copies) console.info(`${MODULE_TITLE} | Reconciled published Recipe knowledge:`, migrated);
     } catch (error) {
       console.error(`${MODULE_TITLE} | Published Recipe knowledge reconciliation failed.`, error);
     }

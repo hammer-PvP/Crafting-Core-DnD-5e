@@ -7,6 +7,7 @@ import {
 } from "../constants.mjs";
 import { KnowledgeItemService } from "../services/knowledge-item-service.mjs";
 import { RecipeService } from "../services/recipe-service.mjs";
+import { ResultDialog } from "../ui/result-dialog.mjs";
 import { MaterialCatalogApp } from "./material-catalog-app.mjs";
 import { MaterialGeneratorApp } from "./material-generator-app.mjs";
 import { CreatureScannerApp } from "./creature-scanner-app.mjs";
@@ -19,7 +20,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     id: "crafting-core-gm",
     classes: ["crafting-core", "crafting-core-gm-app", "standard-form"],
     tag: "form",
-    position: { width: 1200, height: 780 },
+    position: { width: 1080, height: 740 },
     window: { title: "Crafting Core", resizable: true }
   };
 
@@ -30,6 +31,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
   selectedId = null;
   draft = null;
   pendingContentScroll = null;
+  publicationPending = false;
 
   constructor(options={}) {
     super(options);
@@ -70,6 +72,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       draft: foundry.utils.deepClone(this.draft),
       editingExisting: Boolean(this.selectedId),
       published: Boolean(this.draft?.publication?.uuid),
+      publishedRevision: Math.max(0, Math.floor(Number(this.draft?.publication?.revision) || 0)),
       defaultKnowledgeIcon: DEFAULT_KNOWLEDGE_ICON,
       knowledgeIcons: KNOWLEDGE_ICONS,
       outputRarity: rarityLabel,
@@ -395,9 +398,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       const saved = await RecipeService.save(this.draft);
       this.selectedId = saved.id;
       this.draft = foundry.utils.deepClone(saved);
-      ui.notifications.info(saved.publication?.uuid
-        ? `Saved editor draft: ${saved.name}. The published Compendium source is unchanged.`
-        : `Saved draft: ${saved.name}.`);
+      ui.notifications.info(`Saved editor draft: ${saved.name}.`);
       this.render({ force: true });
     } catch (error) {
       console.error(`${MODULE_ID} | Save recipe failed.`, error);
@@ -407,21 +408,51 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   async #publish(event) {
     event.preventDefault();
+    if (this.publicationPending) return;
+    const button = event.currentTarget;
+    this.publicationPending = true;
+    if (button) button.disabled = true;
     this.#syncDraftFromForm();
+    const wasPublished = Boolean(this.draft?.publication?.uuid);
     try {
       this.#validateDraft();
       const saved = await RecipeService.save(this.draft);
       this.selectedId = saved.id;
       this.draft = foundry.utils.deepClone(saved);
-      const { item, recipe } = await KnowledgeItemService.publishRecipe(saved.id);
+      const {
+        item, recipe, revision, synchronizedActors, actorSyncFailures,
+        synchronizedCopies, copySyncFailures
+      } = await KnowledgeItemService.publishRecipe(saved.id);
       this.draft = foundry.utils.deepClone(recipe);
-      ui.notifications.info(saved.publication?.uuid
-        ? `Updated ${item.name} in Crafting Core — Learn Sources. Characters who know it were synchronized.`
-        : `Published ${item.name} to the private Crafting Core — Learn Sources Compendium.`);
-      this.render({ force: true });
+      await this.render({ force: true });
+      const syncWarnings = Number(actorSyncFailures || 0) + Number(copySyncFailures || 0);
+      const facts = [`Published revision: ${revision}`];
+      const knownActorTargets = Number(synchronizedActors || 0) + Number(actorSyncFailures || 0);
+      if (knownActorTargets) {
+        if (synchronizedActors) facts.push(`${synchronizedActors} Character${synchronizedActors === 1 ? "" : "s"} who already knew it synchronized.`);
+        if (actorSyncFailures) facts.push(`${actorSyncFailures} Character knowledge synchronization${actorSyncFailures === 1 ? "" : "s"} will retry during reconciliation.`);
+      } else facts.push("No existing Character knowledge needed synchronization.");
+      if (synchronizedCopies) facts.push(`${synchronizedCopies} distributed Knowledge Source cop${synchronizedCopies === 1 ? "y" : "ies"} synchronized.`);
+      if (copySyncFailures) facts.push(`${copySyncFailures} Knowledge Source cop${copySyncFailures === 1 ? "y" : "ies"} could not be refreshed and will retry during reconciliation.`);
+      await ResultDialog.show({
+        title: syncWarnings
+          ? (wasPublished ? "Recipe Updated — Sync Pending" : "Recipe Published — Sync Pending")
+          : (wasPublished ? "Published Recipe Updated" : "Recipe Published"),
+        message: syncWarnings
+          ? `${recipe.name} was saved successfully to the authoritative Learn Sources Compendium. Some downstream copies could not be synchronized immediately.`
+          : (wasPublished
+              ? `${recipe.name} was saved to the authoritative Learn Sources Compendium.`
+              : `${recipe.name} was published to the authoritative Learn Sources Compendium.`),
+        facts,
+        tone: syncWarnings ? "warning" : "success",
+        icon: syncWarnings ? "fa-solid fa-rotate" : "fa-solid fa-cloud-arrow-up"
+      });
     } catch (error) {
       console.error(`${MODULE_ID} | Publish recipe failed.`, error);
-      ui.notifications.error(error.message ?? "Crafting Core could not publish this Knowledge Source.");
+      await ResultDialog.error(error.message ?? "Crafting Core could not save this Recipe to the Learn Sources Compendium.", wasPublished ? "Published Recipe Update Failed" : "Recipe Publication Failed");
+    } finally {
+      this.publicationPending = false;
+      if (button?.isConnected) button.disabled = false;
     }
   }
 
@@ -430,19 +461,34 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (!this.selectedId) return;
     const recipe = RecipeService.get(this.selectedId);
     const published = Boolean(recipe?.publication?.uuid);
-    const content = published
-      ? `<p>Delete the published Recipe <strong>${foundry.utils.escapeHTML(recipe?.name ?? "this recipe")}</strong>?</p><p>This removes its authoritative Learn Sources Compendium entry. Every Character who knows it will forget it, and distributed copies of that deleted source will no longer teach it.</p><p><strong>This cannot be undone.</strong></p>`
-      : `<p><strong>${foundry.utils.escapeHTML(recipe?.name ?? "This draft")}</strong> has not been published to the Crafting Core library.</p><p>Deleting it now permanently destroys this draft.</p>`;
     const confirmed = await foundry.applications.api.DialogV2.confirm({
-      window: { title: published ? "Delete Published Recipe" : "Delete Unpublished Draft" },
-      content,
+      window: { title: published ? "Delete Published Recipe" : "Delete Recipe Draft" },
+      modal: true,
+      render: (_event, dialog) => { dialog?.bringToFront?.(); requestAnimationFrame(() => dialog?.bringToFront?.()); },
+      content: published
+        ? `<p>Delete the published Recipe <strong>${foundry.utils.escapeHTML(recipe?.name ?? "this Recipe")}</strong>?</p><p>Characters who know it will forget it immediately. Existing active Crafting Projects keep their frozen Project snapshot until completed or cancelled.</p>`
+        : `<p><strong>${foundry.utils.escapeHTML(recipe?.name ?? "This draft")}</strong> has not been published. Delete this editor draft permanently?</p>`,
       yes: { label: published ? "Delete Published Recipe" : "Delete Draft", icon: "fa-solid fa-trash" },
       no: { label: "Cancel" }
     });
     if (!confirmed) return;
-    if (published) await KnowledgeItemService.deletePublishedSource(this.selectedId);
-    await RecipeService.delete(this.selectedId);
-    this.#newDraft();
-    this.render({ force: true });
+    const recipeName = recipe?.name ?? "Recipe";
+    try {
+      if (published) await KnowledgeItemService.deletePublishedSource(this.selectedId);
+      await RecipeService.delete(this.selectedId);
+      this.#newDraft();
+      await this.render({ force: true });
+      await ResultDialog.show({
+        title: published ? "Published Recipe Deleted" : "Draft Deleted",
+        message: published
+          ? `${recipeName} was removed from Learn Sources and from Characters who knew it.`
+          : `${recipeName} was deleted from the Recipe Builder.`,
+        tone: published ? "warning" : "info",
+        icon: "fa-solid fa-trash"
+      });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Delete recipe failed.`, error);
+      await ResultDialog.error(error.message ?? "Crafting Core could not delete that Recipe.", "Recipe Deletion Failed");
+    }
   }
 }

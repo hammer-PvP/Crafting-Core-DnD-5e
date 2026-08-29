@@ -1032,15 +1032,10 @@
 .cc-profession-recipe-name small { opacity: .55; font-size: 8px; margin-top: 1px; }
 .cc-profession-count { min-width: 28px; padding: 2px 4px; border-radius: 3px; text-align: center; font-weight: 800; font-size: 9px; color: #cbdccf; background: rgba(54,91,60,.35); }
 .cc-profession-detail { min-width: 0; min-height: 0; overflow-y: auto; padding: 12px; background: rgba(35,58,70,.12); }
-.cc-profession-detail-header { display: grid; grid-template-columns: 58px minmax(0,1fr) auto; gap: 10px; align-items: center; padding-bottom: 10px; border-bottom: 1px solid rgba(181,155,97,.20); }
+.cc-profession-detail-header { display: grid; grid-template-columns: 58px minmax(0,1fr); gap: 10px; align-items: center; padding-bottom: 10px; border-bottom: 1px solid rgba(181,155,97,.20); }
 .cc-profession-detail-header img { width: 56px; height: 56px; object-fit: cover; border-radius: 4px; border: 1px solid rgba(181,155,97,.35); }
 .cc-profession-detail-header h2 { margin: 1px 0 0; font-family: var(--dnd5e-font-roboto-slab, serif); font-size: 19px; }
 .cc-active-project-label { display: inline-flex; gap: 4px; align-items: center; margin-top: 3px; color: #8ac394; font-size: 9px; font-weight: 800; text-transform: uppercase; }
-.cc-recipe-unlearn { min-height: 32px; padding: 0 9px; border: 1px solid rgba(177,78,78,.42); background: rgba(83,37,37,.42); color: #f0d8d8; font-size: 9px; font-weight: 800; white-space: nowrap; }
-.cc-recipe-unlearn:hover { border-color: rgba(226,118,118,.72); background: rgba(104,43,43,.58); }
-.cc-unlearn-confirm { margin-top: 10px; display: grid; gap: 5px; }
-.cc-unlearn-confirm label { font-size: 10px; font-weight: 800; color: var(--cc-gold); }
-.cc-unlearn-confirm input { width: 100%; min-height: 34px; }
 .cc-profession-block { margin-top: 9px; padding: 9px 10px; border: 1px solid rgba(255,255,255,.065); border-radius: 4px; background: rgba(0,0,0,.10); }
 .cc-profession-block > h3 { margin: 0 0 7px; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--dnd5e-color-gold, #b59b61); }
 .cc-profession-block-heading { display: flex; gap: 12px; justify-content: space-between; align-items: center; }
@@ -1585,6 +1580,114 @@
 }
 
 
-/* v0.1.1 — Published Recipe lifecycle */
-.cc-recipe-footer { align-items: center; }
-.cc-recipe-footer .cc-publish-action { margin-left: auto; min-width: 220px; }
+/* v0.1.1 — compact Recipe Builder + published Recipe lifecycle UI */
+.crafting-core-gm-app .cc-shell {
+  grid-template-columns: 300px minmax(0, 1fr);
+  min-height: 580px;
+}
+.crafting-core-gm-app .cc-sidebar { padding: 12px; gap: 10px; }
+.crafting-core-gm-app .cc-app-header { gap: 9px; }
+.crafting-core-gm-app .cc-app-header > i { font-size: 27px; }
+.crafting-core-gm-app .cc-app-header h1 { font-size: 25px; }
+.crafting-core-gm-app .cc-app-header p { margin-top: 1px; font-size: 10px; }
+.crafting-core-gm-app .cc-new-recipe,
+.crafting-core-gm-app .cc-materials-launch { min-height: 31px; }
+.crafting-core-gm-app .cc-recipe-nav { grid-template-columns: 34px minmax(0,1fr); gap: 7px; padding: 5px 6px; }
+.crafting-core-gm-app .cc-recipe-nav img { width: 32px; height: 32px; }
+.crafting-core-gm-app .cc-recipe-nav small { margin-top: 1px; font-size: 9px; }
+.crafting-core-gm-app .cc-content { padding: 14px 16px; }
+.crafting-core-gm-app .cc-section-header { margin-bottom: 10px; padding-bottom: 8px; gap: 12px; }
+.crafting-core-gm-app .cc-section-header h2 { font-size: 24px; }
+.crafting-core-gm-app .cc-section-header p { margin-top: 3px; font-size: 10px; }
+.crafting-core-gm-app .cc-recipe-image { width: 54px; height: 54px; }
+.crafting-core-gm-app .cc-form-card { padding: 10px; margin-bottom: 8px; }
+.crafting-core-gm-app .cc-form-card h3 { margin-bottom: 6px; }
+.crafting-core-gm-app .cc-card-heading { margin-bottom: 6px; gap: 9px; }
+.crafting-core-gm-app .cc-card-heading small { font-size: 9px; line-height: 1.25; }
+.crafting-core-gm-app .cc-form-card label { gap: 3px; }
+.crafting-core-gm-app .cc-grid.two,
+.crafting-core-gm-app .cc-grid.three { gap: 7px; }
+.crafting-core-gm-app .cc-file-field { margin-top: 7px; }
+.crafting-core-gm-app .cc-description-field { margin-top: 7px; }
+.crafting-core-gm-app .cc-description-field textarea { min-height: 60px; }
+.crafting-core-gm-app .cc-drop-zone { min-height: 52px; }
+.crafting-core-gm-app .cc-item-rows { gap: 5px; margin-top: 7px; }
+.crafting-core-gm-app .cc-item-row,
+.crafting-core-gm-app .cc-result-card { grid-template-columns: 36px minmax(0,1fr) 78px 30px; gap: 7px; padding: 5px 6px; }
+.crafting-core-gm-app .cc-item-row img,
+.crafting-core-gm-app .cc-result-card img { width: 34px; height: 34px; }
+.crafting-core-gm-app .cc-icon-button { width: 28px; height: 28px; }
+.crafting-core-gm-app .cc-visibility-grid { gap: 5px; }
+.crafting-core-gm-app .cc-visibility-toggle { gap: 6px; padding: 5px 7px; }
+.crafting-core-gm-app .cc-learning-access { gap: 8px; margin-top: 7px; padding: 6px 8px; }
+.crafting-core-gm-app .cc-knowledge-economy { margin-top: 7px; padding: 7px 8px; }
+.crafting-core-gm-app .cc-footer { padding: 8px 14px; gap: 8px; }
+.cc-recipe-footer .cc-footer-left,
+.cc-recipe-footer .cc-footer-actions { display: flex; align-items: center; gap: 7px; }
+.cc-recipe-footer .cc-footer-actions { margin-left: auto; justify-content: flex-end; }
+.cc-recipe-footer button { margin: 0; width: auto; min-height: 32px; white-space: nowrap; }
+.cc-save-draft-action { margin-top: 0; }
+
+/* v0.1.1 — Character knowledge controls */
+.cc-profession-detail-header { grid-template-columns: 58px minmax(0,1fr) auto; }
+.cc-unlearn-recipe {
+  align-self: start;
+  margin: 0;
+  width: auto;
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid rgba(142,43,49,.56);
+  background: rgba(142,43,49,.10);
+  color: #e8b5b8;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.cc-unlearn-recipe:disabled { opacity: .38; filter: grayscale(.45); }
+.cc-unlearn-recipe > i { margin-right: 4px; }
+.cc-confirm-dialog { min-width: min(500px, calc(100vw - 70px)); }
+.cc-confirm-dialog .cc-result-dialog { min-width: 0; }
+.cc-confirm-warning { margin-top: 7px !important; color: #e2b866; }
+.cc-confirm-phrase-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(209,176,107,.24);
+  border-radius: 5px;
+  background: rgba(0,0,0,.18);
+}
+.cc-confirm-phrase-field > span { font-size: 11px; opacity: .82; }
+.cc-confirm-phrase-field input { width: 100%; box-sizing: border-box; }
+
+/* v0.1.1 — compact Settings without reducing available source information */
+.crafting-core-settings-app .cc-settings-header { padding: 9px 12px; grid-template-columns: 34px minmax(0,1fr); gap: 9px; }
+.crafting-core-settings-app .cc-settings-header > i { font-size: 25px; }
+.crafting-core-settings-app .cc-settings-header h1 { font-size: 21px; }
+.crafting-core-settings-app .cc-settings-header p { font-size: 10px; line-height: 1.3; }
+.crafting-core-settings-app .cc-settings-body { padding: 7px; gap: 7px; }
+.crafting-core-settings-app .cc-settings-source-card { padding: 8px; }
+.crafting-core-settings-app .cc-settings-hint { margin-bottom: 5px; font-size: 10px; line-height: 1.3; }
+.crafting-core-settings-app .cc-settings-source-actions { margin-bottom: 5px; }
+.crafting-core-settings-app .cc-settings-source-actions button { min-height: 27px; }
+.crafting-core-settings-app .cc-settings-source-list { gap: 3px; }
+.crafting-core-settings-app .cc-settings-source-row { padding: 4px 6px; }
+.crafting-core-settings-app .cc-settings-source-priority { grid-template-columns: 30px 26px 26px; gap: 3px; }
+.crafting-core-settings-app .cc-settings-source-priority button { width: 26px; height: 26px; }
+.crafting-core-settings-app .cc-normalization-mode-row { gap: 7px; margin-bottom: 5px; }
+.crafting-core-settings-app .cc-normalization-homebrew { margin-bottom: 5px; padding: 6px 7px; }
+.crafting-core-settings-app .cc-settings-support { margin: 0 7px 7px; padding: 7px 9px; }
+.crafting-core-settings-app .cc-settings-support > p { margin-top: 5px; line-height: 1.35; }
+.crafting-core-settings-app .cc-settings-footer { padding: 7px 10px; gap: 8px; }
+
+@media (max-width: 980px) {
+  .crafting-core-gm-app .cc-shell { grid-template-columns: 270px minmax(0,1fr); }
+  .cc-recipe-footer { align-items: stretch; flex-direction: column; }
+  .cc-recipe-footer .cc-footer-actions { margin-left: 0; flex-wrap: wrap; }
+}
+@media (max-width: 720px) {
+  .cc-profession-detail-header { grid-template-columns: 50px minmax(0,1fr); }
+  .cc-unlearn-recipe { grid-column: 1 / -1; justify-self: end; }
+  .cc-confirm-dialog { min-width: 0; }
+}

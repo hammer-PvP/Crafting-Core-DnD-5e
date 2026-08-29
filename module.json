@@ -1,7 +1,7 @@
 {
   "id": "dnd5e-crafting-core",
   "title": "Crafting Core (DnD 5e)",
-  "description": "A D&D5e crafting framework for Foundry VTT 14 with Recipes, published Recipe lifecycle synchronization, Crafting Projects, Extra Effort, curated materials, harvesting, resource generation, Item Piles integration, stable material stacking, and player-facing result feedback.",
+  "description": "A D&D5e crafting framework for Foundry VTT 14 with published Recipe lifecycle synchronization, Crafting Projects, Extra Effort, curated materials, harvesting, resource generation, Item Piles integration, stable material stacking, and player-facing result feedback.",
   "version": "0.1.1",
   "authors": [
     {
