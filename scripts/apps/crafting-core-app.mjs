@@ -29,6 +29,8 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
   };
 
   selectedId = null;
+  selectedPublishedRecipeId = null;
+  activeView = "drafts";
   draft = null;
   pendingContentScroll = null;
 
@@ -40,7 +42,22 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
   async _prepareContext() {
     await RecipeService.prepareSystemLabels();
     const recipes = RecipeService.list();
+    const publishedSources = await KnowledgeItemService.publishedSources();
+    const publishedById = new Map(publishedSources.map(source => [source.recipeId, source]));
+
     if (this.selectedId && !recipes.some(recipe => recipe.id === this.selectedId)) this.#newDraft();
+    if (this.activeView === "knowledge") {
+      if (!this.selectedPublishedRecipeId || !publishedById.has(this.selectedPublishedRecipeId)) {
+        this.selectedPublishedRecipeId = publishedSources[0]?.recipeId ?? null;
+      }
+    }
+
+    const currentSource = this.draft?.id ? publishedById.get(String(this.draft.id)) ?? null : null;
+    const draftMatchesPublished = Boolean(currentSource && KnowledgeItemService.sameRecipeDefinition(this.draft, currentSource.recipe));
+    const selectedPublished = this.selectedPublishedRecipeId ? publishedById.get(this.selectedPublishedRecipeId) ?? null : null;
+    const selectedPublishedDraft = selectedPublished ? RecipeService.get(selectedPublished.recipeId) : null;
+    const selectedPublishedDraftPending = Boolean(selectedPublishedDraft && !KnowledgeItemService.sameRecipeDefinition(selectedPublishedDraft, selectedPublished.recipe));
+
     const rarity = String(this.draft?.result?.snapshot?.system?.rarity ?? "");
     const rarityLabel = rarity ? (CONFIG.DND5E?.itemRarity?.[rarity] ?? rarity) : "No rarity";
     const localizeLabel = value => game.i18n.localize((typeof value === "string" ? value : value?.label) ?? "");
@@ -61,16 +78,58 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const progressCheckValue = `${this.draft?.project?.progressCheck?.type ?? "tool"}:${this.draft?.project?.progressCheck?.id ?? ""}`;
     const extraEffortCheckValue = `${this.draft?.project?.extraEffort?.type ?? "ability"}:${this.draft?.project?.extraEffort?.id ?? ""}`;
     return {
+      activeView: this.activeView,
       recipeCount: recipes.length,
-      recipes: recipes.map(recipe => ({
-        ...recipe,
-        selected: recipe.id === this.selectedId,
-        published: Boolean(recipe.publication?.uuid),
-        sourceType: recipe.publication?.sourceType ?? recipe.knowledge?.label ?? "Recipe"
-      })),
+      publishedCount: publishedSources.length,
+      recipes: recipes.map(recipe => {
+        const source = publishedById.get(recipe.id) ?? null;
+        const pending = Boolean(source && !KnowledgeItemService.sameRecipeDefinition(recipe, source.recipe));
+        return {
+          ...recipe,
+          selected: recipe.id === this.selectedId,
+          published: Boolean(source),
+          pending,
+          sourceType: source?.sourceType ?? recipe.knowledge?.label ?? "Recipe",
+          publicationStatus: source ? (pending ? "Published · Changes pending" : "Published · Up to date") : "Draft only"
+        };
+      }),
+      publishedSources: publishedSources.map(source => {
+        const draft = RecipeService.get(source.recipeId);
+        const pending = Boolean(draft && !KnowledgeItemService.sameRecipeDefinition(draft, source.recipe));
+        return {
+          recipeId: source.recipeId,
+          uuid: source.uuid,
+          itemId: source.item.id,
+          name: source.recipe.name,
+          sourceName: source.item.name,
+          img: source.item.img || source.recipe.img,
+          sourceType: source.sourceType,
+          selected: source.recipeId === this.selectedPublishedRecipeId,
+          hasDraft: Boolean(draft),
+          pending,
+          draftStatus: !draft ? "No Builder draft" : (pending ? "Unpublished changes" : "Draft synchronized")
+        };
+      }),
+      selectedPublished: selectedPublished ? {
+        recipeId: selectedPublished.recipeId,
+        uuid: selectedPublished.uuid,
+        itemId: selectedPublished.item.id,
+        sourceName: selectedPublished.item.name,
+        sourceType: selectedPublished.sourceType,
+        img: selectedPublished.item.img || selectedPublished.recipe.img,
+        publishedAtLabel: selectedPublished.publishedAt ? new Date(selectedPublished.publishedAt).toLocaleString() : "",
+        updatedAtLabel: selectedPublished.updatedAt ? new Date(selectedPublished.updatedAt).toLocaleString() : "",
+        recipe: foundry.utils.deepClone(selectedPublished.recipe),
+        hasDraft: Boolean(selectedPublishedDraft),
+        draftPending: selectedPublishedDraftPending,
+        draftActionLabel: selectedPublishedDraft ? "Continue Editing" : "Edit as Draft",
+        draftStatus: !selectedPublishedDraft ? "No Builder draft" : (selectedPublishedDraftPending ? "Unpublished changes" : "Draft synchronized")
+      } : null,
       draft: foundry.utils.deepClone(this.draft),
       editingExisting: Boolean(this.selectedId),
-      published: Boolean(this.draft?.publication?.uuid),
+      published: Boolean(currentSource),
+      draftMatchesPublished,
+      draftHasUnpublishedChanges: Boolean(currentSource && !draftMatchesPublished),
       defaultKnowledgeIcon: DEFAULT_KNOWLEDGE_ICON,
       knowledgeIcons: KNOWLEDGE_ICONS,
       outputRarity: rarityLabel,
@@ -88,8 +147,21 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   _onRender() {
     const root = this.element;
+    root.querySelector('[data-action="show-drafts"]')?.addEventListener("click", event => {
+      event.preventDefault();
+      if (this.activeView === "drafts") return;
+      this.activeView = "drafts";
+      this.render({ force: true });
+    });
+    root.querySelector('[data-action="show-knowledge-base"]')?.addEventListener("click", event => {
+      event.preventDefault();
+      if (this.activeView === "knowledge") return;
+      this.#syncDraftFromForm();
+      this.activeView = "knowledge";
+      this.render({ force: true });
+    });
     root.querySelector('[data-action="new-recipe"]')?.addEventListener("click", event => {
-      event.preventDefault(); this.#newDraft(); this.render({ force: true });
+      event.preventDefault(); this.activeView = "drafts"; this.#newDraft(); this.render({ force: true });
     });
     root.querySelector('[data-action="open-material-catalog"]')?.addEventListener("click", event => {
       event.preventDefault();
@@ -113,6 +185,14 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     root.querySelectorAll('[data-recipe-id]').forEach(button => button.addEventListener("click", event => {
       event.preventDefault(); this.#loadRecipe(button.dataset.recipeId); this.render({ force: true });
     }));
+    root.querySelectorAll('[data-published-recipe-id]').forEach(button => button.addEventListener("click", event => {
+      event.preventDefault();
+      this.selectedPublishedRecipeId = String(button.dataset.publishedRecipeId || "");
+      this.render({ force: true });
+    }));
+    root.querySelector('[data-action="edit-published-source"]')?.addEventListener("click", event => this.#editPublished(event));
+    root.querySelector('[data-action="open-published-item"]')?.addEventListener("click", event => this.#openPublishedItem(event));
+    root.querySelector('[data-action="unpublish-source"]')?.addEventListener("click", event => this.#unpublish(event));
     root.querySelector('[data-action="save-recipe"]')?.addEventListener("click", event => this.#save(event));
     root.querySelector('[data-action="delete-recipe"]')?.addEventListener("click", event => this.#delete(event));
     root.querySelector('[data-action="publish-recipe"]')?.addEventListener("click", event => this.#publish(event));
@@ -210,6 +290,87 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (!recipe) return;
     this.selectedId = recipe.id;
     this.draft = RecipeService.normalize(foundry.utils.deepClone(recipe));
+  }
+
+  async #editPublished(event) {
+    event.preventDefault();
+    const recipeId = String(this.selectedPublishedRecipeId || "");
+    if (!recipeId) return;
+    try {
+      const draft = await KnowledgeItemService.draftFromPublished(recipeId);
+      this.activeView = "drafts";
+      this.selectedId = draft.id;
+      this.draft = RecipeService.normalize(foundry.utils.deepClone(draft));
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Could not open published Knowledge Source as a draft.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not open that published source for editing.");
+    }
+  }
+
+  async #openPublishedItem(event) {
+    event.preventDefault();
+    const recipeId = String(this.selectedPublishedRecipeId || "");
+    if (!recipeId) return;
+    try {
+      const source = await KnowledgeItemService.publishedSource(recipeId);
+      if (!source?.item) throw new Error("That Knowledge Source is no longer published.");
+      source.item.sheet?.render?.({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Could not open published Knowledge Item.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not open that Knowledge Source.");
+    }
+  }
+
+  async #unpublish(event) {
+    event.preventDefault();
+    const recipeId = String(this.selectedPublishedRecipeId || "");
+    if (!recipeId) return;
+    const source = await KnowledgeItemService.publishedSource(recipeId);
+    if (!source) {
+      ui.notifications.warn("That Knowledge Source is no longer published.");
+      this.render({ force: true });
+      return;
+    }
+    const recipeName = foundry.utils.escapeHTML(String(source.recipe?.name || source.item?.name || "this Recipe"));
+    const confirmation = await foundry.applications.api.DialogV2.input({
+      window: { title: "Unpublish Knowledge Source" },
+      content: `<section class="cc-unpublish-dialog"><p>Unpublish <strong>${recipeName}</strong>?</p><p>This is a global action. It removes the authoritative source from <strong>Crafting Core — Learn Sources</strong> and Characters who learned it will forget it. Active Projects keep their frozen Recipe snapshot.</p><p>To confirm, type <strong>I AGREE</strong>.</p><input type="text" name="confirmation" autocomplete="off" autofocus placeholder="I AGREE"></section>`,
+      ok: { label: "Unpublish", icon: "fa-solid fa-book-skull" },
+      rejectClose: false,
+      modal: true
+    });
+    if (!confirmation) return;
+    const confirmed = String(confirmation.confirmation ?? "").trim().replace(/\s+/g, " ").toLowerCase() === "i agree";
+    if (!confirmed) {
+      await ResultDialog.show({
+        title: "Confirmation Required",
+        message: "The Knowledge Source was not unpublished. Type I AGREE exactly (capitalization and extra spaces do not matter).",
+        tone: "warning",
+        icon: "fa-solid fa-shield-halved"
+      });
+      return;
+    }
+
+    try {
+      const result = await KnowledgeItemService.unpublishRecipe(recipeId);
+      this.selectedPublishedRecipeId = null;
+      if (result.reconciliation?.failed?.length) {
+        await ResultDialog.show({
+          title: "Unpublished — Reconciliation Pending",
+          message: `${source.item.name} was removed from Learn Sources, but some derived knowledge cleanup is still pending. Crafting Core will retry at the next GM startup.`,
+          facts: result.reconciliation.failed.map(row => row.actorName || row.recipeName || row.scope || row.error).filter(Boolean),
+          tone: "warning",
+          icon: "fa-solid fa-triangle-exclamation"
+        });
+      } else {
+        ui.notifications.warn(`${source.item.name} was unpublished from Learn Sources.`);
+      }
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Unpublish Knowledge Source failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not unpublish that Knowledge Source.");
+    }
   }
 
   #syncDraftFromForm() {
@@ -436,7 +597,8 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     event.preventDefault();
     if (!this.selectedId) return;
     const recipe = RecipeService.get(this.selectedId);
-    const published = Boolean(recipe?.publication?.uuid);
+    const publishedSource = recipe ? await KnowledgeItemService.publishedSource(recipe.id) : null;
+    const published = Boolean(publishedSource);
     const content = published
       ? `<p>Delete the Recipe Builder draft <strong>${foundry.utils.escapeHTML(recipe?.name ?? "this recipe")}</strong>?</p><p>The published Knowledge Source and any Characters who already learned it remain fully functional.</p>`
       : `<p><strong>${foundry.utils.escapeHTML(recipe?.name ?? "This draft")}</strong> has not been published to the Crafting Core library.</p><p>Deleting it now permanently destroys this draft.</p>`;

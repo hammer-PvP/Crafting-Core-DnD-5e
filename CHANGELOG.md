@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.1.0 — Stable Foundation
+
+v0.1.0 consolidates the live-validated Crafting Core foundation without introducing a new crafting mechanic after the v0.0.24 test cycle. The Recipe knowledge lifecycle is now treated as stable: private Builder drafts are separate from authoritative published sources, the **Crafting Core - Learn Sources** Compendium is the source of truth, the Knowledge Base manages those published Items, Characters can learn/unlearn reliably, published updates refresh learned Recipes, and Unpublish removes the Recipe from Characters while preserving already-started Project snapshots.
+
+Release polish includes moving **Publish / Update Published Source** into the Builder footer beside **Save Draft**, preserving the deliberate `Save Draft -> Publish` authoring flow. Game Settings now also presents **More from Hammer-PvP** alongside the existing Support the Creator entry so GMs can discover complementary Hammer-PvP modules without adding another functional dependency.
+
+Documentation is refreshed for the stable release, including the complete PDF manual in `docs/`, a direct README link, and updated public module-page copy. No Project progress math, harvesting RNG, material economy, crafting checks, or generation rules are retuned in this release.
+
+## 0.0.24
+- UI/safety polish only; no crafting, Project, Harvest, publication, knowledge identity, or material-economy mechanics were changed.
+- Moved **Unlearn** from the full-width bottom action to a small contextual button in the selected Recipe header. Active Projects show the same compact control disabled with an explanatory tooltip.
+- Replaced typed `I AGREE` for Character **Unlearn** with a lightweight **I agree** checkbox confirmation.
+- Fixed `Recipe Forgotten` result layering by awaiting the Character sheet re-render before opening the result dialog, so the feedback is presented in the foreground.
+- Strengthened **Unpublish** as the global destructive action: Knowledge Base now requires typed `I AGREE` before the authoritative Learn Sources entry can be removed.
+- Added **Support the Creator** directly to Foundry's Game Settings entry for Crafting Core, immediately above **Configure Crafting Core**, with a **Buy Me a Coffee** button pointing to `https://buymeacoffee.com/hammer.pvp`. The support promotion no longer consumes space inside the Crafting Core settings application.
+
+## 0.0.23
+- Fixed learned Recipe deletion on Character Actors. Crafting Core now uses Foundry's explicit nested-object deletion operator for `flags.dnd5e-crafting-core.learnedRecipes.<recipeId>` instead of relying on an object merge with the Recipe key omitted.
+- **Unlearn Recipe** now verifies the persisted Actor flags before reporting success. If either current or legacy knowledge still contains the Recipe ID, the operation fails visibly instead of showing a false `Recipe Forgotten` result.
+- **Unpublish / direct deletion from Learn Sources** now removes orphaned learned Recipe IDs with the same verified deletion path during knowledge reconciliation. This fixes ghost Recipes that remained on Character sheets after the authoritative Compendium source had been removed.
+- GM startup reconciliation now repairs Characters already affected by the v0.0.21/v0.0.22 ghost-knowledge bug by physically removing learned Recipe IDs that no longer have an authoritative source in `Crafting Core — Learn Sources`.
+- Active Crafting Projects remain untouched and continue using their frozen Recipe snapshot.
+- This is intentionally a narrow persistence fix. Direct Compendium-to-Actor `Outdated` investigation and Unlearn UI redesign are deferred so the confirmed deletion bug can be validated independently.
+
+## 0.0.22
+- Added a dedicated **Knowledge Base** workspace to the Crafting Core GM application. Drafts and published Knowledge Sources are now clearly separated without creating a second authoritative database.
+- **Crafting Core — Learn Sources remains the canonical published database.** The Knowledge Base reads and manages that Compendium directly; internal publication metadata, the client-readable fingerprint cache, and Actor learned snapshots are explicitly derived state.
+- Published sources can be selected in Knowledge Base and opened with **Edit as Draft / Continue Editing**. If the Builder draft was previously deleted, Crafting Core reconstructs it from the published Compendium snapshot while preserving the stable Recipe ID and published source identity.
+- Added **Unpublish** to Knowledge Base. It removes the authoritative Compendium Item, reconciles Builder publication metadata, removes learned knowledge from Characters, and preserves already-active Projects through their frozen snapshots.
+- Fixed the live v0.0.21 publication regression where a successful Compendium update could be reported as `D&D5e did not create the published Knowledge Source.` Crafting Core no longer treats the return value of `updateDocuments()` as proof of success; it re-reads Learn Sources and verifies the persisted post-condition instead.
+- Republishing continues to update the same managed Compendium Item in place. A successful update is verified by stable Recipe ID and the persisted Recipe definition, so a fresh drag-and-drop copy matches the current published fingerprint and remains learnable.
+- The publication cache is rebuilt from Learn Sources after every successful publish and during reconciliation. A stale cache never defines the canonical Recipe.
+- Actor learned Recipe snapshots remain as materialized read copies because Players may not have permission to read the private Compendium directly. They are refreshed from the persisted Compendium snapshot, not from the Builder draft.
+- Draft navigation now shows **Draft only**, **Published · Up to date**, or **Published · Changes pending** based on the actual Compendium state. Editing a published Recipe does not affect Players until **Update Published Source** is used.
+- Preserved v0.0.21 stale-view protection, outdated/orphan Knowledge Source validation, Unlearn flow, startup reconciliation, and frozen active Project behavior.
+- No material costs, Project progression, rest cadence, Extra Effort, Harvest, gathering, or material-generation mathematics were changed.
+
 ## 0.0.21
 - Stabilized the **Knowledge Lifecycle** around the private `Crafting Core — Learn Sources` Compendium as the publication authority.
 - Republishing a Recipe continues updating the same managed Knowledge Source in place and now records a compact published-revision fingerprint used to validate distributed copies.

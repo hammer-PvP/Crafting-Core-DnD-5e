@@ -35,9 +35,11 @@ Any D&D5e Item can be an input or output. There is no exclusive Ingredient Item 
 
 ### 2. Published Knowledge Source
 
-A finished draft is published into the private **Crafting Core — Learn Sources** Compendium. The published Consumable contains the full recipe snapshot, not only a pointer to the Builder draft. The Compendium source is the authoritative publication record for that stable Recipe ID.
+A finished draft is published into the private **Crafting Core — Learn Sources** Compendium. The published Consumable contains the full recipe snapshot, not only a pointer to the Builder draft. **The Compendium source is the authoritative publication record for that stable Recipe ID.**
 
-Therefore a published source remains valid if the Builder draft is deleted. Republishing a retained draft updates the same managed Compendium Item in place when possible, preserving its UUID while replacing its managed Recipe snapshot and canonical `Learn Recipe` Activity.
+The GM application's **Knowledge Base** is not a second database. It is an administrative view over the actual Learn Sources Compendium. It can open the published Item, unpublish it, or load its snapshot back into the Recipe Builder. If the Builder draft was deleted, **Edit as Draft** reconstructs an editable draft from the Compendium while preserving the stable Recipe ID.
+
+Therefore a published source remains valid if the Builder draft is deleted. Republishing a retained or reconstructed draft updates the same managed Compendium Item in place when possible, preserving its UUID while replacing its managed Recipe snapshot and canonical `Learn Recipe` Activity. Publication success is verified by re-reading the persisted Compendium state rather than relying on the return shape of Foundry's document update call.
 
 Knowledge Source rarity is always inherited from the crafted output. Price uses the D&D5e 5.3.3 2024 magic crafting cost progression:
 
@@ -58,9 +60,9 @@ The published Item uses a native D&D5e one-use Consumable / Trinket with a Utili
 
 ### 3. Character Learned Knowledge
 
-When `Learn Recipe` completes, the normalized Recipe snapshot is persisted on that Character Actor. The Character does not depend on the Builder draft or the consumed physical Knowledge Item, but learned knowledge remains governed by the authoritative publication lifecycle in **Learn Sources**.
+When `Learn Recipe` completes, the Character records that stable Recipe ID and keeps a normalized Recipe snapshot as a **materialized read copy**. That Actor snapshot is necessary because Players may not have permission to read the private Learn Sources Compendium directly; it is not a second authority. The authoritative definition remains the published Compendium source.
 
-Knowledge intentionally belongs to the Actor rather than the Foundry User. A replacement Character does not inherit a dead Character's recipes. Multiple Characters can learn the same source if multiple valid copies are acquired. If the GM republishes a revision under the same stable Recipe ID, learned snapshots are refreshed on Characters who already know it.
+Knowledge intentionally belongs to the Actor rather than the Foundry User. A replacement Character does not inherit a dead Character's recipes. Multiple Characters can learn the same source if multiple valid copies are acquired. If the GM republishes a revision under the same stable Recipe ID, Actor read snapshots are refreshed **from the persisted Compendium snapshot**, not from the Builder draft. Startup reconciliation repeats this derivation when required.
 
 Distributed Recipe / Formula / Blueprint / Manual Items are teaching copies, not authorities. A copy is valid only while its Recipe ID is published and its stored snapshot matches the current published revision. An outdated copy is blocked before consumption. Deleting the authoritative Compendium source makes all remaining copies orphaned and removes that learned Recipe from Characters.
 
@@ -72,7 +74,9 @@ v0.0.3 migrates legacy recipe-ID-only knowledge from v0.0.1/v0.0.2 into this sel
 
 Players do not receive a standalone Crafting Core administration application.
 
-The module adds a `Crafting` tab to the official D&D5e Character Sheet after `Effects`. It reads the recipe snapshots stored on that Actor, checks live Item quantities and shows `N×` crafts possible in the left Recipe list. The right-hand profession workspace presents the selected Recipe or active Project.
+The GM application separates **Drafts** (private authoring state) from **Knowledge Base** (published Compendium state). A draft may show `Draft only`, `Published · Up to date`, or `Published · Changes pending`. Saving a draft never alters the published source; only Publish / Update Published Source changes Learn Sources.
+
+The module adds a `Crafting` tab to the official D&D5e Character Sheet after `Effects`. It reads the derived Recipe snapshots stored on that Actor, checks live Item quantities and shows `N×` crafts possible in the left Recipe list. The right-hand profession workspace presents the selected Recipe or active Project.
 
 Recipes with zero possible crafts remain selectable so the player can inspect missing materials. While one Project is active, other Recipes remain inspectable for planning but cannot be started.
 
@@ -118,7 +122,7 @@ A player learns about a material or Knowledge Source only when the GM deliberate
 
 ### Curated defaults
 
-The 165 shipped default materials are the **Crafting Core Built-in Curated Catalog**. They are not extracted from installed PHB, DMG, Monster Manual, Tasha or SRD packs.
+The 229 shipped default materials are the **Crafting Core Built-in Curated Catalog**. They are not extracted from installed PHB, DMG, Monster Manual, Tasha or SRD packs.
 
 The catalog is a crafting vocabulary used by future generation systems.
 

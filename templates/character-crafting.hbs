@@ -25,7 +25,10 @@
       {{#with craftingCore.selectedRecipe}}
       <header class="cc-profession-detail-header">
         <img src="{{img}}" alt="">
-        <div><span class="cc-kicker">{{#if (eq craftingMode "project")}}Crafting Project{{else}}Timed Recipe{{/if}}</span><h2>{{name}}</h2>{{#if ../craftingCore.selectedIsActiveProject}}<small class="cc-active-project-label"><i class="fa-solid fa-hammer"></i> Active Project</small>{{/if}}</div>
+        <div class="cc-profession-detail-title"><span class="cc-kicker">{{#if (eq craftingMode "project")}}Crafting Project{{else}}Timed Recipe{{/if}}</span><h2>{{name}}</h2>{{#if ../craftingCore.selectedIsActiveProject}}<small class="cc-active-project-label"><i class="fa-solid fa-hammer"></i> Active Project</small>{{/if}}</div>
+        {{#if ../craftingCore.selectedKnown}}
+          <button type="button" class="cc-sheet-unlearn cc-sheet-unlearn-compact" {{#if ../craftingCore.selectedIsActiveProject}}disabled data-tooltip="Finish or cancel this active Project before forgetting its Recipe."{{else}}data-action="unlearn-recipe" data-tooltip="Forget this Recipe"{{/if}}><i class="fa-solid {{#if ../craftingCore.selectedIsActiveProject}}fa-lock{{else}}fa-book-open{{/if}}"></i><span>Unlearn</span></button>
+        {{/if}}
       </header>
 
       {{#if ../craftingCore.selectedStale}}
@@ -90,10 +93,6 @@
           {{/if}}{{/if}}
           <button type="button" class="cc-project-cancel" data-action="cancel-project"><i class="fa-solid fa-ban"></i> Cancel Project</button>
         </div>
-        {{#if ../craftingCore.selectedKnown}}
-        <button type="button" class="cc-sheet-unlearn" disabled><i class="fa-solid fa-book-open"></i> Unlearn Recipe</button>
-        <div class="cc-unlearn-lock-note"><i class="fa-solid fa-lock"></i><span>Finish or cancel this active Project before forgetting its Recipe.</span></div>
-        {{/if}}
         {{/with}}
       {{else}}
         {{#if playerVisibility.ingredients}}
@@ -128,9 +127,6 @@
           <button type="button" class="cc-sheet-craft" data-action="start-project" {{#unless ../craftingCore.selectedCanStart}}disabled{{/unless}}><i class="fa-solid fa-hammer"></i> Start Project</button>
         {{else}}
           <button type="button" class="cc-sheet-craft" data-action="craft" {{#unless ../craftingCore.selectedCanStart}}disabled{{/unless}}><i class="fa-solid {{#if resolution.rollRequired}}fa-dice-d20{{else}}fa-hammer{{/if}}"></i> {{#if resolution.rollRequired}}Attempt Craft{{else}}Craft{{/if}}</button>
-        {{/if}}
-        {{#if ../craftingCore.selectedKnown}}
-          <button type="button" class="cc-sheet-unlearn" data-action="unlearn-recipe"><i class="fa-solid fa-book-open"></i> Unlearn Recipe</button>
         {{/if}}
       {{/if}}
       {{/with}}

@@ -11,6 +11,8 @@ import { RecipeService } from "./recipe-service.mjs";
 import { ResultDialog } from "../ui/result-dialog.mjs";
 
 export class KnowledgeItemService {
+  static #managedDeletionIds = new Set();
+
   static PACK_NAME = "crafting-core-learn-sources";
   static PACK_LABEL = "Crafting Core — Learn Sources";
   static PACK_ID = `world.${this.PACK_NAME}`;
@@ -33,8 +35,10 @@ export class KnowledgeItemService {
   }
 
   static registerSettings() {
+    // This world setting is a read cache for clients that cannot read the private
+    // Learn Sources Compendium directly. The Compendium is always authoritative.
     game.settings.register(MODULE_ID, SETTINGS.KNOWLEDGE_INDEX, {
-      name: "Crafting Core Published Knowledge Index",
+      name: "Crafting Core Published Knowledge Cache",
       scope: "world",
       config: false,
       type: Object,
@@ -97,23 +101,69 @@ export class KnowledgeItemService {
   }
 
   static async #writeAuthorityIndex(index) {
-    if (!game.user?.isGM) throw new Error("Only a GM can update the published Knowledge index.");
+    if (!game.user?.isGM) throw new Error("Only a GM can update the published Knowledge cache.");
     const normalized = index && typeof index === "object" && !Array.isArray(index) ? index : {};
     await game.settings.set(MODULE_ID, SETTINGS.KNOWLEDGE_INDEX, normalized);
     return normalized;
   }
 
-  static async #upsertAuthority(recipe, item, sourceType) {
-    const index = this.authorityIndex();
-    index[recipe.id] = {
+  static #sourceRecord(item) {
+    if (!item?.getFlag) return null;
+    if (!item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED)) return null;
+    const recipeId = String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "");
+    const rawSnapshot = item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT);
+    if (!recipeId || !rawSnapshot || typeof rawSnapshot !== "object") return null;
+    const recipe = RecipeService.snapshot(rawSnapshot);
+    const publishedAt = Number(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED_AT)) || Date.now();
+    const sourceType = String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_SOURCE_TYPE) ?? recipe.knowledge?.label ?? "Recipe");
+    return {
+      recipeId,
+      recipe,
+      item,
       uuid: String(item.uuid || ""),
+      sourceType,
       fingerprint: this.recipeFingerprint(recipe),
-      sourceType: String(sourceType || recipe.knowledge?.label || "Recipe"),
-      publishedAt: Number(recipe.publication?.publishedAt) || Date.now(),
-      updatedAt: Number(recipe.publication?.updatedAt) || Date.now()
+      publishedAt,
+      updatedAt: Number(item._stats?.modifiedTime) || publishedAt
     };
-    await this.#writeAuthorityIndex(index);
-    return index[recipe.id];
+  }
+
+  static async publishedSources() {
+    if (!game.user?.isGM) return [];
+    const pack = this.pack();
+    if (!pack) return [];
+    const docs = await pack.getDocuments();
+    return docs
+      .map(item => this.#sourceRecord(item))
+      .filter(Boolean)
+      .sort((a, b) => String(a.recipe?.name ?? a.item?.name ?? "").localeCompare(String(b.recipe?.name ?? b.item?.name ?? ""), game.i18n.lang));
+  }
+
+  static async publishedSource(recipeId) {
+    const id = String(recipeId || "");
+    if (!id || !game.user?.isGM) return null;
+    return (await this.publishedSources()).find(record => record.recipeId === id) ?? null;
+  }
+
+  static async #rebuildAuthorityCacheFromPack() {
+    if (!game.user?.isGM) return this.authorityIndex();
+    const records = await this.publishedSources();
+    const next = {};
+    for (const record of records) {
+      if (next[record.recipeId]) {
+        console.warn(`${MODULE_ID} | Duplicate published Knowledge Source detected for Recipe ${record.recipeId}; keeping ${next[record.recipeId].uuid}.`);
+        continue;
+      }
+      next[record.recipeId] = {
+        uuid: record.uuid,
+        fingerprint: record.fingerprint,
+        sourceType: record.sourceType,
+        publishedAt: record.publishedAt,
+        updatedAt: record.updatedAt
+      };
+    }
+    await this.#writeAuthorityIndex(next);
+    return next;
   }
 
   static async publishRecipe(recipeId) {
@@ -141,12 +191,17 @@ export class KnowledgeItemService {
       const folder = folders.get(label) ?? null;
       const data = this.#knowledgeItemData(recipe, { folderId: folder?.id ?? null, published: true });
 
+      // Find the canonical source by the draft's remembered UUID first, then by stable Recipe ID.
+      // The Compendium itself is authoritative; draft metadata is only a shortcut.
       let item = null;
       if (recipe.publication?.uuid) {
         try {
           const existing = await fromUuid(recipe.publication.uuid);
-          if (existing instanceof Item && existing.pack === pack.collection) item = existing;
-        } catch (_) { /* missing publication is recreated below */ }
+          if (existing instanceof Item
+            && existing.pack === pack.collection
+            && String(existing.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "") === recipe.id
+            && Boolean(existing.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED))) item = existing;
+        } catch (_) { /* a missing remembered UUID is recovered by Recipe ID below */ }
       }
       if (!item) {
         const docs = await pack.getDocuments();
@@ -154,50 +209,67 @@ export class KnowledgeItemService {
           && Boolean(doc.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED))) ?? null;
       }
 
+      const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+      let sourceId = item?.id ?? null;
       if (item) {
         const update = foundry.utils.deepClone(data);
         update._id = item.id;
-        // Published Knowledge Sources are fully managed by Crafting Core. Foundry deep-merges object fields
-        // during document updates, so explicitly delete every previous Activity before writing the single
-        // canonical Learn Recipe Activity. This makes publication idempotent and also repairs old duplicates.
         update.system ??= {};
-        // Deletions must be applied before the canonical Activity is re-added. Rebuild the Activities
-        // update object in that order so an already-canonical ID is not deleted after being written.
+
+        // Foundry/D&D5e deep-merges Activity objects. Delete all old Activities before re-adding
+        // the single canonical Learn Recipe Activity. Do not trust updateDocuments() to return
+        // the updated document: in some Compendium update paths it writes successfully but
+        // returns an empty array. The post-write Compendium state is the success criterion.
         const canonicalActivities = foundry.utils.deepClone(update.system.activities ?? {});
         const reconciledActivities = {};
-        for (const activityId of Object.keys(item.system?.activities ?? {})) {
-          reconciledActivities[`-=${activityId}`] = null;
-        }
+        for (const activityId of Object.keys(item.system?.activities ?? {})) reconciledActivities[`-=${activityId}`] = null;
         Object.assign(reconciledActivities, canonicalActivities);
         update.system.activities = reconciledActivities;
-        const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
-        [item] = await ItemClass.updateDocuments([update], { pack: pack.collection });
+        await ItemClass.updateDocuments([update], { pack: pack.collection });
+        sourceId = update._id;
 
-        // Enforce the post-condition instead of trusting a deep-merge implementation detail:
-        // one managed Knowledge Source always has exactly one canonical Learn Recipe Activity.
-        item = await pack.getDocument(item?.id ?? update._id) ?? item;
+        item = await pack.getDocument(sourceId);
+        if (!item) {
+          const docs = await pack.getDocuments();
+          item = docs.find(doc => String(doc.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "") === recipe.id
+            && Boolean(doc.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED))) ?? null;
+        }
+
         const canonicalId = Object.keys(canonicalActivities)[0];
         const currentIds = Object.keys(item?.system?.activities ?? {});
-        if (canonicalId && (currentIds.length !== 1 || currentIds[0] !== canonicalId)) {
+        if (item && canonicalId && (currentIds.length !== 1 || currentIds[0] !== canonicalId)) {
           const activities = {};
           for (const oldId of currentIds) if (oldId !== canonicalId) activities[`-=${oldId}`] = null;
           if (!currentIds.includes(canonicalId)) activities[canonicalId] = foundry.utils.deepClone(canonicalActivities[canonicalId]);
           if (Object.keys(activities).length) {
-            [item] = await ItemClass.updateDocuments([{ _id: item.id, system: { activities } }], { pack: pack.collection });
+            await ItemClass.updateDocuments([{ _id: item.id, system: { activities } }], { pack: pack.collection });
+            item = await pack.getDocument(item.id) ?? item;
           }
         }
       } else {
-        const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
-        [item] = await ItemClass.createDocuments([data], { pack: pack.collection });
+        const created = await ItemClass.createDocuments([data], { pack: pack.collection });
+        sourceId = created?.[0]?.id ?? null;
+        if (sourceId) item = await pack.getDocument(sourceId);
+        if (!item) {
+          const docs = await pack.getDocuments();
+          item = docs.find(doc => String(doc.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "") === recipe.id
+            && Boolean(doc.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED))) ?? null;
+        }
       }
-      if (!item) throw new Error("D&D5e did not create the published Knowledge Source.");
+
+      // Verify the persisted post-condition from Learn Sources itself. This is the definitive
+      // publication check and intentionally does not depend on the return value of updateDocuments().
+      const persisted = this.#sourceRecord(item);
+      if (!persisted || persisted.recipeId !== recipe.id || !this.sameRecipeDefinition(persisted.recipe, recipe)) {
+        throw new Error("Crafting Core could not verify the published Knowledge Source in Learn Sources.");
+      }
 
       recipe.publication = {
-        uuid: item.uuid,
+        uuid: persisted.uuid,
         pack: pack.collection,
-        sourceType: label,
-        publishedAt: Number(recipe.publication?.publishedAt) || Date.now(),
-        updatedAt: Date.now()
+        sourceType: persisted.sourceType || label,
+        publishedAt: Number(recipe.publication?.publishedAt) || persisted.publishedAt || Date.now(),
+        updatedAt: persisted.updatedAt || Date.now()
       };
 
       const syncIssues = [];
@@ -208,17 +280,22 @@ export class KnowledgeItemService {
         syncIssues.push("Builder publication metadata");
       }
 
+      // Rebuild the client-readable publication cache from the actual Compendium after every
+      // successful write. The cache never outranks Learn Sources.
       let authority = null;
       try {
-        authority = await this.#upsertAuthority(recipe, item, label);
+        const cache = await this.#rebuildAuthorityCacheFromPack();
+        authority = cache[persisted.recipeId] ?? null;
       } catch (error) {
-        console.error(`${MODULE_ID} | Published Knowledge authority index update failed.`, error);
-        syncIssues.push("published authority index");
+        console.error(`${MODULE_ID} | Published Knowledge cache rebuild failed.`, error);
+        syncIssues.push("published Knowledge cache");
       }
 
+      // Actor snapshots are materialized read copies because Players may not be allowed to read
+      // the private Compendium. Refresh them from the persisted source snapshot, never from draft state.
       let learnedSync = { changed: 0, failed: [] };
       try {
-        learnedSync = await this.refreshLearnedRecipe(recipe);
+        learnedSync = await this.refreshLearnedRecipe(persisted.recipe);
         if (learnedSync.failed.length) syncIssues.push(`${learnedSync.failed.length} Character knowledge update${learnedSync.failed.length === 1 ? "" : "s"}`);
       } catch (error) {
         console.error(`${MODULE_ID} | Published Knowledge Character synchronization failed.`, error);
@@ -226,8 +303,9 @@ export class KnowledgeItemService {
       }
 
       const syncPending = syncIssues.length > 0;
-      Hooks.callAll(`${MODULE_ID}.knowledgePublished`, recipe.id, item.uuid, { syncPending, syncIssues });
-      return { item, recipe, pack, authority, learnedSync, syncPending, syncIssues };
+      Hooks.callAll(`${MODULE_ID}.knowledgePublished`, persisted.recipeId, persisted.uuid, { syncPending, syncIssues });
+      Hooks.callAll(`${MODULE_ID}.knowledgeSourcesChanged`, persisted.recipeId);
+      return { item: persisted.item, recipe, pack, authority, learnedSync, syncPending, syncIssues };
     } finally {
       if (wasLocked) await pack.configure({ locked: true });
     }
@@ -243,6 +321,56 @@ export class KnowledgeItemService {
     const item = await Item.create(data, { renderSheet: false });
     if (!item) throw new Error("D&D5e did not create the Recipe/Blueprint Item.");
     return item;
+  }
+
+  static async draftFromPublished(recipeId) {
+    if (!game.user?.isGM) throw new Error("Only a GM can edit published Knowledge Sources.");
+    const id = String(recipeId || "");
+    if (!id) throw new Error("The published Recipe ID is missing.");
+
+    const existingDraft = RecipeService.get(id);
+    if (existingDraft) return existingDraft;
+
+    const source = await this.publishedSource(id);
+    if (!source) throw new Error("That Knowledge Source is no longer published.");
+    const draft = RecipeService.normalize({
+      ...foundry.utils.deepClone(source.recipe),
+      id,
+      publication: {
+        uuid: source.uuid,
+        pack: source.item.pack ?? this.PACK_ID,
+        sourceType: source.sourceType,
+        publishedAt: source.publishedAt,
+        updatedAt: source.updatedAt
+      }
+    });
+    return RecipeService.save(draft);
+  }
+
+  static async unpublishRecipe(recipeId) {
+    if (!game.user?.isGM) throw new Error("Only a GM can unpublish Crafting Core knowledge sources.");
+    const source = await this.publishedSource(recipeId);
+    if (!source) return { removed: false, recipeId: String(recipeId || ""), reconciliation: null };
+
+    const pack = this.pack();
+    if (!pack) throw new Error("Crafting Core — Learn Sources is unavailable.");
+    const wasLocked = Boolean(pack.locked);
+    if (wasLocked) await pack.configure({ locked: false });
+    this.#managedDeletionIds.add(source.item.id);
+    try {
+      const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+      await ItemClass.deleteDocuments([source.item.id], { pack: pack.collection });
+      const remaining = await pack.getDocument(source.item.id);
+      if (remaining) throw new Error("Crafting Core could not verify that the Knowledge Source was removed from Learn Sources.");
+    } finally {
+      this.#managedDeletionIds.delete(source.item.id);
+      if (wasLocked) await pack.configure({ locked: true });
+    }
+
+    const reconciliation = await this.reconcilePublishedKnowledge();
+    Hooks.callAll(`${MODULE_ID}.knowledgeUnpublished`, source.recipeId, source.uuid);
+    Hooks.callAll(`${MODULE_ID}.knowledgeSourcesChanged`, source.recipeId);
+    return { removed: true, recipeId: source.recipeId, sourceName: source.item.name, reconciliation };
   }
 
   static #sourceType(recipe) {
@@ -526,23 +654,48 @@ export class KnowledgeItemService {
     return { changed, failed };
   }
 
+  static async #deleteLearnedRecipeEntry(actor, recipeId) {
+    const id = String(recipeId || "");
+    if (!id) return false;
+    if (!Object.hasOwn(this.learnedStore(actor), id)) return false;
+
+    // Foundry merges object updates by default. Sending a cloned learnedRecipes object
+    // with one key omitted does not reliably remove the persisted nested flag. Use the
+    // explicit Document deletion operator so the Recipe ID is physically removed.
+    await actor.update({
+      [`flags.${MODULE_ID}.${FLAGS.LEARNED_RECIPES}.-=${id}`]: null
+    });
+
+    if (Object.hasOwn(this.learnedStore(actor), id)) {
+      throw new Error(`Crafting Core could not verify that Recipe ${id} was removed from ${actor.name}'s learned knowledge.`);
+    }
+    return true;
+  }
+
   static async forget(actor, recipeId) {
     if (!actor || actor.type !== "character") throw new Error("Recipes can only be forgotten by a Character Actor.");
     const id = String(recipeId || "");
     if (!id) return false;
 
     let changed = false;
-    const store = this.learnedStore(actor);
-    if (Object.hasOwn(store, id)) {
-      delete store[id];
-      await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
+    if (Object.hasOwn(this.learnedStore(actor), id)) {
+      await this.#deleteLearnedRecipeEntry(actor, id);
       changed = true;
     }
 
     const legacy = this.legacyKnownRecipeIds(actor);
     if (legacy.includes(id)) {
-      await actor.setFlag(MODULE_ID, FLAGS.KNOWN_RECIPES, legacy.filter(entry => entry !== id));
+      const filtered = legacy.filter(entry => entry !== id);
+      await actor.setFlag(MODULE_ID, FLAGS.KNOWN_RECIPES, filtered);
+      if (this.legacyKnownRecipeIds(actor).includes(id)) {
+        throw new Error(`Crafting Core could not verify that Recipe ${id} was removed from ${actor.name}'s legacy knowledge.`);
+      }
       changed = true;
+    }
+
+    // Never report success while either current or legacy storage still contains the ID.
+    if (this.knownRecipeIds(actor).includes(id)) {
+      throw new Error(`Crafting Core could not verify that ${actor.name} forgot Recipe ${id}.`);
     }
 
     if (changed) actor.sheet?.render?.({ force: true });
@@ -586,48 +739,36 @@ export class KnowledgeItemService {
     if (!game.user?.isGM) return { published: 0, authoritativeIds: [], refreshed: 0, forgotten: 0, draftsUpdated: 0, indexChanged: false, failed: [] };
 
     const pack = this.pack();
-    const docs = pack ? await pack.getDocuments() : [];
+    const records = await this.publishedSources();
     const authorities = new Map();
-    for (const item of docs) {
-      if (!item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED)) continue;
-      const recipeId = String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "");
-      const rawSnapshot = item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT);
-      if (!recipeId || !rawSnapshot || typeof rawSnapshot !== "object") {
-        console.warn(`${MODULE_ID} | Ignoring malformed published Knowledge Source ${item.uuid}.`);
+    for (const record of records) {
+      if (authorities.has(record.recipeId)) {
+        console.warn(`${MODULE_ID} | Duplicate published Knowledge Source detected for Recipe ${record.recipeId}; using ${authorities.get(record.recipeId).item.uuid}.`);
         continue;
       }
-      if (authorities.has(recipeId)) {
-        console.warn(`${MODULE_ID} | Duplicate published Knowledge Source detected for Recipe ${recipeId}; using ${authorities.get(recipeId).item.uuid}.`);
-        continue;
-      }
-      const snapshot = RecipeService.snapshot(rawSnapshot);
-      const publishedAt = Number(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED_AT)) || Date.now();
-      authorities.set(recipeId, {
-        item,
-        snapshot,
-        entry: {
-          uuid: String(item.uuid),
-          fingerprint: this.recipeFingerprint(snapshot),
-          sourceType: String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_SOURCE_TYPE) ?? snapshot.knowledge?.label ?? "Recipe"),
-          publishedAt,
-          updatedAt: Number(item._stats?.modifiedTime) || publishedAt
-        }
-      });
+      authorities.set(record.recipeId, record);
     }
 
     const failed = [];
-    const nextIndex = Object.fromEntries([...authorities.entries()].map(([id, data]) => [id, data.entry]));
     const previousIndex = this.authorityIndex();
+    const nextIndex = Object.fromEntries([...authorities.entries()].map(([id, record]) => [id, {
+      uuid: record.uuid,
+      fingerprint: record.fingerprint,
+      sourceType: record.sourceType,
+      publishedAt: record.publishedAt,
+      updatedAt: record.updatedAt
+    }]));
     const indexChanged = JSON.stringify(previousIndex) !== JSON.stringify(nextIndex);
     if (indexChanged) {
       try {
         await this.#writeAuthorityIndex(nextIndex);
       } catch (error) {
-        console.error(`${MODULE_ID} | Published Knowledge index reconciliation failed.`, error);
-        failed.push({ scope: "knowledgeIndex", error: String(error?.message ?? error) });
+        console.error(`${MODULE_ID} | Published Knowledge cache reconciliation failed.`, error);
+        failed.push({ scope: "knowledgeCache", error: String(error?.message ?? error) });
       }
     }
 
+    // Draft publication metadata mirrors the Compendium but never defines publication state.
     let draftsUpdated = 0;
     for (const recipe of RecipeService.list()) {
       const authority = authorities.get(recipe.id);
@@ -641,57 +782,74 @@ export class KnowledgeItemService {
           continue;
         }
         const desired = {
-          uuid: authority.entry.uuid,
+          uuid: authority.uuid,
           pack: pack?.collection ?? this.PACK_ID,
-          sourceType: authority.entry.sourceType,
-          publishedAt: Number(recipe.publication?.publishedAt) || authority.entry.publishedAt,
-          updatedAt: authority.entry.updatedAt
+          sourceType: authority.sourceType,
+          publishedAt: Number(recipe.publication?.publishedAt) || authority.publishedAt,
+          updatedAt: authority.updatedAt
         };
         const current = recipe.publication ?? {};
         if (String(current.uuid || "") !== desired.uuid
           || String(current.pack || "") !== desired.pack
-          || String(current.sourceType || "") !== desired.sourceType) {
+          || String(current.sourceType || "") !== desired.sourceType
+          || Number(current.updatedAt || 0) !== Number(desired.updatedAt || 0)) {
           recipe.publication = desired;
           await RecipeService.save(recipe);
           draftsUpdated += 1;
         }
       } catch (error) {
-        console.error(`${MODULE_ID} | Builder publication reconciliation failed for Recipe ${recipe.id}.`, error);
+        console.error(`${MODULE_ID} | Builder publication metadata reconciliation failed for Recipe ${recipe.id}.`, error);
         failed.push({ scope: "draft", recipeId: recipe.id, recipeName: recipe.name, error: String(error?.message ?? error) });
       }
     }
 
+    // Player clients may not have direct access to the private Compendium, so learned Actor
+    // snapshots are maintained as materialized read copies of the authoritative source.
     let refreshed = 0;
     let forgotten = 0;
     for (const actor of game.actors?.contents?.filter(a => a.type === "character") ?? []) {
-      const store = this.learnedStore(actor);
-      let storeChanged = false;
-      let actorRefreshed = 0;
-      let actorForgotten = 0;
-      for (const [recipeId, entry] of Object.entries(store)) {
-        const authority = authorities.get(recipeId);
-        if (!authority) {
-          delete store[recipeId];
-          storeChanged = true;
-          actorForgotten += 1;
-          continue;
-        }
-        if (!entry?.recipe || !this.sameRecipeDefinition(entry.recipe, authority.snapshot)) {
-          store[recipeId] = { ...entry, recipe: authority.snapshot, revisedAt: Date.now() };
-          storeChanged = true;
-          actorRefreshed += 1;
-        }
-      }
-
+      const initialStore = this.learnedStore(actor);
+      const orphanedLearnedIds = Object.keys(initialStore).filter(recipeId => !authorities.has(recipeId));
       const legacy = this.legacyKnownRecipeIds(actor);
       const filteredLegacy = legacy.filter(recipeId => authorities.has(recipeId));
-      const legacyChanged = filteredLegacy.length !== legacy.length;
-      actorForgotten += legacy.length - filteredLegacy.length;
+      const orphanedLegacyIds = legacy.filter(recipeId => !authorities.has(recipeId));
 
-      if (!storeChanged && !legacyChanged) continue;
+      let actorRefreshed = 0;
+      let actorForgotten = orphanedLearnedIds.length + orphanedLegacyIds.length;
       try {
-        if (storeChanged) await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
-        if (legacyChanged) await actor.setFlag(MODULE_ID, FLAGS.KNOWN_RECIPES, filteredLegacy);
+        // Object flags require Foundry's explicit nested deletion operator. A normal
+        // setFlag with the key omitted is a merge and can leave ghost Recipe IDs behind.
+        for (const recipeId of orphanedLearnedIds) {
+          await this.#deleteLearnedRecipeEntry(actor, recipeId);
+        }
+
+        const store = this.learnedStore(actor);
+        let refreshedStore = false;
+        for (const [recipeId, entry] of Object.entries(store)) {
+          const authority = authorities.get(recipeId);
+          if (!authority) continue;
+          if (!entry?.recipe || !this.sameRecipeDefinition(entry.recipe, authority.recipe)) {
+            store[recipeId] = { ...entry, recipe: authority.recipe, revisedAt: Date.now() };
+            refreshedStore = true;
+            actorRefreshed += 1;
+          }
+        }
+        if (refreshedStore) await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
+
+        if (orphanedLegacyIds.length) {
+          await actor.setFlag(MODULE_ID, FLAGS.KNOWN_RECIPES, filteredLegacy);
+          const remainingLegacy = this.legacyKnownRecipeIds(actor).filter(recipeId => !authorities.has(recipeId));
+          if (remainingLegacy.length) {
+            throw new Error(`Crafting Core could not remove unpublished legacy Recipe IDs from ${actor.name}: ${remainingLegacy.join(", ")}`);
+          }
+        }
+
+        const remainingOrphans = this.knownRecipeIds(actor).filter(recipeId => !authorities.has(recipeId));
+        if (remainingOrphans.length) {
+          throw new Error(`Crafting Core could not remove unpublished Recipe IDs from ${actor.name}: ${remainingOrphans.join(", ")}`);
+        }
+
+        if (!actorRefreshed && !actorForgotten) continue;
         actor.sheet?.render?.({ force: true });
         refreshed += actorRefreshed;
         forgotten += actorForgotten;
@@ -847,6 +1005,7 @@ export class KnowledgeItemService {
       if (!this.#activeGMOwnsLifecycle()) return;
       const pack = this.pack();
       if (!pack || item?.pack !== pack.collection) return;
+      if (this.#managedDeletionIds.has(item.id)) return;
       if (!item.getFlag?.(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED)) return;
       const recipeId = String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "");
       if (!recipeId) return;
@@ -856,6 +1015,7 @@ export class KnowledgeItemService {
           const result = await this.reconcilePublishedKnowledge();
           if (!result.authoritativeIds.includes(recipeId)) {
             Hooks.callAll(`${MODULE_ID}.knowledgeUnpublished`, recipeId, item.uuid);
+            Hooks.callAll(`${MODULE_ID}.knowledgeSourcesChanged`, recipeId);
             const suffix = result.failed.length ? " Some reconciliation work is still pending and will retry at the next GM startup." : "";
             ui.notifications.warn(`${sourceName} was unpublished. Characters who knew that Recipe have forgotten it; active Projects keep their frozen snapshot.${suffix}`);
           } else if (result.failed.length) {

@@ -199,7 +199,8 @@ export class CharacterSheetService {
           if (!forgotten) return;
           this.#selectionSnapshots.delete(key);
           this.#selection.delete(key);
-          app.render({ force: true });
+          await app.render({ force: true });
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
           await ResultDialog.show({
             title: "Recipe Forgotten",
             message: `${actor.name} no longer knows ${recipe.name}.`,
@@ -277,17 +278,26 @@ export class CharacterSheetService {
     const name = foundry.utils.escapeHTML(String(recipe?.name || "this Recipe"));
     const result = await DialogV2.input({
       window: { title: "Forget Recipe" },
-      content: `<section class="cc-unlearn-dialog"><p>Forget <strong>${name}</strong>?</p><p>This removes the Recipe from this Character's learned knowledge. To confirm, type <strong>I AGREE</strong>.</p><input type="text" name="confirmation" autocomplete="off" autofocus placeholder="I AGREE"></section>`,
+      content: `<section class="cc-unlearn-dialog"><p>Forget <strong>${name}</strong>?</p><p>This removes the Recipe from this Character's learned knowledge. The Recipe can be learned again later from a valid Knowledge Source.</p><label class="cc-confirm-check"><input type="checkbox" name="confirmation"><span><strong>I agree</strong><small>I want this Character to forget the selected Recipe.</small></span></label></section>`,
       ok: { label: "Forget Recipe", icon: "fa-solid fa-book-open" },
       rejectClose: false,
-      modal: true
+      modal: true,
+      render: (_event, dialog) => {
+        const root = dialog?.element;
+        const checkbox = root?.querySelector?.('input[name="confirmation"]');
+        const okButton = root?.querySelector?.('button[data-action="ok"]')
+          ?? [...(root?.querySelectorAll?.("button") ?? [])].find(button => String(button.textContent ?? "").includes("Forget Recipe"));
+        if (!checkbox || !okButton) return;
+        const sync = () => { okButton.disabled = !checkbox.checked; };
+        sync();
+        checkbox.addEventListener("change", sync);
+      }
     });
     if (!result) return false;
-    const confirmation = String(result.confirmation ?? "").trim().replace(/\s+/g, " ").toLowerCase();
-    if (confirmation === "i agree") return true;
+    if (result.confirmation === true || result.confirmation === "true" || result.confirmation === "on") return true;
     await ResultDialog.show({
       title: "Confirmation Required",
-      message: "The Recipe was not forgotten. Type I AGREE exactly (capitalization and extra spaces do not matter).",
+      message: "The Recipe was not forgotten. Check I agree before confirming.",
       tone: "warning",
       icon: "fa-solid fa-shield-halved"
     });

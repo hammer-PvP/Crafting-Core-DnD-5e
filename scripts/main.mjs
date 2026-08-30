@@ -17,6 +17,8 @@ import { MaterialStackService } from "./services/material-stack-service.mjs";
 let app = null;
 let generatorApp = null;
 
+const SUPPORT_URL = "https://buymeacoffee.com/hammer.pvp";
+
 function openCraftingCore() {
   if (!game.user?.isGM) return ui.notifications.warn("Only a GM can configure Crafting Core.");
   try {
@@ -138,10 +140,65 @@ Hooks.once("ready", async () => {
   }
 });
 
-Hooks.on("renderApplicationV2", (directoryApp, element) => {
-  if (isItemDirectoryApp(directoryApp)) injectItemDirectoryButton(directoryApp, element);
+Hooks.on("renderApplicationV2", (renderedApp, element) => {
+  if (isItemDirectoryApp(renderedApp)) injectItemDirectoryButton(renderedApp, element);
+  if (isSettingsConfigApp(renderedApp)) injectSettingsSupportCard(renderedApp, element);
 });
 Hooks.on("renderItemDirectory", (directoryApp, html) => injectItemDirectoryButton(directoryApp, html));
+Hooks.on("renderSettingsConfig", (settingsApp, html) => injectSettingsSupportCard(settingsApp, html));
+
+function isSettingsConfigApp(renderedApp) {
+  const name = String(renderedApp?.constructor?.name ?? "");
+  const id = String(renderedApp?.id ?? renderedApp?.options?.id ?? "");
+  return name === "SettingsConfig" || id === "settings-config" || id === "settings";
+}
+
+function injectSettingsSupportCard(settingsApp, element) {
+  const root = element instanceof HTMLElement ? element : element?.[0] ?? settingsApp?.element;
+  if (!root) return;
+
+  root.querySelectorAll(".crafting-core-support-setting, .crafting-core-suite-setting").forEach(node => node.remove());
+
+  const buttons = [...root.querySelectorAll("button")];
+  const configureButton = root.querySelector(`[data-key="${MODULE_ID}.craftingCoreSettings"]`)
+    ?? buttons.find(button => String(button.textContent ?? "").trim().replace(/\s+/g, " ") === "Configure Crafting Core");
+  if (!configureButton) return;
+
+  const targetRow = configureButton.closest(".form-group, .setting, li") ?? configureButton.parentElement;
+  if (!targetRow?.parentElement) return;
+
+  const supportRow = document.createElement(targetRow.tagName === "LI" ? "li" : "div");
+  supportRow.className = `${targetRow.className || "form-group"} crafting-core-support-setting`.trim();
+  supportRow.innerHTML = `
+    <label class="crafting-core-support-label"><i class="fa-solid fa-mug-hot"></i> Support the Creator</label>
+    <div class="form-fields crafting-core-support-fields">
+      <button type="button" class="crafting-core-support-button">
+        <i class="fa-solid fa-mug-hot"></i> Buy Me a Coffee
+      </button>
+    </div>
+    <p class="hint crafting-core-support-hint">Thank you for using Crafting Core! If you enjoy the module and would like to support its continued development, your support helps me dedicate more time to creating, testing, and improving tools for Foundry VTT.</p>`;
+
+  supportRow.querySelector(".crafting-core-support-button")?.addEventListener("click", event => {
+    event.preventDefault();
+    window.open(SUPPORT_URL, "_blank", "noopener,noreferrer");
+  });
+
+  targetRow.parentElement.insertBefore(supportRow, targetRow);
+
+  const suiteRow = document.createElement(targetRow.tagName === "LI" ? "li" : "div");
+  suiteRow.className = `${targetRow.className || "form-group"} crafting-core-suite-setting`.trim();
+  suiteRow.innerHTML = `
+    <label class="crafting-core-suite-label"><i class="fa-solid fa-cubes-stacked"></i> More from Hammer-PvP</label>
+    <div class="form-fields crafting-core-suite-list" aria-label="Other Hammer-PvP Foundry VTT modules">
+      <span>DnD 5e Character Builder</span>
+      <span>DnD 5e Item Creator</span>
+      <span>DnD 5e Currency Manager</span>
+      <span>Enhanced Audio Player</span>
+    </div>
+    <p class="hint crafting-core-suite-hint">Crafting Core is part of a growing set of Foundry VTT tools designed to complement one another. Explore the other Hammer-PvP modules when you want character creation, custom items, economy, and audio tools that fit naturally beside your crafting workflow.</p>`;
+
+  targetRow.parentElement.insertBefore(suiteRow, targetRow.nextSibling);
+}
 
 function isItemDirectoryApp(directoryApp) {
   const name = String(directoryApp?.constructor?.name ?? "");
