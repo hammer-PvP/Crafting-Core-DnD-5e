@@ -2,7 +2,22 @@
 
 Crafting Core is a GM-authoritative crafting, harvesting, and material framework for Foundry Virtual Tabletop, built specifically for D&D5e 5.3.3 on Foundry VTT 14.
 
-v0.2.0 builds on the frozen v0.1.0 stable foundation without changing its crafting, Project, harvesting, or Knowledge lifecycle mechanics. This release adds the first official **Curated Content** library: fifteen Common culinary Recipes with ready-to-use Products powered by **DnD 5e Item Creator**.
+v0.1.0 remains the consolidated stable foundation. v0.2.3 is a test candidate rebuilt directly from that stable baseline to add the official Curated Culinary library without changing the validated Crafting, Project, Harvest, or Knowledge engines.
+
+
+## v0.2.3 Curated Culinary test candidate
+
+- Adds the private **Crafting Core — Products** Compendium with 15 official Culinary consumables: 5 Dwarven, 5 Elven, and 5 Common dishes.
+- Adds 15 official **Recipe** Learn Sources under `Recipe -> Crafting Core Curated -> Culinary -> <Culture> Cuisine`.
+- Curated Culinary Products require active **DnD 5e Item Creator 0.7.1+**. Core Crafting Core functionality remains independent.
+- Hearty meals grant **5 Temporary Hit Points** through a native D&D5e Heal Activity using `temphp`.
+- Energizing meals grant **+5 ft Walking Speed** through the Item Creator consumable runtime until the next Long Rest.
+- Complete meals combine both benefits. Movement benefits use a shared replacement key and do not stack with one another.
+- All 15 official Culinary Recipes use **10 seconds** crafting time.
+- Prepared Product price is **2x the current ingredient value**, keeping crafting economically preferable to buying the finished dish.
+- The Materials application now includes **Materials (229)** and **Curated Products (15)** tabs. Each Product offers three Foundry Core icon choices.
+- **Restore Curated Culinary Defaults** repairs missing/legacy official Products and Learn Sources. Product effects are updated with the same safe embedded-Effect strategy used by Item Creator, avoiding the invalid legacy `duration.value = null` parent-update path.
+- Official content tracks a baseline for presentation/Recipe fields so later module upgrades can advance unchanged defaults while preserving GM customizations.
 
 ## Highlights
 
@@ -25,18 +40,12 @@ v0.2.0 builds on the frozen v0.1.0 stable foundation without changing its crafti
 - **Generate Materials** for Manual Creature Harvest, Environment Gathering, and Game Hunt.
 - **Preview-first generation** with World Item output and optional Hidden Item Piles.
 - **Stable material stacking** for supported Crafting Core material flows.
-- **Curated Culinary Library** with 15 official Common Recipes: 5 Dwarven, 5 Elven, and 5 Common Cuisine.
-- **Crafting Core - Products** private Compendium with 15 ready-to-distribute food Consumables.
-- **Item Creator v0.7.1+ integration** for meal-buff lifecycle: +5 ft movement benefits expire at the next Long Rest, and repeated culinary movement buffs replace rather than stack.
-- **Three curated food icon candidates** are stored on every official Product, with one default selected.
-- **Supplier-ready metadata** on Products and Recipe Knowledge Sources for future tavern/vendor profiles.
 
 ## Compatibility
 
 - **Foundry VTT:** minimum 14, verified 14.365
 - **D&D5e:** 5.3.3
 - **Item Piles:** optional
-- **DnD 5e Item Creator 0.7.1+:** recommended; required to install and automate the official Curated Culinary library
 
 Crafting Core is intentionally version-bound to the D&D5e system version it was built and tested against.
 
@@ -108,30 +117,6 @@ Crafting Core deliberately separates authoring from publication.
 
 Internal indexes and Actor copies are derived data. If they ever disagree with the Learn Sources Compendium, the Compendium is authoritative and reconciliation repairs the derived state.
 
-## Curated Culinary Library
-
-v0.2.0 introduces Crafting Core's first official content library. The core module remains usable without Item Creator, but the Curated Culinary library is synchronized only while **DnD 5e Item Creator 0.7.1+** is active. Crafting Core deliberately does not implement a second buff-duration engine.
-
-The library adds:
-
-- **15 Common Curated Recipes**: 5 Dwarven Cuisine, 5 Elven Cuisine, and 5 Common Cuisine;
-- **15 Recipe Knowledge Sources** in **Crafting Core - Learn Sources**, all using the canonical Recipe document icon;
-- **15 final Products** in the new private **Crafting Core - Products** Compendium;
-- Products grouped under **Culinary -> Dwarven Cuisine / Elven Cuisine / Common Cuisine**;
-- Supplier-ready metadata including category, subcategory, culture, rarity, meal type, stable Product ID, and stable Recipe ID.
-
-The meal pattern is intentionally modest:
-
-- **Hearty Meal:** 5 Temporary Hit Points;
-- **Energizing Meal:** +5 ft Walking Speed until the next Long Rest;
-- **Complete Meal:** both benefits.
-
-Temporary Hit Points use a native D&D5e Heal Activity. Persistent movement is an Item Creator Consumable blueprint with `longRest` duration. All movement-granting Curated meals share a replacement key, so eating multiple official movement meals does not create +10/+15/+20 ft stacking.
-
-Each Product stores up to three curated native Foundry `icons/...` candidates in Crafting Core metadata. No artwork is bundled with the module.
-
-Deleting an official Curated Product or Recipe Source is treated as an intentional GM suppression rather than something that should be recreated every startup. The GM-facing API can restore suppressed official content when needed.
-
 ## Crafting Projects
 
 Project Recipes can configure:
@@ -195,7 +180,7 @@ The Crafting Core Game Settings area includes:
 
 The complete manual is maintained in the repository under `docs/`:
 
-**[Open the Complete Crafting Core Manual (PDF)](docs/Crafting-Core-Complete-Manual-v0.2.0.pdf)**
+**[Open the Complete Crafting Core Manual (PDF)](docs/Crafting-Core-Complete-Manual-v0.1.0.pdf)**
 
 ## More from Hammer-PvP
 

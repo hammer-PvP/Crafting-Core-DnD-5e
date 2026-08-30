@@ -136,21 +136,17 @@ Hooks.once("ready", async () => {
       console.error(`${MODULE_TITLE} | Curated material icon migration failed.`, error);
     }
     try {
-      const curated = await CuratedContentService.syncIfNeeded();
-      if (!curated?.skipped) console.info(`${MODULE_TITLE} | Synchronized Curated Culinary library.`, curated);
-      else if (curated?.reason === "item-creator-inactive") {
-        console.info(`${MODULE_TITLE} | Curated Culinary library not installed because DnD 5e Item Creator is inactive.`);
-      } else if (curated?.reason === "item-creator-too-old") {
-        console.warn(`${MODULE_TITLE} | Curated Culinary library requires DnD 5e Item Creator 0.7.1 or newer; active version is ${curated.version || "unknown"}.`);
-      }
-    } catch (error) {
-      console.error(`${MODULE_TITLE} | Curated Culinary synchronization failed.`, error);
-    }
-    try {
       const harvestMigration = await HarvestProfileService.migrateStoredProfilesToPools();
       if (harvestMigration.migrated) console.info(`${MODULE_TITLE} | Migrated legacy Harvest Profile slots to v0.0.19d rarity pools.`, harvestMigration);
     } catch (error) {
       console.error(`${MODULE_TITLE} | Harvest Profile rarity-pool migration failed.`, error);
+    }
+    try {
+      const curated = await CuratedContentService.syncIfNeeded();
+      if (!curated?.skipped) console.info(`${MODULE_TITLE} | Curated Culinary library synchronized:`, curated);
+    } catch (error) {
+      console.error(`${MODULE_TITLE} | Curated Culinary synchronization failed.`, error);
+      ui.notifications?.error?.("Crafting Core could not synchronize the Curated Culinary library. Check the console for details.");
     }
   }
 });

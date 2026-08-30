@@ -1,19 +1,21 @@
 import { FLAGS, KNOWLEDGE_ICONS, MODULE_ID, SETTINGS } from "../constants.mjs";
 import { CURATED_CULINARY_RECIPES, CURATED_CULINARY_VERSION } from "../data/curated-culinary-catalog.mjs";
 import { CompendiumService } from "./compendium-service.mjs";
-import { MaterialCatalogService } from "./material-catalog-service.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
+import { MaterialCatalogService } from "./material-catalog-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
 
 const ITEM_CREATOR_ID = "dnd5e-item-creator";
+const ITEM_CREATOR_MIN_VERSION = "0.7.1";
 const ITEM_CREATOR_SCHEMA_VERSION = 17;
-const ITEM_CREATOR_CONTRACT_VERSION = "0.7.1";
+const ACTIVE_EFFECT_ICON = "systems/dnd5e/icons/svg/documents/active-effect.svg";
+const PRICE_CP = Object.freeze({ cp: 1, sp: 10, ep: 50, gp: 100, pp: 1000 });
 
-function deepClone(value) {
+function clone(value) {
   return foundry.utils.deepClone(value);
 }
 
-function stableDocumentId(seed) {
+function stableId(seed) {
   const text = String(seed ?? "");
   let hash = 0xcbf29ce484222325n;
   const prime = 0x100000001b3n;
@@ -24,49 +26,191 @@ function stableDocumentId(seed) {
   return hash.toString(16).padStart(16, "0").slice(0, 16);
 }
 
-function cleanDocumentSource(source) {
-  const clone = deepClone(source ?? {});
-  for (const key of ["_id", "folder", "sort", "ownership", "_stats", "pack"]) delete clone[key];
-  return clone;
-}
-
-function canonicalize(value) {
-  if (Array.isArray(value)) return value.map(canonicalize);
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
   if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalize(value[key])]));
+  return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
 }
 
-function fingerprint(value) {
-  return stableDocumentId(JSON.stringify(canonicalize(value)));
+function sameValue(left, right) {
+  return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
 }
 
-function productFingerprint(source) {
-  const data = cleanDocumentSource(source);
-  return fingerprint({
-    name: data.name,
-    type: data.type,
-    img: data.img,
-    system: data.system,
-    effects: data.effects,
-    itemCreator: data.flags?.[ITEM_CREATOR_ID] ?? null
-  });
+function cleanDocumentSource(source) {
+  const data = clone(source ?? {});
+  for (const key of ["_id", "folder", "sort", "ownership", "_stats", "pack"]) delete data[key];
+  return data;
 }
 
-function knowledgeFingerprint(source) {
-  const data = cleanDocumentSource(source);
-  return fingerprint({
-    name: data.name,
-    type: data.type,
-    img: data.img,
-    system: data.system,
-    recipeSnapshot: data.flags?.[MODULE_ID]?.[FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT] ?? null
-  });
+function valuesOf(value) {
+  if (value instanceof Map) return [...value.values()];
+  if (Array.isArray(value)) return [...value];
+  if (value?.values instanceof Function) {
+    try { return [...value.values()]; } catch (_) { /* fall through */ }
+  }
+  return value && typeof value === "object" ? Object.values(value) : [];
+}
+
+function getPath(object, path) {
+  return String(path).split(".").reduce((value, key) => value?.[key], object);
+}
+
+function setPath(object, path, value) {
+  const parts = String(path).split(".");
+  let cursor = object;
+  for (const key of parts.slice(0, -1)) {
+    cursor[key] ??= {};
+    cursor = cursor[key];
+  }
+  cursor[parts.at(-1)] = clone(value);
+}
+
+function versionAtLeast(current, minimum) {
+  const parse = value => String(value ?? "").split(/[+-]/)[0].split(".").map(part => Number.parseInt(part, 10) || 0);
+  const left = parse(current);
+  const right = parse(minimum);
+  const length = Math.max(left.length, right.length);
+  for (let i = 0; i < length; i += 1) {
+    const a = left[i] ?? 0;
+    const b = right[i] ?? 0;
+    if (a !== b) return a > b;
+  }
+  return true;
+}
+
+function priceToCopper(price) {
+  const denomination = String(price?.denomination ?? "gp").toLowerCase();
+  return Math.max(0, Math.round((Number(price?.value) || 0) * (PRICE_CP[denomination] ?? PRICE_CP.gp)));
+}
+
+function priceFromCopper(copper) {
+  const value = Math.max(0, Math.round(Number(copper) || 0));
+  if (value % PRICE_CP.gp === 0) return { value: value / PRICE_CP.gp, denomination: "gp" };
+  if (value % PRICE_CP.sp === 0) return { value: value / PRICE_CP.sp, denomination: "sp" };
+  return { value, denomination: "cp" };
+}
+
+function formatPrice(price) {
+  return `${Number(price?.value ?? 0)} ${String(price?.denomination ?? "gp")}`;
+}
+
+function normalizedRecipeBaseline(recipe) {
+  const data = RecipeService.snapshot(recipe);
+  delete data.createdAt;
+  delete data.updatedAt;
+  delete data.publication;
+  return data;
+}
+
+function editableProductSnapshot(source) {
+  const data = source?.toObject instanceof Function ? source.toObject(false) : source ?? {};
+  return {
+    name: data.name ?? "",
+    img: data.img ?? "",
+    description: clone(data.system?.description ?? { value: "", chat: "" }),
+    weight: clone(data.system?.weight ?? { value: 0, units: "lb" }),
+    price: clone(data.system?.price ?? { value: 0, denomination: "gp" }),
+    rarity: String(data.system?.rarity ?? "")
+  };
+}
+
+function extractLegacyBaselineProduct(value) {
+  if (!value || typeof value !== "object") return null;
+  if (Object.hasOwn(value, "description") && Object.hasOwn(value, "price")) return clone(value);
+  if (value.system || value.name || value.img) return editableProductSnapshot(value);
+  return null;
+}
+
+function preserveExternalFlags(current, next) {
+  const currentFlags = clone(current?.flags ?? {});
+  const nextFlags = clone(next?.flags ?? {});
+  for (const [namespace, value] of Object.entries(currentFlags)) {
+    if ([MODULE_ID, ITEM_CREATOR_ID].includes(namespace)) continue;
+    nextFlags[namespace] = clone(value);
+  }
+  next.flags = nextFlags;
+  return next;
+}
+
+function mergeProductPresentation(current, official, previousBaseline, entry) {
+  const next = preserveExternalFlags(current, clone(official));
+  const currentEditable = editableProductSnapshot(current);
+  const baseline = extractLegacyBaselineProduct(previousBaseline);
+  const paths = ["name", "img", "description", "weight", "price", "rarity"];
+
+  if (baseline) {
+    for (const path of paths) {
+      if (!sameValue(getPath(currentEditable, path), getPath(baseline, path))) {
+        setPath(next, path === "name" || path === "img" ? path : `system.${path}`, getPath(currentEditable, path));
+      }
+    }
+    return next;
+  }
+
+  // v0.2.0-v0.2.2 pre-baseline recovery. Preserve obvious GM customizations while
+  // treating the shipped legacy values as replaceable defaults.
+  if (currentEditable.name && currentEditable.name !== entry.name) next.name = currentEditable.name;
+  if (currentEditable.img) next.img = currentEditable.img;
+  const officialDescription = editableProductSnapshot(official).description;
+  if (!sameValue(currentEditable.description, officialDescription)) next.system.description = clone(currentEditable.description);
+  if (Number(currentEditable.weight?.value) !== 0) next.system.weight = clone(currentEditable.weight);
+  const legacyPriceCp = entry.mealType === "complete" ? 100 : 50; // v0.2.0/v0.2.1 defaults.
+  const currentPriceCp = priceToCopper(currentEditable.price);
+  const officialPriceCp = priceToCopper(official.system?.price);
+  if (![legacyPriceCp, officialPriceCp].includes(currentPriceCp)) next.system.price = clone(currentEditable.price);
+  if (currentEditable.rarity && currentEditable.rarity !== "common") next.system.rarity = currentEditable.rarity;
+  return next;
+}
+
+function mergeRecipeDefinition(currentRecipe, officialRecipe, previousBaseline, entry, expectedIngredientNames) {
+  if (!currentRecipe || typeof currentRecipe !== "object") return clone(officialRecipe);
+  const current = normalizedRecipeBaseline(currentRecipe);
+  const official = normalizedRecipeBaseline(officialRecipe);
+  const baseline = previousBaseline && typeof previousBaseline === "object"
+    ? normalizedRecipeBaseline(previousBaseline.flags?.[MODULE_ID]?.[FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT] ?? previousBaseline.recipe ?? previousBaseline)
+    : null;
+
+  if (baseline) {
+    const merge = (now, oldDefault, newDefault) => {
+      if (oldDefault === undefined) return now === undefined ? clone(newDefault) : clone(now);
+      if (newDefault === undefined) return clone(now);
+      if (sameValue(now, oldDefault)) return clone(newDefault);
+      const objects = [now, oldDefault, newDefault].every(value => value && typeof value === "object" && !Array.isArray(value));
+      if (!objects) return clone(now);
+      const result = clone(now);
+      for (const key of Object.keys(newDefault)) result[key] = merge(now[key], oldDefault[key], newDefault[key]);
+      return result;
+    };
+    const merged = merge(current, baseline, official);
+    merged.id = official.id;
+    merged.knowledge = clone(official.knowledge);
+    return RecipeService.snapshot(merged);
+  }
+
+  // Recovery for the experimental v0.2.0-v0.2.2 line. Keep GM-authored rules,
+  // visibility and prose, but repair fields that can be confidently recognized as
+  // the old official defaults.
+  const merged = clone(current);
+  merged.id = official.id;
+  merged.knowledge = clone(official.knowledge);
+  if ([600, 1200, 10].includes(Number(merged.craftingTime))) merged.craftingTime = 10;
+
+  const currentIngredientNames = (merged.ingredients ?? []).map(row => String(row?.name ?? ""));
+  const currentQuantities = (merged.ingredients ?? []).map(row => Math.max(1, Number(row?.quantity) || 1));
+  const officialQuantities = (official.ingredients ?? []).map(row => Math.max(1, Number(row?.quantity) || 1));
+  if (sameValue(currentIngredientNames, expectedIngredientNames) && sameValue(currentQuantities, officialQuantities)) {
+    merged.ingredients = clone(official.ingredients);
+  }
+  if (String(merged.result?.name ?? "") === entry.name) merged.result = clone(official.result);
+  return RecipeService.snapshot(merged);
 }
 
 export class CuratedContentService {
   static PRODUCTS_PACK_NAME = "crafting-core-products";
   static PRODUCTS_PACK_LABEL = "Crafting Core — Products";
   static PRODUCTS_PACK_ID = `world.${this.PRODUCTS_PACK_NAME}`;
+  static #managedDeletes = new Set();
+  static #hooksInstalled = false;
 
   static registerSettings() {
     game.settings.register(MODULE_ID, SETTINGS.CURATED_CONTENT_STATE, {
@@ -77,7 +221,10 @@ export class CuratedContentService {
       default: {
         culinaryVersion: 0,
         suppressedProducts: [],
-        suppressedRecipes: []
+        suppressedRecipes: [],
+        productIcons: {},
+        productBaselines: {},
+        recipeBaselines: {}
       }
     });
   }
@@ -88,16 +235,42 @@ export class CuratedContentService {
     return {
       culinaryVersion: Math.max(0, Number(source.culinaryVersion) || 0),
       suppressedProducts: [...new Set((source.suppressedProducts ?? []).map(String).filter(Boolean))],
-      suppressedRecipes: [...new Set((source.suppressedRecipes ?? []).map(String).filter(Boolean))]
+      suppressedRecipes: [...new Set((source.suppressedRecipes ?? []).map(String).filter(Boolean))],
+      productIcons: source.productIcons && typeof source.productIcons === "object" ? clone(source.productIcons) : {},
+      productBaselines: source.productBaselines && typeof source.productBaselines === "object" ? clone(source.productBaselines) : {},
+      recipeBaselines: source.recipeBaselines && typeof source.recipeBaselines === "object" ? clone(source.recipeBaselines) : {}
     };
   }
 
   static async #saveState(state) {
-    await game.settings.set(MODULE_ID, SETTINGS.CURATED_CONTENT_STATE, {
-      culinaryVersion: Math.max(0, Number(state.culinaryVersion) || 0),
-      suppressedProducts: [...new Set((state.suppressedProducts ?? []).map(String).filter(Boolean))],
-      suppressedRecipes: [...new Set((state.suppressedRecipes ?? []).map(String).filter(Boolean))]
+    await game.settings.set(MODULE_ID, SETTINGS.CURATED_CONTENT_STATE, clone(state));
+  }
+
+  static installHooks() {
+    if (this.#hooksInstalled) return;
+    this.#hooksInstalled = true;
+    Hooks.on("deleteItem", item => {
+      if (!game.user?.isGM || !item?.pack) return;
+      const token = `${item.pack}:${item.id}`;
+      if (this.#managedDeletes.has(token)) return;
+      if (item.pack === this.PRODUCTS_PACK_ID && item.getFlag(MODULE_ID, FLAGS.PRODUCT_MANAGED)) {
+        const productId = String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? "");
+        if (productId) this.#suppress("product", productId);
+      }
+      if (item.pack === KnowledgeItemService.PACK_ID
+        && item.getFlag(MODULE_ID, FLAGS.CURATED)
+        && item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) === "culinary-recipe") {
+        const recipeId = String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "");
+        if (recipeId) this.#suppress("recipe", recipeId);
+      }
     });
+  }
+
+  static async #suppress(kind, id) {
+    const state = this.state();
+    const key = kind === "product" ? "suppressedProducts" : "suppressedRecipes";
+    if (!state[key].includes(id)) state[key].push(id);
+    await this.#saveState(state);
   }
 
   static itemCreatorActive() {
@@ -109,18 +282,7 @@ export class CuratedContentService {
   }
 
   static itemCreatorCompatible() {
-    if (!this.itemCreatorActive()) return false;
-    const current = this.itemCreatorVersion();
-    const parse = value => String(value ?? "").split(/[+-]/)[0].split(".").map(part => Number.parseInt(part, 10) || 0);
-    const left = parse(current);
-    const right = parse(ITEM_CREATOR_CONTRACT_VERSION);
-    const length = Math.max(left.length, right.length);
-    for (let i = 0; i < length; i += 1) {
-      const a = left[i] ?? 0;
-      const b = right[i] ?? 0;
-      if (a !== b) return a > b;
-    }
-    return true;
+    return this.itemCreatorActive() && versionAtLeast(this.itemCreatorVersion(), ITEM_CREATOR_MIN_VERSION);
   }
 
   static productsPack() {
@@ -128,15 +290,19 @@ export class CuratedContentService {
   }
 
   static async ensureProductsPack() {
-    const pack = await CompendiumService.ensureWorldItemPack({
-      name: this.PRODUCTS_PACK_NAME,
-      label: this.PRODUCTS_PACK_LABEL
-    });
-    await CompendiumService.ensurePackFolders(pack, this.#productFolderDefinitions());
+    const pack = await CompendiumService.ensureWorldItemPack({ name: this.PRODUCTS_PACK_NAME, label: this.PRODUCTS_PACK_LABEL });
+    await CompendiumService.ensurePackFolders(pack, this.#productFolders());
     return pack;
   }
 
-  static #productFolderDefinitions() {
+  static openProductsPack() {
+    const pack = this.productsPack();
+    if (!pack) return false;
+    pack.render?.(true);
+    return true;
+  }
+
+  static #productFolders() {
     return [
       { key: "culinary", name: "Culinary" },
       { key: "culinary:dwarven", name: "Dwarven Cuisine", parent: "culinary" },
@@ -145,7 +311,7 @@ export class CuratedContentService {
     ];
   }
 
-  static #knowledgeFolderDefinitions() {
+  static #knowledgeFolders() {
     return [
       { key: "Recipe", name: "Recipe" },
       { key: "Recipe:curated", name: "Crafting Core Curated", parent: "Recipe" },
@@ -158,231 +324,154 @@ export class CuratedContentService {
 
   static async syncIfNeeded() {
     if (!game.user?.isGM) return { skipped: true, reason: "not-gm" };
-    if (!this.itemCreatorActive()) return { skipped: true, reason: "item-creator-inactive" };
-    if (!this.itemCreatorCompatible()) return { skipped: true, reason: "item-creator-too-old", version: this.itemCreatorVersion() };
+    if (!this.itemCreatorCompatible()) return { skipped: true, reason: "item-creator" };
     const state = this.state();
-    const productsMissing = !this.productsPack();
-    const learnSourcesMissing = !KnowledgeItemService.pack();
-    if (state.culinaryVersion >= CURATED_CULINARY_VERSION && !productsMissing && !learnSourcesMissing) {
-      return { skipped: true, reason: "current" };
+    const products = this.productsPack();
+    const learn = KnowledgeItemService.pack();
+    const expectedProducts = CURATED_CULINARY_RECIPES.length - state.suppressedProducts.length;
+    const expectedRecipes = CURATED_CULINARY_RECIPES.length - state.suppressedRecipes.length;
+    let productCount = 0;
+    let recipeCount = 0;
+    if (products) {
+      const docs = await products.getDocuments();
+      productCount = docs.filter(item => item.getFlag(MODULE_ID, FLAGS.PRODUCT_MANAGED)).length;
     }
-    return this.sync();
-  }
-
-  static async sync({ restoreProducts=[], restoreRecipes=[] }={}) {
-    if (!game.user?.isGM) throw new Error("Only a GM can synchronize Crafting Core Curated content.");
-    if (!this.itemCreatorActive()) throw new Error("DnD 5e Item Creator must be active to install the Curated Culinary library.");
-    if (!this.itemCreatorCompatible()) throw new Error(`DnD 5e Item Creator ${ITEM_CREATOR_CONTRACT_VERSION} or newer is required for the Curated Culinary library.`);
-
-    const state = this.state();
-    const restoreProductSet = new Set(restoreProducts.map(String));
-    const restoreRecipeSet = new Set(restoreRecipes.map(String));
-    state.suppressedProducts = state.suppressedProducts.filter(id => !restoreProductSet.has(id));
-    state.suppressedRecipes = state.suppressedRecipes.filter(id => !restoreRecipeSet.has(id));
-
-    const materialDocs = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
-    const missingMaterials = [...new Set(CURATED_CULINARY_RECIPES.flatMap(entry => entry.ingredients.map(i => i.materialId)))]
-      .filter(id => !materialDocs.has(id));
-    if (missingMaterials.length) throw new Error(`Curated Culinary materials are missing: ${missingMaterials.join(", ")}`);
-
-    const productResult = await this.#syncProducts(state);
-    const recipeResult = await this.#syncRecipes(state, materialDocs, productResult.documentsByProductId);
-    state.culinaryVersion = CURATED_CULINARY_VERSION;
-    await this.#saveState(state);
-
-    const reconciliation = await KnowledgeItemService.reconcilePublishedKnowledge();
-    Hooks.callAll(`${MODULE_ID}.curatedContentChanged`, {
-      culinaryVersion: CURATED_CULINARY_VERSION,
-      products: productResult,
-      recipes: recipeResult
-    });
-    return { products: productResult, recipes: recipeResult, reconciliation, state };
+    if (learn) {
+      const docs = await learn.getDocuments();
+      recipeCount = docs.filter(item => item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) === "culinary-recipe").length;
+    }
+    if (state.culinaryVersion >= CURATED_CULINARY_VERSION && productCount >= expectedProducts && recipeCount >= expectedRecipes) {
+      return { skipped: true, reason: "current", products: productCount, recipes: recipeCount };
+    }
+    return this.sync({ restore: false });
   }
 
   static async restoreAll() {
+    if (!game.user?.isGM) throw new Error("Only a GM can restore Crafting Core Curated content.");
+    if (!this.itemCreatorCompatible()) throw new Error(`Curated Culinary Products require active DnD 5e Item Creator ${ITEM_CREATOR_MIN_VERSION} or newer.`);
     const state = this.state();
-    return this.sync({
-      restoreProducts: [...state.suppressedProducts],
-      restoreRecipes: [...state.suppressedRecipes]
+    state.suppressedProducts = [];
+    state.suppressedRecipes = [];
+    await this.#saveState(state);
+    return this.sync({ restore: true });
+  }
+
+  static async sync({ restore=false }={}) {
+    if (!game.user?.isGM) throw new Error("Only a GM can synchronize Crafting Core Curated content.");
+    if (!this.itemCreatorCompatible()) throw new Error(`Curated Culinary Products require active DnD 5e Item Creator ${ITEM_CREATOR_MIN_VERSION} or newer.`);
+
+    const state = this.state();
+    if (restore) {
+      state.suppressedProducts = [];
+      state.suppressedRecipes = [];
+    }
+    const materialDocs = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
+    const products = await this.#syncProducts(state, materialDocs);
+    const recipes = await this.#syncRecipes(state, materialDocs, products.documentsByProductId);
+    state.culinaryVersion = CURATED_CULINARY_VERSION;
+    state.productBaselines = products.baselines;
+    state.recipeBaselines = recipes.baselines;
+    await this.#saveState(state);
+    await KnowledgeItemService.reconcilePublishedKnowledge();
+    return { products, recipes };
+  }
+
+  static async saveProductIconChoice(productId, path) {
+    if (!game.user?.isGM) throw new Error("Only a GM can change Curated Product presentation.");
+    const entry = CURATED_CULINARY_RECIPES.find(row => row.productId === String(productId));
+    if (!entry) throw new Error("Unknown Curated Product.");
+    if (!entry.icons.includes(String(path))) throw new Error("Choose one of the three official Foundry Core icons.");
+    const state = this.state();
+    state.productIcons[entry.productId] = String(path);
+    await this.#saveState(state);
+    await this.sync({ restore: false });
+    const pack = this.productsPack();
+    const docs = pack ? await pack.getDocuments() : [];
+    return docs.find(item => String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? "") === entry.productId) ?? null;
+  }
+
+  static async culinaryCatalogContext() {
+    const state = this.state();
+    const materials = await MaterialCatalogService.allEntries();
+    const materialMap = new Map(materials.map(row => [row.id, row]));
+    const pack = this.productsPack();
+    const docs = pack ? await pack.getDocuments() : [];
+    const byId = new Map(docs.map(item => [String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? ""), item]).filter(([id]) => id));
+    const products = CURATED_CULINARY_RECIPES.map(entry => {
+      const item = byId.get(entry.productId) ?? null;
+      const ingredientCostCopper = entry.ingredients.reduce((total, row) => {
+        const material = materialMap.get(row.materialId);
+        const price = material ? { value: material.price, denomination: material.denomination } : { value: 0, denomination: "gp" };
+        return total + priceToCopper(price) * row.quantity;
+      }, 0);
+      const buyPrice = priceFromCopper(ingredientCostCopper * entry.priceMultiplier);
+      const selectedIcon = String(state.productIcons?.[entry.productId] || item?.img || entry.icons[0]);
+      return {
+        ...clone(entry),
+        exists: Boolean(item),
+        selectedIcon,
+        ingredientCostLabel: formatPrice(priceFromCopper(ingredientCostCopper)),
+        priceLabel: formatPrice(item?.system?.price ?? buyPrice),
+        benefitLabel: entry.mealType === "complete" ? "5 Temp HP + 5 ft" : entry.mealType === "hearty" ? "5 Temp HP" : "+5 ft Speed",
+        iconCandidates: entry.icons.map((icon, index) => ({ path: icon, index: index + 1, selected: icon === selectedIcon }))
+      };
     });
+    const cultures = ["dwarven", "elven", "common"];
+    const groups = cultures.map(culture => ({
+      culture,
+      label: `${culture.charAt(0).toUpperCase()}${culture.slice(1)} Cuisine`,
+      products: products.filter(row => row.culture === culture),
+      count: products.filter(row => row.culture === culture).length
+    }));
+    return {
+      compatible: this.itemCreatorCompatible(),
+      itemCreatorVersion: this.itemCreatorVersion(),
+      requiredVersion: ITEM_CREATOR_MIN_VERSION,
+      packExists: Boolean(pack),
+      count: products.filter(row => row.exists).length,
+      groups
+    };
   }
 
-  static async restoreProduct(productId) {
-    return this.sync({ restoreProducts: [String(productId)] });
-  }
-
-  static async restoreRecipe(recipeId) {
-    return this.sync({ restoreRecipes: [String(recipeId)] });
-  }
-
-  static async #syncProducts(state) {
-    const pack = await this.ensureProductsPack();
-    const wasLocked = Boolean(pack.locked);
-    if (wasLocked) await pack.configure({ locked: false });
-    try {
-      const folders = await CompendiumService.ensurePackFolders(pack, this.#productFolderDefinitions());
-      const docs = await pack.getDocuments();
-      const byProductId = new Map(docs
-        .filter(item => item.getFlag(MODULE_ID, FLAGS.PRODUCT_MANAGED))
-        .map(item => [String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? ""), item])
-        .filter(([id]) => id));
-      const suppressed = new Set(state.suppressedProducts);
-      const creates = [];
-      const updates = [];
-      const touchedProductIds = new Set();
-      for (const entry of CURATED_CULINARY_RECIPES) {
-        if (suppressed.has(entry.productId)) continue;
-        const folder = folders.get(`culinary:${entry.culture}`) ?? folders.get("culinary") ?? null;
-        const data = this.#productItemData(entry, folder?.id ?? null);
-        const existing = byProductId.get(entry.productId);
-        if (!existing) {
-          creates.push(data);
-          touchedProductIds.add(entry.productId);
-        } else {
-          const baseline = String(existing.getFlag(MODULE_ID, FLAGS.CURATED_BASELINE_FINGERPRINT) ?? "");
-          const currentFingerprint = productFingerprint(existing.toObject?.(false) ?? existing);
-          if (baseline && currentFingerprint !== baseline) continue; // Preserve explicit GM customization.
-          updates.push({ _id: existing.id, ...data });
-          touchedProductIds.add(entry.productId);
-        }
-      }
-
-      const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
-      if (creates.length) await ItemClass.createDocuments(creates, { pack: pack.collection });
-      if (updates.length) await ItemClass.updateDocuments(updates, { pack: pack.collection });
-      const refreshed = await pack.getDocuments();
-      const documentsByProductId = new Map(refreshed
-        .filter(item => item.getFlag(MODULE_ID, FLAGS.PRODUCT_MANAGED))
-        .map(item => [String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? ""), item])
-        .filter(([id]) => id));
-      const baselineUpdates = [...touchedProductIds].map(productId => {
-        const item = documentsByProductId.get(productId);
-        if (!item) return null;
-        return { _id: item.id, [`flags.${MODULE_ID}.${FLAGS.CURATED_BASELINE_FINGERPRINT}`]: productFingerprint(item.toObject?.(false) ?? item) };
-      }).filter(Boolean);
-      if (baselineUpdates.length) await ItemClass.updateDocuments(baselineUpdates, { pack: pack.collection });
-      await pack.getIndex({ fields: ["name", "img", "type", "folder", "system.rarity", `flags.${MODULE_ID}.${FLAGS.PRODUCT_ID}`] });
-      return { pack, created: creates.length, updated: updates.length, total: documentsByProductId.size, documentsByProductId };
-    } finally {
-      if (wasLocked) await pack.configure({ locked: true });
-    }
-  }
-
-  static async #syncRecipes(state, materialDocs, productDocs) {
-    const pack = await KnowledgeItemService.ensurePack();
-    const wasLocked = Boolean(pack.locked);
-    if (wasLocked) await pack.configure({ locked: false });
-    try {
-      const folders = await CompendiumService.ensurePackFolders(pack, this.#knowledgeFolderDefinitions());
-      const docs = await pack.getDocuments();
-      const byRecipeId = new Map(docs
-        .filter(item => item.getFlag(MODULE_ID, FLAGS.CURATED) && item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) === "culinary-recipe")
-        .map(item => [String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? ""), item])
-        .filter(([id]) => id));
-      const suppressed = new Set(state.suppressedRecipes);
-      const creates = [];
-      const updates = [];
-      const touchedRecipeIds = new Set();
-      for (const entry of CURATED_CULINARY_RECIPES) {
-        if (suppressed.has(entry.recipeId)) continue;
-        const product = productDocs.get(entry.productId);
-        if (!product) continue; // Without a materialized Product, do not create/update the official Recipe artifact.
-        const recipe = this.#recipeSnapshot(entry, materialDocs, product);
-        const folder = folders.get(`Recipe:curated:culinary:${entry.culture}`) ?? folders.get("Recipe") ?? null;
-        const data = KnowledgeItemService.knowledgeItemData(recipe, { folderId: folder?.id ?? null, published: true });
-        data.img = KNOWLEDGE_ICONS.Recipe;
-        data.flags[MODULE_ID] = {
-          ...(data.flags[MODULE_ID] ?? {}),
-          [FLAGS.CURATED]: true,
-          [FLAGS.CURATED_ID]: entry.id,
-          [FLAGS.CURATED_KIND]: "culinary-recipe",
-          [FLAGS.CURATED_VERSION]: CURATED_CULINARY_VERSION,
-          [FLAGS.PRODUCT_ID]: entry.productId,
-          [FLAGS.PRODUCT_CATEGORY]: entry.category,
-          [FLAGS.PRODUCT_SUBCATEGORY]: entry.subcategory,
-          [FLAGS.PRODUCT_CULTURE]: entry.culture,
-          [FLAGS.PRODUCT_RARITY]: entry.rarity,
-          [FLAGS.PRODUCT_MEAL_TYPE]: entry.mealType
-        };
-        const existing = byRecipeId.get(entry.recipeId);
-        if (!existing) {
-          creates.push(data);
-          touchedRecipeIds.add(entry.recipeId);
-        } else {
-          const baseline = String(existing.getFlag(MODULE_ID, FLAGS.CURATED_BASELINE_FINGERPRINT) ?? "");
-          const currentFingerprint = knowledgeFingerprint(existing.toObject?.(false) ?? existing);
-          if (baseline && currentFingerprint !== baseline) continue; // Preserve explicit GM customization.
-          updates.push({ _id: existing.id, ...data });
-          touchedRecipeIds.add(entry.recipeId);
-        }
-      }
-      const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
-      if (creates.length) await ItemClass.createDocuments(creates, { pack: pack.collection });
-      if (updates.length) await ItemClass.updateDocuments(updates, { pack: pack.collection });
-      const refreshed = await pack.getDocuments();
-      const refreshedByRecipeId = new Map(refreshed
-        .filter(item => item.getFlag(MODULE_ID, FLAGS.CURATED) && item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) === "culinary-recipe")
-        .map(item => [String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? ""), item])
-        .filter(([id]) => id));
-      const baselineUpdates = [...touchedRecipeIds].map(recipeId => {
-        const item = refreshedByRecipeId.get(recipeId);
-        if (!item) return null;
-        return { _id: item.id, [`flags.${MODULE_ID}.${FLAGS.CURATED_BASELINE_FINGERPRINT}`]: knowledgeFingerprint(item.toObject?.(false) ?? item) };
-      }).filter(Boolean);
-      if (baselineUpdates.length) await ItemClass.updateDocuments(baselineUpdates, { pack: pack.collection });
-      await pack.getIndex({ fields: ["name", "img", "type", "folder", "system.rarity", `flags.${MODULE_ID}.${FLAGS.KNOWLEDGE_RECIPE_ID}`] });
-      return { pack, created: creates.length, updated: updates.length, total: refreshedByRecipeId.size };
-    } finally {
-      if (wasLocked) await pack.configure({ locked: true });
-    }
-  }
-
-  static #recipeSnapshot(entry, materialDocs, product) {
-    const ingredients = entry.ingredients.map(row => {
+  static #ingredientCost(entry, materialDocs) {
+    let copper = 0;
+    for (const row of entry.ingredients) {
       const item = materialDocs.get(row.materialId);
-      return RecipeService.itemReference(item, row.quantity);
-    });
-    const result = RecipeService.itemReference(product, 1, { snapshot: true });
-    return RecipeService.normalize({
-      id: entry.recipeId,
-      name: entry.name,
-      img: product.img,
-      description: entry.description,
-      craftingMode: "timed",
-      craftingTime: entry.craftingTime,
-      craftingResolution: {
-        proficiencies: [],
-        proficiencyMatch: "any",
-        attemptPolicy: "anyone",
-        proficientPolicy: "rollNormally",
-        check: { required: false, type: "skill", id: "", dc: 10 },
-        failure: { mode: "failProject", regressBy: 1, loseMaterials: false, lossPercent: 0 }
-      },
-      learning: { access: "anyone" },
-      ingredients,
-      result,
-      knowledge: { label: "Recipe", name: `Recipe — ${entry.name}`, img: KNOWLEDGE_ICONS.Recipe },
-      publication: null,
-      playerVisibility: {}
-    });
+      if (!item) throw new Error(`Curated Recipe ${entry.name} is missing Material ${row.materialId}.`);
+      copper += priceToCopper(item.system?.price) * row.quantity;
+    }
+    return copper;
   }
 
-  static #productItemData(entry, folderId=null) {
-    const activityId = stableDocumentId(`activity:${entry.productId}`);
-    const effectId = stableDocumentId(`effect:${entry.productId}:movement`);
-    const itemData = {
+  static #selectedIcon(entry, state, existing=null) {
+    const stored = String(state.productIcons?.[entry.productId] ?? "");
+    if (entry.icons.includes(stored)) return stored;
+    const current = String(existing?.img ?? "");
+    if (current) return current;
+    return entry.icons[0];
+  }
+
+  static #productDescription(entry) {
+    const benefit = entry.mealType === "complete"
+      ? "<strong>5 Temporary Hit Points</strong> and <strong>+5 ft Walking Speed</strong>"
+      : entry.mealType === "hearty"
+        ? "<strong>5 Temporary Hit Points</strong>"
+        : "<strong>+5 ft Walking Speed</strong>";
+    return `<p>${entry.description}</p><p><strong>Meal Benefit:</strong> ${benefit}.</p><p><strong>Duration:</strong> Until the next Long Rest.</p><p><em>Official Crafting Core Curated Culinary Product. Persistent movement effects are managed by DnD 5e Item Creator.</em></p><section class="item-creator-generated" data-item-creator-generated="consumable-runtime"><h3>Consumable Use</h3><ul><li><strong>Activation:</strong> Action.</li><li><strong>Effect Duration:</strong> Until next Long Rest.</li></ul></section>`;
+  }
+
+  static #baseProductData(entry, state, existing, materialDocs, folderId) {
+    const price = priceFromCopper(this.#ingredientCost(entry, materialDocs) * entry.priceMultiplier);
+    return {
       name: entry.name,
       type: "consumable",
-      img: entry.icons[0],
+      img: this.#selectedIcon(entry, state, existing),
       folder: folderId,
       system: {
-        description: {
-          value: this.#productDescription(entry),
-          chat: ""
-        },
+        description: { value: this.#productDescription(entry), chat: "" },
         quantity: 1,
         weight: { value: 0, units: "lb" },
-        price: deepClone(entry.price),
+        price,
         rarity: entry.rarity,
         identified: true,
         unidentified: { description: "" },
@@ -391,9 +480,7 @@ export class CuratedContentService {
         type: { value: "food", subtype: "" },
         identifier: `cc-product-${entry.id}`,
         uses: { max: "1", spent: 0, recovery: [], autoDestroy: true },
-        attunement: "",
-        attuned: false,
-        equipped: false,
+        source: { revision: 1, rules: "2024" },
         activities: {}
       },
       effects: [],
@@ -410,77 +497,25 @@ export class CuratedContentService {
           [FLAGS.PRODUCT_CULTURE]: entry.culture,
           [FLAGS.PRODUCT_RARITY]: entry.rarity,
           [FLAGS.PRODUCT_MEAL_TYPE]: entry.mealType,
-          [FLAGS.PRODUCT_ICON_CANDIDATES]: entry.icons,
+          [FLAGS.PRODUCT_ICON_CANDIDATES]: clone(entry.icons),
           [FLAGS.PRODUCT_MANAGED]: true
         }
       },
       ownership: { default: 0 }
     };
-
-    itemData.system.activities[activityId] = this.#consumeActivityData(itemData, entry, activityId);
-    if (entry.movementBonus) itemData.effects.push(this.#movementBlueprint(entry, effectId));
-
-    const movementEnabled = Boolean(entry.movementBonus);
-    const runtimeKey = movementEnabled ? "crafting-core:culinary:movement-benefit" : `crafting-core:culinary:${entry.id}`;
-    const consumableConfig = {
-      activation: "action",
-      reactionTrigger: "",
-      durationMode: "longRest",
-      durationValue: 1,
-      stacking: "replace",
-      removeExhaustion: false,
-      removeExhaustionAmount: "1"
-    };
-    itemData.flags[ITEM_CREATOR_ID] = {
-      created: true,
-      schemaVersion: ITEM_CREATOR_SCHEMA_VERSION,
-      moduleVersion: ITEM_CREATOR_CONTRACT_VERSION,
-      itemType: "consumable",
-      templateUuid: null,
-      baseConsumableUuid: null,
-      editedFromUuid: null,
-      importedItem: false,
-      runtime: {
-        consumable: {
-          key: runtimeKey,
-          config: consumableConfig
-        }
-      },
-      draft: {
-        customized: {},
-        overrides: {},
-        consumableConfig,
-        grantedEffects: movementEnabled ? { movementBonus: true } : {},
-        grantedEffectValues: movementEnabled ? {
-          movementBonus: {
-            entries: [{ type: "walk", bonus: entry.movementBonus, units: "ft" }],
-            availability: "consumableUse",
-            unlockOnLevel: false,
-            unlockLevel: 1,
-            progressionGroupId: "effect:movementBonus"
-          }
-        } : {},
-        customImportedEffects: [],
-        customImportedActivities: [],
-        importedBaseSummary: [],
-        descriptionCustomized: true
-      }
-    };
-    return itemData;
   }
 
-  static #consumeActivityData(itemData, entry, activityId) {
-    const ItemClass = Item.implementation ?? CONFIG.Item.documentClass;
-    const ActivityClass = entry.tempHp
+  static #managedActivity(entry, itemData) {
+    const ActivityClass = entry.tempHp > 0
       ? CONFIG.DND5E.activityTypes?.heal?.documentClass
       : CONFIG.DND5E.activityTypes?.utility?.documentClass;
-    if (!ItemClass || !ActivityClass) throw new Error("D&D5e activity support is unavailable for Curated Culinary Products.");
-    const provisionalSource = cleanDocumentSource(itemData);
-    const provisionalItem = new ItemClass(provisionalSource, { temporary: true });
-    const activityDocument = new ActivityClass({}, { parent: provisionalItem });
-    const activity = cleanDocumentSource(activityDocument.toObject?.() ?? activityDocument);
-    activity._id = activityId;
-    activity.type = entry.tempHp ? "heal" : "utility";
+    if (!ActivityClass) throw new Error(`D&D5e ${entry.tempHp > 0 ? "Heal" : "Utility"} Activity support is unavailable.`);
+    const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+    const provisional = new ItemClass(clone(itemData), { temporary: true });
+    const document = new ActivityClass({}, { parent: provisional });
+    const activity = cleanDocumentSource(document.toObject?.(false) ?? document);
+    activity._id = stableId(`culinary-activity:${entry.id}`);
+    activity.type = entry.tempHp > 0 ? "heal" : "utility";
     activity.name = "Consume";
     activity.activation ??= {};
     activity.activation.type = "action";
@@ -501,37 +536,36 @@ export class CuratedContentService {
     activity.range ??= {};
     activity.range.override = false;
     activity.range.units = "self";
-    if (entry.tempHp) {
-      // Keep the D&D5e 5.3.3 Heal Activity's native source shape and only
-      // change the fields that define this meal's deterministic Temp HP heal.
+    activity.flags ??= {};
+    activity.flags[ITEM_CREATOR_ID] = { ...(activity.flags[ITEM_CREATOR_ID] ?? {}), consumableUse: true };
+    if (entry.tempHp > 0) {
       activity.healing ??= {};
       activity.healing.number = 0;
       activity.healing.denomination = 0;
       activity.healing.bonus = String(entry.tempHp);
-      activity.healing.types = ["temp"];
-    } else {
-      activity.roll ??= { formula: "", name: "", prompt: false, visible: false };
+      activity.healing.types = ["temphp"];
+      activity.healing.custom = { enabled: false };
+      activity.healing.scaling = { number: 1 };
     }
-    activity.flags ??= {};
-    activity.flags[ITEM_CREATOR_ID] = {
-      ...(activity.flags[ITEM_CREATOR_ID] ?? {}),
-      consumableUse: true
-    };
     return activity;
   }
 
-  static #movementBlueprint(entry, effectId) {
-    const addMode = CONST.ACTIVE_EFFECT_MODES?.ADD ?? 2;
+  static #movementBlueprint(entry) {
+    if (entry.movementBonus <= 0) return null;
     return {
-      _id: effectId,
+      _id: stableId(`culinary-effect:movement:${entry.id}`),
       type: "base",
       name: "Item Creator — Movement Bonus",
-      img: "systems/dnd5e/icons/svg/documents/active-effect.svg",
+      img: ACTIVE_EFFECT_ICON,
       description: `Culinary movement benefit from ${entry.name}.`,
       disabled: false,
       transfer: false,
       statuses: [],
-      changes: [{ key: "system.attributes.movement.walk", mode: addMode, value: String(entry.movementBonus) }],
+      changes: [{
+        key: "system.attributes.movement.walk",
+        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        value: String(entry.movementBonus)
+      }],
       flags: {
         [ITEM_CREATOR_ID]: {
           blueprint: true,
@@ -545,60 +579,336 @@ export class CuratedContentService {
           consumableBlueprint: true
         }
       }
+      // Intentionally no duration object. Item Creator v0.7.1 materializes the
+      // applied Actor effect and owns its Long Rest duration/cleanup.
     };
   }
 
-  static #productDescription(entry) {
-    const benefits = [];
-    if (entry.tempHp) benefits.push(`<strong>${entry.tempHp} Temporary Hit Points</strong>`);
-    if (entry.movementBonus) benefits.push(`<strong>+${entry.movementBonus} ft Walking Speed</strong>`);
-    return [
-      `<p>${foundry.utils.escapeHTML(entry.description)}</p>`,
-      `<p><strong>Meal Benefit:</strong> ${benefits.join(" and ")}.</p>`,
-      `<p><strong>Duration:</strong> Until the next Long Rest.</p>`,
-      `<p><em>Official Crafting Core Curated Culinary Product. Automated persistent meal effects are managed by DnD 5e Item Creator.</em></p>`
-    ].join("");
+  static #itemCreatorFlags(entry) {
+    const config = {
+      activation: "action",
+      reactionTrigger: "",
+      durationMode: "longRest",
+      durationValue: 1,
+      stacking: "replace",
+      removeExhaustion: false,
+      removeExhaustionAmount: "1"
+    };
+    const movement = entry.movementBonus > 0;
+    return {
+      created: true,
+      schemaVersion: ITEM_CREATOR_SCHEMA_VERSION,
+      moduleVersion: ITEM_CREATOR_MIN_VERSION,
+      itemType: "consumable",
+      templateUuid: null,
+      baseConsumableUuid: null,
+      editedFromUuid: null,
+      importedItem: false,
+      runtime: {
+        consumable: {
+          key: movement ? "crafting-core:culinary:movement-benefit" : `crafting-core:culinary:${entry.id}`,
+          config: clone(config)
+        }
+      },
+      draft: {
+        customized: {},
+        overrides: {},
+        consumableConfig: clone(config),
+        grantedEffects: movement ? { movementBonus: true } : {},
+        grantedEffectValues: movement ? {
+          movementBonus: {
+            entries: [{ type: "walk", bonus: entry.movementBonus, units: "ft" }],
+            availability: "consumableUse",
+            unlockOnLevel: false,
+            unlockLevel: 1,
+            progressionGroupId: "effect:movementBonus"
+          }
+        } : {},
+        customImportedEffects: [],
+        importedBaseSummary: [],
+        descriptionCustomized: true
+      }
+    };
   }
 
-  static installHooks() {
-    Hooks.on("deleteItem", item => {
-      if (!game.user?.isGM || !item?.getFlag?.(MODULE_ID, FLAGS.CURATED)) return;
-      const state = this.state();
-      let changed = false;
-      if (item.pack === this.PRODUCTS_PACK_ID && item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) === "culinary-product") {
-        const id = String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? "");
-        if (id && !state.suppressedProducts.includes(id)) {
-          state.suppressedProducts.push(id);
-          changed = true;
-        }
+  static #buildProductData(entry, state, existing, materialDocs, folderId) {
+    const data = this.#baseProductData(entry, state, existing, materialDocs, folderId);
+    const activity = this.#managedActivity(entry, data);
+    data.system.activities = { [activity._id]: activity };
+    const movement = this.#movementBlueprint(entry);
+    data.effects = movement ? [movement] : [];
+    data.flags[ITEM_CREATOR_ID] = this.#itemCreatorFlags(entry);
+    this.#validateItemSource(data, `Curated Product ${entry.name}`);
+    return data;
+  }
+
+  static #validateItemSource(data, label) {
+    try {
+      const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+      const itemData = clone(data);
+      const effects = clone(itemData.effects ?? []);
+      itemData.effects = [];
+      const provisional = new ItemClass(itemData, { temporary: true });
+      const ActiveEffectClass = CONFIG.ActiveEffect?.documentClass ?? globalThis.ActiveEffect?.implementation ?? globalThis.ActiveEffect;
+      if (ActiveEffectClass) {
+        for (const effect of effects) new ActiveEffectClass(effect, { parent: provisional });
       }
-      if (item.pack === KnowledgeItemService.PACK_ID && item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) === "culinary-recipe") {
-        const id = String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "");
-        if (id && !state.suppressedRecipes.includes(id)) {
-          state.suppressedRecipes.push(id);
-          changed = true;
+      return true;
+    } catch (error) {
+      console.error(`${MODULE_ID} | ${label} failed D&D5e schema validation before persistence.`, error, data);
+      throw new Error(`${label} failed D&D5e schema validation. See the console for details.`);
+    }
+  }
+
+  static async #replaceActivities(item, activities) {
+    const currentIds = valuesOf(item.system?.activities).map(activity => activity?.id ?? activity?._id).filter(Boolean);
+    if (currentIds.length) {
+      const deletions = {};
+      for (const id of currentIds) deletions[`system.activities.-=${id}`] = null;
+      await item.update(deletions, { render: false });
+    }
+    if (activities && Object.keys(activities).length) await item.update({ "system.activities": clone(activities) }, { render: false });
+  }
+
+  static async #replaceEffects(item, effects) {
+    const ids = [...(item.effects ?? [])].map(effect => effect.id).filter(Boolean);
+    if (ids.length) await item.deleteEmbeddedDocuments("ActiveEffect", ids, { render: false });
+    if (effects?.length) await item.createEmbeddedDocuments("ActiveEffect", clone(effects), { keepId: true, render: false });
+  }
+
+  static async #createProductDocument(pack, source) {
+    const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+    const core = clone(source);
+    const effects = clone(core.effects ?? []);
+    delete core.effects;
+    const [created] = await ItemClass.createDocuments([core], { pack: pack.collection });
+    if (!created) throw new Error(`D&D5e did not create Curated Product ${source.name}.`);
+    if (effects.length) await created.createEmbeddedDocuments("ActiveEffect", effects, { keepId: true, render: false });
+    return created;
+  }
+
+  static async #updateProductDocument(item, source) {
+    const data = clone(source);
+    const desiredEffects = clone(data.effects ?? []);
+    const desiredActivities = clone(data.system?.activities ?? {});
+    delete data.effects;
+    if (data.system) delete data.system.activities;
+    delete data._id;
+    delete data.ownership;
+
+    // Mirror Item Creator v0.7.1's safe update strategy: effects are replaced as
+    // embedded documents instead of riding through the parent Item update. This
+    // also repairs experimental v0.2.x Products whose serialized effect duration
+    // contained a D&D5e-invalid null value.
+    const existingEffectIds = [...(item.effects ?? [])].map(effect => effect.id).filter(Boolean);
+    if (existingEffectIds.length) await item.deleteEmbeddedDocuments("ActiveEffect", existingEffectIds, { render: false });
+    await item.update(data, { render: false });
+    await this.#replaceActivities(item, desiredActivities);
+    if (desiredEffects.length) await item.createEmbeddedDocuments("ActiveEffect", desiredEffects, { keepId: true, render: false });
+    return item;
+  }
+
+  static async #syncProducts(state, materialDocs) {
+    const pack = await this.ensureProductsPack();
+    const wasLocked = Boolean(pack.locked);
+    if (wasLocked) await pack.configure({ locked: false });
+    try {
+      const folders = await CompendiumService.ensurePackFolders(pack, this.#productFolders());
+      let docs = await pack.getDocuments();
+      const byId = new Map(docs.map(item => [String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? ""), item]).filter(([id]) => id));
+      const suppressed = new Set(state.suppressedProducts);
+      const baselines = {};
+      let created = 0;
+      let updated = 0;
+      let repairedLegacyEffects = 0;
+
+      for (const entry of CURATED_CULINARY_RECIPES) {
+        if (suppressed.has(entry.productId)) continue;
+        const existing = byId.get(entry.productId) ?? null;
+        const folder = folders.get(`culinary:${entry.culture}`) ?? folders.get("culinary") ?? null;
+        const official = this.#buildProductData(entry, state, existing, materialDocs, folder?.id ?? null);
+        baselines[entry.productId] = editableProductSnapshot(official);
+        if (!existing) {
+          const item = await this.#createProductDocument(pack, official);
+          byId.set(entry.productId, item);
+          created += 1;
+          continue;
         }
+
+        const merged = mergeProductPresentation(existing.toObject(false), official, state.productBaselines?.[entry.productId], entry);
+        merged.folder = folder?.id ?? null;
+        this.#validateItemSource(merged, `Curated Product ${entry.name}`);
+        const hadLegacyNullDuration = [...(existing.effects ?? [])].some(effect => effect.duration?.value === null);
+        await this.#updateProductDocument(existing, merged);
+        if (hadLegacyNullDuration) repairedLegacyEffects += 1;
+        updated += 1;
       }
-      if (changed) void this.#saveState(state).catch(error => console.warn(`${MODULE_ID} | Could not remember Curated content removal.`, error));
+
+      docs = await pack.getDocuments();
+      await pack.getIndex({ fields: ["name", "img", "type", "folder", "system.price", `flags.${MODULE_ID}.${FLAGS.PRODUCT_ID}`] });
+      const documentsByProductId = new Map(docs.map(item => [String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? ""), item]).filter(([id]) => id));
+      return {
+        pack,
+        created,
+        updated,
+        repairedLegacyEffects,
+        foldersRepaired: 0,
+        total: documentsByProductId.size,
+        documentsByProductId,
+        baselines
+      };
+    } finally {
+      if (wasLocked) await pack.configure({ locked: true });
+    }
+  }
+
+  static #recipeSnapshot(entry, materialDocs, product) {
+    const ingredients = entry.ingredients.map(row => {
+      const item = materialDocs.get(row.materialId);
+      if (!item) throw new Error(`Curated Recipe ${entry.name} is missing Material ${row.materialId}.`);
+      return {
+        uuid: item.uuid,
+        sourceUuid: item.uuid,
+        name: item.name,
+        img: item.img,
+        type: item.type,
+        identifier: String(item.system?.identifier ?? ""),
+        quantity: row.quantity
+      };
+    });
+    return RecipeService.snapshot({
+      id: entry.recipeId,
+      name: entry.name,
+      img: product.img,
+      description: entry.description,
+      craftingMode: "timed",
+      craftingTime: entry.craftingTime,
+      craftingResolution: {
+        proficiencies: [],
+        proficiencyMatch: "any",
+        attemptPolicy: "anyone",
+        proficientPolicy: "rollNormally",
+        check: { required: false, type: "skill", id: "", dc: 10 },
+        failure: { mode: "failProject", regressBy: 1, loseMaterials: false, lossPercent: 0 }
+      },
+      learning: { access: "anyone" },
+      ingredients,
+      result: {
+        uuid: product.uuid,
+        sourceUuid: product.uuid,
+        name: product.name,
+        img: product.img,
+        type: product.type,
+        identifier: String(product.system?.identifier ?? ""),
+        quantity: 1,
+        snapshot: product.toObject(false)
+      },
+      knowledge: {
+        label: "Recipe",
+        name: `Recipe — ${entry.name}`,
+        img: KNOWLEDGE_ICONS.Recipe
+      },
+      publication: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     });
   }
 
-  static supplierCatalog() {
-    return CURATED_CULINARY_RECIPES.map(entry => ({
-      productId: entry.productId,
-      recipeId: entry.recipeId,
-      name: entry.name,
-      category: entry.category,
-      subcategory: entry.subcategory,
-      culture: entry.culture,
-      rarity: entry.rarity,
-      mealType: entry.mealType,
-      tempHp: entry.tempHp,
-      movementBonus: entry.movementBonus,
-      durationMode: entry.durationMode,
-      price: deepClone(entry.price),
-      ingredients: deepClone(entry.ingredients),
-      iconCandidates: deepClone(entry.icons)
-    }));
+  static async #updateKnowledgeDocument(item, source) {
+    const data = clone(source);
+    const desiredActivities = clone(data.system?.activities ?? {});
+    if (data.system) delete data.system.activities;
+    delete data._id;
+    delete data.ownership;
+    await item.update(data, { render: false });
+    const currentIds = valuesOf(item.system?.activities).map(activity => activity?.id ?? activity?._id).filter(Boolean);
+    if (currentIds.length) {
+      const deletions = {};
+      for (const id of currentIds) deletions[`system.activities.-=${id}`] = null;
+      await item.update(deletions, { render: false });
+    }
+    if (Object.keys(desiredActivities).length) await item.update({ "system.activities": desiredActivities }, { render: false });
+    return item;
+  }
+
+  static async #syncRecipes(state, materialDocs, productDocs) {
+    const pack = await KnowledgeItemService.ensurePack();
+    const wasLocked = Boolean(pack.locked);
+    if (wasLocked) await pack.configure({ locked: false });
+    try {
+      const folders = await CompendiumService.ensurePackFolders(pack, this.#knowledgeFolders());
+      let docs = await pack.getDocuments();
+      const byRecipeId = new Map(docs.map(item => [String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? ""), item]).filter(([id]) => id));
+      const suppressed = new Set(state.suppressedRecipes);
+      const baselines = {};
+      let created = 0;
+      let updated = 0;
+
+      for (const entry of CURATED_CULINARY_RECIPES) {
+        if (suppressed.has(entry.recipeId)) continue;
+        const product = productDocs.get(entry.productId);
+        if (!product) continue;
+        const existing = byRecipeId.get(entry.recipeId) ?? null;
+        const officialRecipe = this.#recipeSnapshot(entry, materialDocs, product);
+        const expectedIngredientNames = entry.ingredients.map(row => materialDocs.get(row.materialId)?.name ?? "");
+        const currentRecipe = existing?.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT) ?? null;
+        const recipe = existing
+          ? mergeRecipeDefinition(currentRecipe, officialRecipe, state.recipeBaselines?.[entry.recipeId], entry, expectedIngredientNames)
+          : officialRecipe;
+        if (existing) {
+          recipe.publication = {
+            uuid: existing.uuid,
+            pack: pack.collection,
+            sourceType: "Recipe",
+            publishedAt: Number(existing.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED_AT)) || Date.now(),
+            updatedAt: Date.now()
+          };
+        }
+        baselines[entry.recipeId] = normalizedRecipeBaseline(officialRecipe);
+        const folder = folders.get(`Recipe:curated:culinary:${entry.culture}`) ?? folders.get("Recipe") ?? null;
+        const data = KnowledgeItemService.knowledgeItemData(recipe, { folderId: folder?.id ?? null, published: true });
+        data.img = KNOWLEDGE_ICONS.Recipe;
+        data.flags[MODULE_ID] = {
+          ...(data.flags[MODULE_ID] ?? {}),
+          [FLAGS.CURATED]: true,
+          [FLAGS.CURATED_ID]: entry.id,
+          [FLAGS.CURATED_KIND]: "culinary-recipe",
+          [FLAGS.CURATED_VERSION]: CURATED_CULINARY_VERSION,
+          [FLAGS.PRODUCT_ID]: entry.productId,
+          [FLAGS.PRODUCT_CATEGORY]: entry.category,
+          [FLAGS.PRODUCT_SUBCATEGORY]: entry.subcategory,
+          [FLAGS.PRODUCT_CULTURE]: entry.culture,
+          [FLAGS.PRODUCT_RARITY]: entry.rarity,
+          [FLAGS.PRODUCT_MEAL_TYPE]: entry.mealType
+        };
+        preserveExternalFlags(existing?.toObject(false), data);
+        this.#validateItemSource(data, `Curated Learn Source ${entry.name}`);
+        const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+        if (!existing) {
+          const [createdItem] = await ItemClass.createDocuments([data], { pack: pack.collection });
+          if (!createdItem) throw new Error(`D&D5e did not create Curated Learn Source ${entry.name}.`);
+          byRecipeId.set(entry.recipeId, createdItem);
+          created += 1;
+        } else {
+          await this.#updateKnowledgeDocument(existing, data);
+          updated += 1;
+        }
+      }
+
+      docs = await pack.getDocuments();
+      await pack.getIndex({ fields: ["name", "img", "type", "folder", `flags.${MODULE_ID}.${FLAGS.KNOWLEDGE_RECIPE_ID}`] });
+      const documentsByRecipeId = new Map(docs.map(item => [String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? ""), item]).filter(([id]) => id));
+      return {
+        pack,
+        created,
+        updated,
+        foldersRepaired: 0,
+        total: documentsByRecipeId.size,
+        documentsByRecipeId,
+        baselines
+      };
+    } finally {
+      if (wasLocked) await pack.configure({ locked: true });
+    }
   }
 }

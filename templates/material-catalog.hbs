@@ -1,10 +1,11 @@
 <section class="cc-material-shell">
   <header class="cc-material-header">
     <div>
-      <span class="cc-kicker">GM Tool · Private Library</span>
-      <h1>Material Catalog</h1>
-      <p><strong>Built-in Curated Catalog:</strong> these materials are authored by Crafting Core and are not imported from your PHB, DMG, Monster Manual, Tasha, or SRD Compendiums.</p>
+      <span class="cc-kicker">GM Tool · Private Libraries</span>
+      <h1>Crafting Core Catalog</h1>
+      <p>Manage the 229 canonical Materials and the official Curated Products that can also be used as ingredients in any Recipe.</p>
     </div>
+    {{#if isMaterials}}
     <div class="cc-material-status {{#if summary.exists}}ready{{/if}}">
       <i class="fa-solid {{#if summary.exists}}fa-lock{{else}}fa-circle-exclamation{{/if}}"></i>
       <div>
@@ -12,8 +13,27 @@
         <small>{{summary.count}} Items · {{summary.managed}} curated · {{summary.custom}} custom</small>
       </div>
     </div>
+    {{else}}
+    <div class="cc-material-status {{#if culinary.packExists}}ready{{/if}}">
+      <i class="fa-solid {{#if culinary.packExists}}fa-utensils{{else}}fa-circle-exclamation{{/if}}"></i>
+      <div>
+        <strong>{{#if culinary.packExists}}Curated Products Compendium ready{{else}}Curated Products not installed{{/if}}</strong>
+        <small>{{culinary.count}} / 15 Culinary Products</small>
+      </div>
+    </div>
+    {{/if}}
   </header>
 
+  <nav class="cc-content-catalog-tabs" aria-label="Crafting Core content catalog">
+    <button type="button" class="{{#if isMaterials}}active{{/if}}" data-action="catalog-tab" data-catalog-view="materials">
+      <i class="fa-solid fa-boxes-stacked"></i><span>Materials</span><small>{{catalogCount}}</small>
+    </button>
+    <button type="button" class="{{#if isProducts}}active{{/if}}" data-action="catalog-tab" data-catalog-view="products">
+      <i class="fa-solid fa-utensils"></i><span>Curated Products</span><small>15</small>
+    </button>
+  </nav>
+
+  {{#if isMaterials}}
   <div class="cc-material-layout">
     <aside class="cc-material-tools">
       <section class="cc-form-card">
@@ -94,4 +114,72 @@
       {{/each}}
     </main>
   </div>
+  {{else}}
+  <div class="cc-material-layout cc-product-layout">
+    <aside class="cc-material-tools">
+      <section class="cc-form-card">
+        <span class="cc-kicker">Official Product Library</span>
+        <h3>Crafting Core — Products</h3>
+        <p class="cc-note">The 15 official Culinary Products are normal D&D5e consumables and can be sold, looted, supplied to vendors, or used as ingredients in another Recipe.</p>
+        <p class="cc-note"><strong>Canonical price:</strong> 2× the current value of the ingredients required by the official Recipe. Crafting therefore remains cheaper than buying the prepared meal.</p>
+        <button type="button" class="cc-primary-action cc-wide" data-action="restore-curated-culinary" {{#unless culinary.compatible}}disabled{{/unless}}><i class="fa-solid fa-utensils"></i> Restore Curated Culinary Defaults</button>
+        <button type="button" class="cc-secondary-action cc-wide" data-action="open-products" {{#unless culinary.packExists}}disabled{{/unless}}><i class="fa-solid fa-book-open"></i> Open Products Compendium</button>
+      </section>
+
+      <section class="cc-form-card">
+        <span class="cc-kicker">Runtime Integration</span>
+        <h3>DnD 5e Item Creator</h3>
+        {{#if culinary.compatible}}
+        <p class="cc-note"><i class="fa-solid fa-circle-check"></i> Active and compatible ({{culinary.itemCreatorVersion}}). Movement meal buffs use Item Creator's Long Rest runtime.</p>
+        {{else}}
+        <p class="cc-note"><i class="fa-solid fa-triangle-exclamation"></i> Curated Culinary content requires active DnD 5e Item Creator {{culinary.requiredVersion}} or newer. Core Crafting Core features remain independent.</p>
+        {{/if}}
+      </section>
+
+      <section class="cc-form-card">
+        <span class="cc-kicker">Published Knowledge</span>
+        <h3>Recipe Learn Sources</h3>
+        <p class="cc-note">Restore also repairs the 15 official <strong>Recipe</strong> sources under Learn Sources → Recipe → Crafting Core Curated → Culinary and its culture folders.</p>
+        <p class="cc-note">The Recipe source always uses the canonical Recipe document icon; the food artwork chosen here belongs to the final Product.</p>
+      </section>
+    </aside>
+
+    <main class="cc-material-catalog cc-product-catalog">
+      <div class="cc-catalog-summary">
+        <div><span class="cc-kicker">Official Curated Content</span><h2>{{culinary.count}} / 15 Culinary Products</h2></div>
+        <p>Each dish has three Foundry Core icon candidates. Choosing one updates the Product and re-synchronizes the official Recipe output while preserving unrelated GM customizations.</p>
+      </div>
+
+      {{#unless culinary.compatible}}
+      <div class="cc-curated-unavailable"><i class="fa-solid fa-puzzle-piece"></i><strong>Item Creator integration required</strong><p>Activate DnD 5e Item Creator {{culinary.requiredVersion}} or newer to install or repair this official library.</p></div>
+      {{else}}
+      {{#each culinary.groups}}
+      <details class="cc-material-group" open>
+        <summary><span>{{label}}</span><small>{{count}} products</small></summary>
+        <div class="cc-product-table">
+          <div class="cc-product-table-head"><span>Product</span><span>Benefit</span><span>Ingredient Cost</span><span>Buy Price</span><span>Core Icon — choose 1 of 3</span></div>
+          {{#each products}}
+          <div class="cc-product-table-row" data-product-id="{{productId}}" data-current-icon="{{selectedIcon}}">
+            <span class="cc-material-name"><img src="{{selectedIcon}}" alt=""><span><strong>{{name}}</strong><small>{{#if exists}}Published Product{{else}}Missing — restore defaults{{/if}}</small></span></span>
+            <span class="cc-product-benefit">{{benefitLabel}}</span>
+            <span>{{ingredientCostLabel}}</span>
+            <span><strong>{{priceLabel}}</strong></span>
+            <span class="cc-icon-curation" role="radiogroup" aria-label="Core icon choices for {{name}}">
+              {{#each iconCandidates}}
+              <label class="cc-icon-choice {{#if selected}}selected{{/if}}" title="{{path}}">
+                <input type="radio" name="product-icon-{{../id}}" value="{{path}}" data-action="choose-product-icon" data-product-id="{{../productId}}" {{#if selected}}checked{{/if}} {{#unless ../exists}}disabled{{/unless}}>
+                <img src="{{path}}" alt="Icon option {{index}} for {{../name}}">
+                <small>{{index}}</small>
+              </label>
+              {{/each}}
+            </span>
+          </div>
+          {{/each}}
+        </div>
+      </details>
+      {{/each}}
+      {{/unless}}
+    </main>
+  </div>
+  {{/if}}
 </section>

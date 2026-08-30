@@ -373,6 +373,23 @@ export class KnowledgeItemService {
     return { removed: true, recipeId: source.recipeId, sourceName: source.item.name, reconciliation };
   }
 
+  static #activityIdForRecipe(recipeId) {
+    const raw = String(recipeId || foundry.utils.randomID(20));
+    const direct = raw.slice(0, 16);
+    if (/^[A-Za-z0-9]{16}$/.test(direct)) return direct;
+    let hash = 0xcbf29ce484222325n;
+    const prime = 0x100000001b3n;
+    for (let i = 0; i < raw.length; i += 1) {
+      hash ^= BigInt(raw.charCodeAt(i));
+      hash = BigInt.asUintN(64, hash * prime);
+    }
+    return hash.toString(16).padStart(16, "0").slice(0, 16);
+  }
+
+  static knowledgeItemData(recipe, options={}) {
+    return this.#knowledgeItemData(recipe, options);
+  }
+
   static #sourceType(recipe) {
     const label = String(recipe?.knowledge?.label || "Recipe");
     return Object.hasOwn(KNOWLEDGE_ICONS, label) ? label : "Recipe";
@@ -382,12 +399,8 @@ export class KnowledgeItemService {
     return String(recipe?.result?.snapshot?.system?.rarity ?? "");
   }
 
-  static knowledgeItemData(recipe, { folderId=null, published=false }={}) {
-    return this.#knowledgeItemData(recipe, { folderId, published });
-  }
-
   static #knowledgeItemData(recipe, { folderId=null, published=false }={}) {
-    const activityId = String(recipe?.id || foundry.utils.randomID(20)).slice(0, 16).padEnd(16, "0");
+    const activityId = this.#activityIdForRecipe(recipe?.id);
     const label = this.#sourceType(recipe);
     const itemName = recipe.knowledge?.name || `${label} — ${recipe.name}`;
     const img = (!recipe.knowledge?.img || recipe.knowledge.img === "icons/svg/book.svg")

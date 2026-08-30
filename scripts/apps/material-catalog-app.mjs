@@ -1,5 +1,6 @@
 import { MODULE_ID } from "../constants.mjs";
 import { MaterialCatalogService } from "../services/material-catalog-service.mjs";
+import { CuratedContentService } from "../services/curated-content-service.mjs";
 import { MaterialEditorApp } from "./material-editor-app.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -11,7 +12,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     classes: ["crafting-core", "crafting-core-materials-app", "standard-form"],
     tag: "form",
     position: { width: 1280, height: 820 },
-    window: { title: "Crafting Core — Materials", resizable: true }
+    window: { title: "Crafting Core — Materials & Products", resizable: true }
   };
 
   static PARTS = {
@@ -19,6 +20,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
   };
 
   filters = { search: "", family: "all", nature: "all", rarity: "all" };
+  catalogView = "materials";
 
   async _prepareContext() {
     const summary = await MaterialCatalogService.packSummary();
@@ -29,6 +31,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       return row;
     });
     const natures = [...new Set(entries.map(entry => entry.nature).filter(Boolean))].sort((a,b) => a.localeCompare(b, game.i18n.lang));
+    const culinary = await CuratedContentService.culinaryCatalogContext();
     return {
       summary,
       groups: MaterialCatalogService.groupedEntries(filtered),
@@ -36,6 +39,10 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       catalogCount: entries.length,
       shownCount: filtered.filter(entry => !this.filters.search || entry.searchText.includes(String(this.filters.search).trim().toLowerCase())).length,
       filters: this.filters,
+      catalogView: this.catalogView,
+      isMaterials: this.catalogView === "materials",
+      isProducts: this.catalogView === "products",
+      culinary,
       natureOptions: natures.map(value => ({ value, label: value.replace(/[-_]+/g," ").replace(/\b\w/g,c=>c.toUpperCase()), selected: this.filters.nature === value })),
       familyOptions: [
         { value: "all", label: "All Families", selected: this.filters.family === "all" },
@@ -50,6 +57,17 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
 
   _onRender() {
     const root = this.element;
+    root.querySelectorAll('[data-action="catalog-tab"]').forEach(button => button.addEventListener("click", event => {
+      event.preventDefault();
+      this.catalogView = String(button.dataset.catalogView ?? "materials");
+      this.render({ force: true });
+    }));
+    root.querySelector('[data-action="restore-curated-culinary"]')?.addEventListener("click", event => this.#restoreCuratedCulinary(event));
+    root.querySelector('[data-action="open-products"]')?.addEventListener("click", event => {
+      event.preventDefault();
+      if (!CuratedContentService.openProductsPack()) ui.notifications.warn("Restore the Curated Culinary library first.");
+    });
+    root.querySelectorAll('[data-action="choose-product-icon"]').forEach(input => input.addEventListener("change", event => this.#chooseProductIcon(event)));
     root.querySelector('[data-action="sync-materials"]')?.addEventListener("click", event => this.#sync(event));
     root.querySelector('[data-action="reset-curated-defaults"]')?.addEventListener("click", event => this.#resetCuratedDefaults(event));
     root.querySelector('[data-action="open-materials"]')?.addEventListener("click", event => {
@@ -184,6 +202,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
 
   async #resetCuratedDefaults(event) {
     event.preventDefault();
+    const button = event.currentTarget;
     const confirmed = await foundry.applications.api.DialogV2.confirm({
       window: { title: "Reset Curated Material Catalog" },
       content: "<p>Reset every <strong>built-in curated material</strong> to the Crafting Core defaults?</p><p>This restores curated names, icons, rarity/value/drop defaults, quantities, tags and biome metadata. Registered custom materials are preserved.</p>",
@@ -191,8 +210,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       no: { label: "Cancel" }
     });
     if (!confirmed) return;
-    const button = event.currentTarget;
-    button.disabled = true;
+    if (button) button.disabled = true;
     try {
       const result = await MaterialCatalogService.resetCuratedDefaults();
       ui.notifications.info(`Curated catalog reset: ${result.created} created, ${result.updated} restored.`);
@@ -200,7 +218,63 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     } catch (error) {
       console.error(`${MODULE_ID} | Curated material reset failed.`, error);
       ui.notifications.error(error.message ?? "Crafting Core could not reset the curated catalog.");
-      button.disabled = false;
+      if (button) button.disabled = false;
+    }
+  }
+
+  async #restoreCuratedCulinary(event) {
+    event.preventDefault();
+    const button = event.currentTarget;
+    const confirmed = await foundry.applications.api.DialogV2.confirm({
+      window: { title: "Restore Curated Culinary Library" },
+      content: "<p>Repair and restore the <strong>15 official Culinary Products and Recipe Learn Sources</strong>?</p><p>Missing official content is recreated. Fields that still match older Crafting Core defaults are upgraded. GM-customized fields are preserved.</p>",
+      yes: { label: "Restore Culinary Defaults", icon: "fa-solid fa-utensils" },
+      no: { label: "Cancel" }
+    });
+    if (!confirmed) return;
+    if (button) button.disabled = true;
+    try {
+      const result = await CuratedContentService.restoreAll();
+      const products = result.products ?? {};
+      const recipes = result.recipes ?? {};
+      ui.notifications.info(`Culinary library restored: ${products.created ?? 0} Products created, ${products.updated ?? 0} updated; ${recipes.created ?? 0} Recipes created, ${recipes.updated ?? 0} updated.`);
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Curated Culinary restore failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not restore the Curated Culinary library.");
+      if (button) button.disabled = false;
+    }
+  }
+
+  async #chooseProductIcon(event) {
+    const input = event.currentTarget;
+    if (!input?.checked) return;
+    const row = input.closest(".cc-product-table-row");
+    const productId = String(input.dataset.productId ?? "");
+    const path = String(input.value ?? "");
+    const previousPath = String(row?.dataset.currentIcon ?? "");
+    const controls = [...(row?.querySelectorAll('[data-action="choose-product-icon"]') ?? [])];
+    const labels = [...(row?.querySelectorAll(".cc-icon-choice") ?? [])];
+    controls.forEach(control => control.disabled = true);
+    row?.classList.add("saving-icon");
+    try {
+      const saved = await CuratedContentService.saveProductIconChoice(productId, path);
+      const savedPath = String(saved?.img ?? path);
+      const preview = row?.querySelector(".cc-material-name img");
+      if (preview && savedPath) preview.src = savedPath;
+      controls.forEach(control => { control.checked = control.value === savedPath; });
+      labels.forEach(label => label.classList.toggle("selected", label.querySelector("input")?.value === savedPath));
+      if (row) row.dataset.currentIcon = savedPath;
+      row?.classList.add("icon-saved");
+      setTimeout(() => row?.classList.remove("icon-saved"), 550);
+    } catch (error) {
+      console.error(`${MODULE_ID} | Curated Product icon selection failed.`, error);
+      controls.forEach(control => { control.checked = control.value === previousPath; });
+      labels.forEach(label => label.classList.toggle("selected", label.querySelector("input")?.value === previousPath));
+      ui.notifications.error(error.message ?? "Crafting Core could not save that Product icon.");
+    } finally {
+      row?.classList.remove("saving-icon");
+      controls.forEach(control => control.disabled = false);
     }
   }
 

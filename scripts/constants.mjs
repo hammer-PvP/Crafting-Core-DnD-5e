@@ -1,6 +1,6 @@
 export const MODULE_ID = "dnd5e-crafting-core";
 export const MODULE_TITLE = "Crafting Core (DnD 5e)";
-export const MODULE_VERSION = "0.2.0";
+export const MODULE_VERSION = "0.2.3";
 
 export const SETTINGS = Object.freeze({
   RECIPES: "recipes",
@@ -44,7 +44,7 @@ export const FLAGS = Object.freeze({
   CURATED_ID: "curatedId",
   CURATED_KIND: "curatedKind",
   CURATED_VERSION: "curatedVersion",
-  CURATED_BASELINE_FINGERPRINT: "curatedBaselineFingerprint",
+  CURATED_BASELINE: "curatedBaseline",
   PRODUCT: "product",
   PRODUCT_ID: "productId",
   PRODUCT_CATEGORY: "productCategory",

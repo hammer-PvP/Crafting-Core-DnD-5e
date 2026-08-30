@@ -5,7 +5,7 @@
  * materializes them into the private Products and Learn Sources world Compendiums.
  */
 
-export const CURATED_CULINARY_VERSION = 1;
+export const CURATED_CULINARY_VERSION = 3;
 
 const MEAL = Object.freeze({
   HEARTY: "hearty",
@@ -28,9 +28,10 @@ const recipe = ({ id, name, culture, mealType, description, ingredients, icons }
   durationMode: "longRest",
   tempHp: mealType === MEAL.HEARTY || mealType === MEAL.COMPLETE ? 5 : 0,
   movementBonus: mealType === MEAL.ENERGIZING || mealType === MEAL.COMPLETE ? 5 : 0,
-  // Canonical v0.2.0 defaults. Curated content is intentionally modest and easy to duplicate/customize.
-  price: mealType === MEAL.COMPLETE ? { value: 1, denomination: "gp" } : { value: 5, denomination: "sp" },
-  craftingTime: mealType === MEAL.COMPLETE ? 1200 : 600,
+  // v0.2.3: products are priced dynamically at 2x the current ingredient value during sync.
+  // Keeping the multiplier in the catalog makes Supplier/other consumers aware of the pricing rule.
+  priceMultiplier: 2,
+  craftingTime: 10,
   description,
   ingredients: ingredients.map(([materialId, quantity=1]) => ({ materialId, quantity })),
   icons: [...icons].slice(0, 3)
