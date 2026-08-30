@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.2.0 — Curated Culinary Library
+
+v0.2.0 builds directly on the frozen v0.1.0 stable foundation and deliberately leaves the validated crafting, Knowledge, Project, Harvest, and material-generation mechanics unchanged. This release adds Crafting Core's first official Curated Content library and a new Product distribution layer designed to work with DnD 5e Item Creator and future Supplier profiles.
+
+- Added the private world Compendium **Crafting Core - Products**.
+- Added 15 official Common culinary Products: 5 Dwarven Cuisine, 5 Elven Cuisine, and 5 Common Cuisine.
+- Added matching 15 official Curated Recipe Knowledge Sources to **Crafting Core - Learn Sources**. Every culinary Learn Source is a **Recipe** and uses the canonical Recipe document icon.
+- Added stable Curated Product/Recipe metadata: category `culinary`, subcategory `meal`, culture, rarity, meal type, stable Product ID, stable Recipe ID, curated/source identity, and up to three native Foundry icon candidates.
+- Added Item Creator v0.7.1 Consumable contract materialization. Curated Products are recognized by Item Creator through its normal `dnd5e-item-creator` flags/runtime rather than a parallel Crafting Core effect engine.
+- Hearty meals grant **5 Temporary Hit Points** through a native D&D5e Heal Activity.
+- Energizing meals grant **+5 ft Walking Speed** through an Item Creator Consumable Active Effect blueprint until the next Long Rest.
+- Complete meals provide both benefits through the same managed Consume Activity.
+- All Curated movement meals share one Item Creator replacement key so repeated official meal movement bonuses replace rather than stack.
+- Curated Culinary synchronization runs only for the active GM and only while **DnD 5e Item Creator 0.7.1+** is active. The rest of Crafting Core remains independent.
+- Added intentional-deletion suppression state so a GM-deleted Curated Product or Recipe Source is not blindly recreated on every startup. The GM API exposes curated sync/restore operations for recovery.
+- Added a `recommends` relationship for DnD 5e Item Creator in `module.json`; it is not a hard dependency of the entire Crafting Core module.
+- Prepared Supplier-facing catalog metadata and a portable v0.2.0 catalog export containing the existing 229 Materials plus the 15 Products and 15 Recipe Sources.
+- Updated README, complete manual, public Foundry module-page copy, release notes, and test checklist for v0.2.0.
+
+Implementation defaults not defined by the original Curated Culinary content handoff are intentionally modest and should be live-reviewed: Hearty/Energizing Products use a default listed price of **5 sp**, Complete Meals use **1 gp**, and Timed Recipes use **10 minutes** / **20 minutes** respectively.
+
+
 ## v0.1.0 — Stable Foundation
 
 v0.1.0 consolidates the live-validated Crafting Core foundation without introducing a new crafting mechanic after the v0.0.24 test cycle. The Recipe knowledge lifecycle is now treated as stable: private Builder drafts are separate from authoritative published sources, the **Crafting Core - Learn Sources** Compendium is the source of truth, the Knowledge Base manages those published Items, Characters can learn/unlearn reliably, published updates refresh learned Recipes, and Unpublish removes the Recipe from Characters while preserving already-started Project snapshots.

@@ -13,6 +13,7 @@ import { TokenHarvestService } from "./services/token-harvest-service.mjs";
 import { ItemPilesBridge } from "./services/item-piles-bridge.mjs";
 import { GearNormalizationService } from "./services/gear-normalization-service.mjs";
 import { MaterialStackService } from "./services/material-stack-service.mjs";
+import { CuratedContentService } from "./services/curated-content-service.mjs";
 
 let app = null;
 let generatorApp = null;
@@ -57,7 +58,8 @@ const API = {
   get tokenHarvest() { return game.user?.isGM ? TokenHarvestService : undefined; },
   get itemPiles() { return game.user?.isGM ? ItemPilesBridge : undefined; },
   get gearNormalization() { return game.user?.isGM ? GearNormalizationService : undefined; },
-  materialStacking: MaterialStackService
+  materialStacking: MaterialStackService,
+  get curated() { return game.user?.isGM ? CuratedContentService : undefined; }
 };
 
 function exposeApi() {
@@ -83,6 +85,7 @@ Hooks.once("init", () => {
   runInitStep("material settings", () => MaterialCatalogService.registerSettings());
   runInitStep("harvest profile settings", () => HarvestProfileService.registerSettings());
   runInitStep("gear normalization settings", () => GearNormalizationService.registerSettings());
+  runInitStep("curated content settings", () => CuratedContentService.registerSettings());
   runInitStep("Crafting Core settings menu", () => game.settings.registerMenu(MODULE_ID, "craftingCoreSettings", {
     name: "Crafting Core",
     label: "Configure Crafting Core",
@@ -97,6 +100,7 @@ Hooks.once("init", () => {
   runInitStep("Token Harvest hooks", () => TokenHarvestService.installHooks());
   runInitStep("Generated loot drag/drop", () => ItemPilesBridge.installGeneratedLootDropHook());
   runInitStep("Crafting material auto-stacking", () => MaterialStackService.installHooks());
+  runInitStep("Curated content hooks", () => CuratedContentService.installHooks());
 
   console.info(`${MODULE_TITLE} | Initialized.`);
 });
@@ -130,6 +134,17 @@ Hooks.once("ready", async () => {
       if (materialMigration.migrated) console.info(`${MODULE_TITLE} | Applied curated material catalog migration.`, materialMigration);
     } catch (error) {
       console.error(`${MODULE_TITLE} | Curated material icon migration failed.`, error);
+    }
+    try {
+      const curated = await CuratedContentService.syncIfNeeded();
+      if (!curated?.skipped) console.info(`${MODULE_TITLE} | Synchronized Curated Culinary library.`, curated);
+      else if (curated?.reason === "item-creator-inactive") {
+        console.info(`${MODULE_TITLE} | Curated Culinary library not installed because DnD 5e Item Creator is inactive.`);
+      } else if (curated?.reason === "item-creator-too-old") {
+        console.warn(`${MODULE_TITLE} | Curated Culinary library requires DnD 5e Item Creator 0.7.1 or newer; active version is ${curated.version || "unknown"}.`);
+      }
+    } catch (error) {
+      console.error(`${MODULE_TITLE} | Curated Culinary synchronization failed.`, error);
     }
     try {
       const harvestMigration = await HarvestProfileService.migrateStoredProfilesToPools();

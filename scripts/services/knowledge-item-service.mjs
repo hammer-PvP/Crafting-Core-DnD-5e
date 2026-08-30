@@ -382,6 +382,10 @@ export class KnowledgeItemService {
     return String(recipe?.result?.snapshot?.system?.rarity ?? "");
   }
 
+  static knowledgeItemData(recipe, { folderId=null, published=false }={}) {
+    return this.#knowledgeItemData(recipe, { folderId, published });
+  }
+
   static #knowledgeItemData(recipe, { folderId=null, published=false }={}) {
     const activityId = String(recipe?.id || foundry.utils.randomID(20)).slice(0, 16).padEnd(16, "0");
     const label = this.#sourceType(recipe);

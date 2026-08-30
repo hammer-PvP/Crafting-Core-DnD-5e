@@ -1,6 +1,6 @@
 export const MODULE_ID = "dnd5e-crafting-core";
 export const MODULE_TITLE = "Crafting Core (DnD 5e)";
-export const MODULE_VERSION = "0.1.0";
+export const MODULE_VERSION = "0.2.0";
 
 export const SETTINGS = Object.freeze({
   RECIPES: "recipes",
@@ -9,7 +9,8 @@ export const SETTINGS = Object.freeze({
   MATERIAL_OVERRIDES: "materialOverrides",
   HARVEST_PROFILES: "harvestProfiles",
   SCANNER_SOURCES: "scannerSources",
-  GEAR_NORMALIZATION: "gearNormalization"
+  GEAR_NORMALIZATION: "gearNormalization",
+  CURATED_CONTENT_STATE: "curatedContentState"
 });
 
 export const FLAGS = Object.freeze({
@@ -38,7 +39,21 @@ export const FLAGS = Object.freeze({
   MATERIAL_REQUIRES: "materialRequires",
   MATERIAL_BIOMES: "materialBiomes",
   MATERIAL_MANAGED: "materialManaged",
-  MATERIAL_CATALOG_VERSION: "materialCatalogVersion"
+  MATERIAL_CATALOG_VERSION: "materialCatalogVersion",
+  CURATED: "curated",
+  CURATED_ID: "curatedId",
+  CURATED_KIND: "curatedKind",
+  CURATED_VERSION: "curatedVersion",
+  CURATED_BASELINE_FINGERPRINT: "curatedBaselineFingerprint",
+  PRODUCT: "product",
+  PRODUCT_ID: "productId",
+  PRODUCT_CATEGORY: "productCategory",
+  PRODUCT_SUBCATEGORY: "productSubcategory",
+  PRODUCT_CULTURE: "productCulture",
+  PRODUCT_RARITY: "productRarity",
+  PRODUCT_MEAL_TYPE: "productMealType",
+  PRODUCT_ICON_CANDIDATES: "productIconCandidates",
+  PRODUCT_MANAGED: "productManaged"
 });
 
 export const DEFAULT_MATERIAL_ICON = "icons/containers/bags/coinpouch-simple-leather-silver-brown.webp";

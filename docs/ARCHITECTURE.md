@@ -261,3 +261,30 @@ Strong incorporeal classification is reserved for explicit identity or structura
 Creature Scanner source selection is stored in the hidden world `scannerSources` setting and edited through the GM-only Crafting Core settings submenu. Installed module/system sources are grouped at package level and automatically resolve only compatible Actor Compendiums. World Actor Compendiums are exposed individually. Selected order is retained as source priority metadata; complex duplicate-creature reconciliation is intentionally deferred.
 
 Generic family materials may have no anatomy requirements and act as coherent fallback candidates after anatomy-specific materials. v0.0.8 adds Funerary Dust and Necrotic Essence to broaden Undead fallback coverage without introducing fake body tags.
+
+---
+
+## v0.2.0 Curated Content Layer
+
+The v0.1.0 Recipe/Knowledge/Project lifecycle remains the mechanical foundation. v0.2.0 adds an outward content layer rather than a second crafting engine.
+
+### Canonical stores
+
+- `Crafting Core — Materials`: 229 canonical ingredient/material Items.
+- `Crafting Core — Learn Sources`: authoritative published Knowledge Items, including 15 official Curated Culinary Recipe sources.
+- `Crafting Core — Products`: ready-to-distribute final Curated Products. Created/synchronized only while DnD 5e Item Creator 0.7.1+ is active.
+- Curated Recipe definitions live as module data records and are materialized into the normal Learn Sources architecture.
+
+### Item Creator boundary
+
+Crafting Core does not own persistent meal-effect expiration. Curated Products carry the Item Creator v0.7.1 Consumable runtime contract (`created`, schema 17, managed `consumableUse` Activity, `runtime.consumable`, and blueprint effects). Item Creator remains the effect-lifecycle authority.
+
+Temporary HP uses the native D&D5e Heal Activity. Movement uses an Item Creator Active Effect blueprint and `longRest` duration. Every movement-granting official meal shares the source key `crafting-core:culinary:movement-benefit` with `replace` stacking.
+
+### Supplier boundary
+
+Products expose stable Crafting Core metadata (`productId`, category, subcategory, culture, rarity, mealType, curated identity, and icon candidates). Learn Sources retain stable Recipe identity. Supplier can consume the world Compendiums or the portable catalog export without depending on Crafting Core's editor internals.
+
+### Deletion semantics
+
+Official content is synchronized by content version, not rewritten on every startup. Deleting a managed Product or Curated Recipe Source records a suppression in the hidden world setting `curatedContentState`; later startup does not automatically undo the GM's deletion. `game.craftingCore.curated` exposes sync/restore operations for explicit recovery.
