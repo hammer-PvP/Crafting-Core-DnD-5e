@@ -2,13 +2,20 @@
 
 Crafting Core is a GM-authoritative crafting, harvesting, and material framework for Foundry Virtual Tabletop, built specifically for D&D5e 5.3.3 on Foundry VTT 14.
 
-v0.1.0 remains the consolidated stable foundation. v0.2.3 is a test candidate rebuilt directly from that stable baseline to add the official Curated Culinary library without changing the validated Crafting, Project, Harvest, or Knowledge engines.
+v0.1.0 remains the consolidated stable foundation. v0.2.4 is the current Curated Culinary test candidate, continuing the clean v0.2.3 rebuild while fixing Curated Learn Source persistence/folder organization and the Curated Products catalog rendering issue without changing the validated Crafting, Project, Harvest, or Knowledge engines.
 
 
-## v0.2.3 Curated Culinary test candidate
+## v0.2.4 Curated Culinary persistence & catalog fix
+
+- **Builder Draft deletion never suppresses a published Curated Recipe.** Published Learn Sources remain authoritative and independent from private Builder drafts.
+- Curated Recipe suppression is now recorded only after the Knowledge lifecycle confirms an actual Unpublish/direct Learn Sources deletion; republishing clears stale suppression.
+- The first v0.2.4 migration restores the official 15-Recipe set once to repair test worlds affected by the v0.2.0-v0.2.3 persistence regression.
+- Learn Sources are organized within the supported three-level hierarchy `Crafting Core Curated → Culinary → <Culture> Cuisine`.
+- The **Curated Products (15)** catalog now renders its Dwarven/Elven/Common rows and three icon choices instead of being hidden by the Materials-only search filter.
+
 
 - Adds the private **Crafting Core — Products** Compendium with 15 official Culinary consumables: 5 Dwarven, 5 Elven, and 5 Common dishes.
-- Adds 15 official **Recipe** Learn Sources under `Recipe -> Crafting Core Curated -> Culinary -> <Culture> Cuisine`.
+- Adds 15 official **Recipe** Learn Sources under `Crafting Core Curated -> Culinary -> <Culture> Cuisine`.
 - Curated Culinary Products require active **DnD 5e Item Creator 0.7.1+**. Core Crafting Core functionality remains independent.
 - Hearty meals grant **5 Temporary Hit Points** through a native D&D5e Heal Activity using `temphp`.
 - Energizing meals grant **+5 ft Walking Speed** through the Item Creator consumable runtime until the next Long Rest.

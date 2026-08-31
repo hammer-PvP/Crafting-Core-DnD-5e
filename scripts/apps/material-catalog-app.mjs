@@ -134,6 +134,17 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
   #applySearchFilter() {
     const root = this.element;
     if (!root) return;
+
+    // Product groups intentionally reuse the same visual <details> class as material groups,
+    // but they contain .cc-product-table-row rather than .cc-material-table-row. The material
+    // search pass used to see zero material rows and hide every Product group immediately after
+    // render, producing a misleading 15/15 count above an empty catalog. Product filtering is
+    // currently presentation-only, so leave those groups untouched.
+    if (this.catalogView !== "materials") {
+      root.querySelectorAll(".cc-material-group").forEach(group => { group.hidden = false; });
+      return;
+    }
+
     const search = String(this.filters.search || "").trim().toLowerCase();
     let shown = 0;
     root.querySelectorAll(".cc-material-group").forEach(group => {
@@ -237,7 +248,9 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       const result = await CuratedContentService.restoreAll();
       const products = result.products ?? {};
       const recipes = result.recipes ?? {};
-      ui.notifications.info(`Culinary library restored: ${products.created ?? 0} Products created, ${products.updated ?? 0} updated; ${recipes.created ?? 0} Recipes created, ${recipes.updated ?? 0} updated.`);
+      const repairedFolders = Number(recipes.foldersRepaired ?? 0);
+      const folderSuffix = repairedFolders ? `; ${repairedFolders} Recipe folder placement${repairedFolders === 1 ? "" : "s"} repaired` : "";
+      ui.notifications.info(`Culinary library restored: ${products.created ?? 0} Products created, ${products.updated ?? 0} updated; ${recipes.created ?? 0} Recipes created, ${recipes.updated ?? 0} updated${folderSuffix}.`);
       this.render({ force: true });
     } catch (error) {
       console.error(`${MODULE_ID} | Curated Culinary restore failed.`, error);

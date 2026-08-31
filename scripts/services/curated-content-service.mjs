@@ -249,20 +249,42 @@ export class CuratedContentService {
   static installHooks() {
     if (this.#hooksInstalled) return;
     this.#hooksInstalled = true;
+
+    // Products do not have a separate lifecycle service, so direct deletion from the
+    // Products Compendium is the explicit signal that the GM wants that official Product
+    // suppressed until Restore Curated Culinary Defaults is used.
     Hooks.on("deleteItem", item => {
       if (!game.user?.isGM || !item?.pack) return;
       const token = `${item.pack}:${item.id}`;
       if (this.#managedDeletes.has(token)) return;
       if (item.pack === this.PRODUCTS_PACK_ID && item.getFlag(MODULE_ID, FLAGS.PRODUCT_MANAGED)) {
         const productId = String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? "");
-        if (productId) this.#suppress("product", productId);
+        if (productId) void this.#suppress("product", productId);
       }
-      if (item.pack === KnowledgeItemService.PACK_ID
-        && item.getFlag(MODULE_ID, FLAGS.CURATED)
-        && item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) === "culinary-recipe") {
-        const recipeId = String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "");
-        if (recipeId) this.#suppress("recipe", recipeId);
-      }
+    });
+
+    // Curated Learn Sources are governed by the same authoritative Knowledge lifecycle as
+    // every other Recipe. Suppression is recorded only when that lifecycle confirms a real
+    // Unpublish/direct Compendium deletion. Deleting a Builder Draft must never suppress or
+    // remove its published Curated source.
+    Hooks.on(`${MODULE_ID}.knowledgeUnpublished`, recipeId => {
+      const id = String(recipeId ?? "");
+      if (!CURATED_CULINARY_RECIPES.some(entry => entry.recipeId === id)) return;
+      void this.#suppress("recipe", id);
+    });
+    Hooks.on(`${MODULE_ID}.knowledgePublished`, recipeId => {
+      const id = String(recipeId ?? "");
+      if (!CURATED_CULINARY_RECIPES.some(entry => entry.recipeId === id)) return;
+      // Republishing an intentionally/unintentionally missing official source makes it live
+      // again. Clear stale suppression so a later GM startup cannot treat it as absent by design.
+      // Then repair its official metadata/folder after the normal publish transaction finishes.
+      void this.#unsuppress("recipe", id);
+      setTimeout(() => {
+        if (!game.user?.isGM || !this.itemCreatorCompatible()) return;
+        void this.sync({ restore: false }).catch(error => {
+          console.warn(`${MODULE_ID} | Could not post-repair Curated Recipe ${id} after publication.`, error);
+        });
+      }, 0);
     });
   }
 
@@ -271,6 +293,16 @@ export class CuratedContentService {
     const key = kind === "product" ? "suppressedProducts" : "suppressedRecipes";
     if (!state[key].includes(id)) state[key].push(id);
     await this.#saveState(state);
+  }
+
+  static async #unsuppress(kind, id) {
+    const state = this.state();
+    const key = kind === "product" ? "suppressedProducts" : "suppressedRecipes";
+    const next = state[key].filter(value => value !== String(id));
+    if (next.length === state[key].length) return false;
+    state[key] = next;
+    await this.#saveState(state);
+    return true;
   }
 
   static itemCreatorActive() {
@@ -312,36 +344,62 @@ export class CuratedContentService {
   }
 
   static #knowledgeFolders() {
+    // Compendium folders have a finite nesting depth. Keeping Curated content outside the
+    // generic Recipe folder gives us the three useful levels the GM actually needs while the
+    // Item itself still remains Source Type = Recipe:
+    // Crafting Core Curated -> Culinary -> <Culture> Cuisine.
     return [
-      { key: "Recipe", name: "Recipe" },
-      { key: "Recipe:curated", name: "Crafting Core Curated", parent: "Recipe" },
-      { key: "Recipe:curated:culinary", name: "Culinary", parent: "Recipe:curated" },
-      { key: "Recipe:curated:culinary:dwarven", name: "Dwarven Cuisine", parent: "Recipe:curated:culinary" },
-      { key: "Recipe:curated:culinary:elven", name: "Elven Cuisine", parent: "Recipe:curated:culinary" },
-      { key: "Recipe:curated:culinary:common", name: "Common Cuisine", parent: "Recipe:curated:culinary" }
+      { key: "curated", name: "Crafting Core Curated" },
+      { key: "curated:culinary", name: "Culinary", parent: "curated" },
+      { key: "curated:culinary:dwarven", name: "Dwarven Cuisine", parent: "curated:culinary" },
+      { key: "curated:culinary:elven", name: "Elven Cuisine", parent: "curated:culinary" },
+      { key: "curated:culinary:common", name: "Common Cuisine", parent: "curated:culinary" }
     ];
   }
 
   static async syncIfNeeded() {
     if (!game.user?.isGM) return { skipped: true, reason: "not-gm" };
     if (!this.itemCreatorCompatible()) return { skipped: true, reason: "item-creator" };
+
     const state = this.state();
     const products = this.productsPack();
     const learn = KnowledgeItemService.pack();
-    const expectedProducts = CURATED_CULINARY_RECIPES.length - state.suppressedProducts.length;
-    const expectedRecipes = CURATED_CULINARY_RECIPES.length - state.suppressedRecipes.length;
-    let productCount = 0;
-    let recipeCount = 0;
-    if (products) {
-      const docs = await products.getDocuments();
-      productCount = docs.filter(item => item.getFlag(MODULE_ID, FLAGS.PRODUCT_MANAGED)).length;
+    const productDocs = products ? await products.getDocuments() : [];
+    const recipeDocs = learn ? await learn.getDocuments() : [];
+
+    const presentProductIds = new Set(productDocs
+      .map(item => String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? ""))
+      .filter(Boolean));
+    const presentRecipeIds = new Set(recipeDocs
+      .map(item => String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? ""))
+      .filter(Boolean));
+
+    // A source that exists cannot simultaneously be "suppressed". This can happen after a GM
+    // republishes a source that had previously been deleted. Repair that stale state before
+    // deciding whether startup synchronization can be skipped.
+    const repairedState = clone(state);
+    // v0.2.0-v0.2.3 were development candidates and could leave Curated Recipe suppression
+    // state out of sync with the actual Learn Sources pack. On the first v0.2.4 migration,
+    // restore the official Recipe set once; after that, explicit Unpublish is respected again.
+    if (repairedState.culinaryVersion < 4) repairedState.suppressedRecipes = [];
+    repairedState.suppressedProducts = repairedState.suppressedProducts.filter(id => !presentProductIds.has(id));
+    repairedState.suppressedRecipes = repairedState.suppressedRecipes.filter(id => !presentRecipeIds.has(id));
+    if (!sameValue(repairedState.suppressedProducts, state.suppressedProducts)
+      || !sameValue(repairedState.suppressedRecipes, state.suppressedRecipes)) {
+      await this.#saveState(repairedState);
     }
-    if (learn) {
-      const docs = await learn.getDocuments();
-      recipeCount = docs.filter(item => item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) === "culinary-recipe").length;
-    }
-    if (state.culinaryVersion >= CURATED_CULINARY_VERSION && productCount >= expectedProducts && recipeCount >= expectedRecipes) {
-      return { skipped: true, reason: "current", products: productCount, recipes: recipeCount };
+
+    const expectedProducts = CURATED_CULINARY_RECIPES
+      .filter(entry => !repairedState.suppressedProducts.includes(entry.productId))
+      .map(entry => entry.productId);
+    const expectedRecipes = CURATED_CULINARY_RECIPES
+      .filter(entry => !repairedState.suppressedRecipes.includes(entry.recipeId))
+      .map(entry => entry.recipeId);
+
+    const productsComplete = expectedProducts.every(id => presentProductIds.has(id));
+    const recipesComplete = expectedRecipes.every(id => presentRecipeIds.has(id));
+    if (repairedState.culinaryVersion >= CURATED_CULINARY_VERSION && productsComplete && recipesComplete) {
+      return { skipped: true, reason: "current", products: expectedProducts.length, recipes: expectedRecipes.length };
     }
     return this.sync({ restore: false });
   }
@@ -843,6 +901,7 @@ export class CuratedContentService {
       const baselines = {};
       let created = 0;
       let updated = 0;
+      const folderRepairIds = new Set();
 
       for (const entry of CURATED_CULINARY_RECIPES) {
         if (suppressed.has(entry.recipeId)) continue;
@@ -865,7 +924,10 @@ export class CuratedContentService {
           };
         }
         baselines[entry.recipeId] = normalizedRecipeBaseline(officialRecipe);
-        const folder = folders.get(`Recipe:curated:culinary:${entry.culture}`) ?? folders.get("Recipe") ?? null;
+        const folder = folders.get(`curated:culinary:${entry.culture}`) ?? folders.get("curated:culinary") ?? folders.get("curated") ?? null;
+        const targetFolderId = String(folder?.id ?? "");
+        const currentFolderId = String(existing?.folder?.id ?? existing?.folder ?? "");
+        if (existing && currentFolderId !== targetFolderId) folderRepairIds.add(entry.recipeId);
         const data = KnowledgeItemService.knowledgeItemData(recipe, { folderId: folder?.id ?? null, published: true });
         data.img = KNOWLEDGE_ICONS.Recipe;
         data.flags[MODULE_ID] = {
@@ -896,13 +958,32 @@ export class CuratedContentService {
       }
 
       docs = await pack.getDocuments();
+      let documentsByRecipeId = new Map(docs.map(item => [String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? ""), item]).filter(([id]) => id));
+
+      // Verify the persisted post-condition from the Compendium itself. Draft state is never
+      // authoritative for Curated publication, and folder placement is repaired even when the
+      // documents already existed before this version.
+      for (const entry of CURATED_CULINARY_RECIPES) {
+        if (suppressed.has(entry.recipeId)) continue;
+        const item = documentsByRecipeId.get(entry.recipeId);
+        if (!item) throw new Error(`Curated Learn Source ${entry.name} was not persisted in Crafting Core — Learn Sources.`);
+        const folder = folders.get(`curated:culinary:${entry.culture}`) ?? folders.get("curated:culinary") ?? folders.get("curated") ?? null;
+        const targetFolderId = String(folder?.id ?? "");
+        const persistedFolderId = String(item.folder?.id ?? item.folder ?? "");
+        if (persistedFolderId !== targetFolderId) {
+          await item.update({ folder: folder?.id ?? null }, { render: false });
+          folderRepairIds.add(entry.recipeId);
+        }
+      }
+
+      docs = await pack.getDocuments();
+      documentsByRecipeId = new Map(docs.map(item => [String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? ""), item]).filter(([id]) => id));
       await pack.getIndex({ fields: ["name", "img", "type", "folder", `flags.${MODULE_ID}.${FLAGS.KNOWLEDGE_RECIPE_ID}`] });
-      const documentsByRecipeId = new Map(docs.map(item => [String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? ""), item]).filter(([id]) => id));
       return {
         pack,
         created,
         updated,
-        foldersRepaired: 0,
+        foldersRepaired: folderRepairIds.size,
         total: documentsByRecipeId.size,
         documentsByRecipeId,
         baselines

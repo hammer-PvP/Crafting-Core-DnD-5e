@@ -209,6 +209,14 @@ export class KnowledgeItemService {
           && Boolean(doc.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED))) ?? null;
       }
 
+      // A Curated Learn Source may live in a specialized library folder rather than the
+      // generic Recipe folder. Editing it as a Builder Draft and publishing again must update
+      // the same authoritative Item in place without pulling it out of that curated hierarchy.
+      if (item?.getFlag(MODULE_ID, FLAGS.CURATED)) {
+        const curatedKind = String(item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) ?? "");
+        if (curatedKind === "culinary-recipe") data.folder = item.folder?.id ?? item.folder ?? data.folder ?? null;
+      }
+
       const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
       let sourceId = item?.id ?? null;
       if (item) {

@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.2.4 — Curated Learn Source Persistence & Catalog UI Fix
+
+- Fixed the Curated Products catalog regression where the UI reported **15 / 15** Products but hid all Product groups because the Materials search routine looked only for `.cc-material-table-row`. Product groups now render normally with their three icon choices.
+- Curated Recipe suppression is now driven by the authoritative Knowledge lifecycle (`knowledgeUnpublished`) instead of a parallel raw `deleteItem` interpretation. Deleting a private Builder Draft can no longer be mistaken for Curated unpublication.
+- Republishing a Curated Recipe clears stale suppression state so later GM startup synchronization does not treat the newly published source as intentionally absent.
+- Added a one-time v0.2.4 migration that restores the official 15 Curated Recipe Learn Sources in worlds affected by the v0.2.0-v0.2.3 development-candidate persistence bug. Explicit Unpublish is respected normally after the migration.
+- Reorganized Curated Learn Sources into a Foundry-safe three-level Compendium hierarchy: `Crafting Core Curated → Culinary → Dwarven / Elven / Common Cuisine`.
+- Restore/sync now verifies that every unsuppressed official Recipe is actually persisted in `Crafting Core — Learn Sources`, repairs folder placement when needed, and reports the number of repaired Recipe folders.
+- Editing a Curated published source as a Builder Draft and publishing it again preserves its specialized Curated folder instead of moving it back to the generic `Recipe` folder.
+- Added a runtime invariant check after **Delete Builder Draft**: if a previously published source unexpectedly disappears, Crafting Core reports the regression instead of silently continuing.
+- No Curated Product mechanics were retuned: Temporary HP remains native D&D5e `temphp`, movement remains Item Creator-managed +5 ft until Long Rest, crafting time remains 10 seconds, and prepared price remains 2× ingredient value.
+
 ## v0.2.3 — Curated Culinary Rebuild Candidate
 
 - Rebuilt the Curated Culinary feature directly from the live-validated **v0.1.0 stable** baseline instead of continuing the experimental v0.2.0-v0.2.2 implementation line.

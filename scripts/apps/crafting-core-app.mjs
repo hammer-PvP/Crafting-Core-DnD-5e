@@ -609,7 +609,20 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       no: { label: "Cancel" }
     });
     if (!confirmed) return;
-    await RecipeService.delete(this.selectedId);
+    const deletedRecipeId = this.selectedId;
+    await RecipeService.delete(deletedRecipeId);
+
+    // Draft deletion is intentionally independent from publication. Verify the invariant when
+    // the draft was published so a future regression can never silently turn "Delete Draft"
+    // into an Unpublish operation.
+    if (published) {
+      const persistedSource = await KnowledgeItemService.publishedSource(deletedRecipeId);
+      if (!persistedSource) {
+        console.error(`${MODULE_ID} | Published Learn Source disappeared while deleting Builder Draft ${deletedRecipeId}.`);
+        ui.notifications.error("The Builder draft was deleted, but its published Learn Source is unexpectedly missing. Reconcile/restore the library before continuing.");
+      }
+    }
+
     this.#newDraft();
     this.render({ force: true });
   }
