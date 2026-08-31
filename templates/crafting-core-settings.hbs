@@ -1,0 +1,106 @@
+<section class="cc-settings-shell">
+  <header class="cc-settings-header">
+    <i class="fa-solid fa-hammer"></i>
+    <div>
+      <span class="cc-kicker">Game Settings</span>
+      <h1>Crafting Core</h1>
+      <p>Configure Creature Scanner content sources and how physical NPC gear is normalized before a harvested corpse becomes an Item Pile.</p>
+    </div>
+  </header>
+
+  <div class="cc-settings-body">
+    <section class="cc-form-card cc-settings-source-card">
+      <div class="cc-card-heading">
+        <div><span class="cc-kicker">Creature Scanner</span><h3>Actor Sources & Priority</h3></div>
+        <small><strong>{{selectedCount}}</strong> sources · <strong>{{selectedPackCount}}</strong> Actor packs</small>
+      </div>
+      <p class="cc-settings-hint">Select a module/system source once; Crafting Core only scans its Actor Compendiums. World Actor Compendiums appear as individual sources. Higher entries have higher source priority.</p>
+      <div class="cc-settings-source-actions">
+        <button type="button" data-action="select-all-sources"><i class="fa-solid fa-check-double"></i> Select All</button>
+        <button type="button" data-action="clear-sources"><i class="fa-solid fa-xmark"></i> Clear</button>
+      </div>
+      <div class="cc-settings-source-list">
+        {{#each sources}}
+        <article class="cc-settings-source-row {{#if selected}}selected{{/if}}">
+          <label>
+            <input type="checkbox" name="scanner.source" value="{{id}}" {{#if selected}}checked{{/if}}>
+            <span>
+              <strong>{{label}}</strong>
+              <small>{{detail}} · {{packCount}} Actor pack{{#unless (eq packCount 1)}}s{{/unless}}</small>
+              <small class="cc-settings-pack-summary">{{packSummary}}</small>
+            </span>
+          </label>
+          <div class="cc-settings-source-priority">
+            {{#if selected}}<strong>#{{priority}}</strong>{{else}}<span>—</span>{{/if}}
+            <button type="button" data-action="source-up" data-source-id="{{id}}" {{#unless selected}}disabled{{/unless}} data-tooltip="Higher priority"><i class="fa-solid fa-chevron-up"></i></button>
+            <button type="button" data-action="source-down" data-source-id="{{id}}" {{#unless selected}}disabled{{/unless}} data-tooltip="Lower priority"><i class="fa-solid fa-chevron-down"></i></button>
+          </div>
+        </article>
+        {{else}}
+        <div class="cc-scanner-empty"><i class="fa-solid fa-book"></i><strong>No compatible Actor sources found.</strong><span>Install or create an Actor Compendium, then reopen this menu.</span></div>
+        {{/each}}
+      </div>
+    </section>
+
+    <section class="cc-form-card cc-settings-source-card cc-normalization-card">
+      <div class="cc-card-heading">
+        <div><span class="cc-kicker">Token Harvest</span><h3>Existing NPC Loot</h3></div>
+        <small><strong>{{normalizationSelectedCount}}</strong> / {{normalizationMaxSources}} normalization packs</small>
+      </div>
+      <div class="cc-normalization-mode-row">
+        <label>
+          <span>Loot Handling</span>
+          <select name="normalization.mode">
+            <option value="normalize" {{#if normalizeMode}}selected{{/if}}>Normalize from Compendiums</option>
+            <option value="remove-all" {{#if removeAllMode}}selected{{/if}}>Remove All Existing Items</option>
+            <option value="filter" {{#if filterMode}}selected{{/if}}>Keep Physical Gear / Remove Natural & Features</option>
+            <option value="keep-all" {{#if keepAllMode}}selected{{/if}}>Keep All Existing Items</option>
+          </select>
+        </label>
+        <p class="cc-settings-hint">Normalize is the recommended mode: every physical candidate is replaced by the first safe base match found below. Unmatched items are deleted; generated Harvest, Essence and Pinpoints are always kept.</p>
+      </div>
+      <div class="cc-normalization-homebrew">
+        <div class="cc-normalization-homebrew-title">
+          <span><i class="fa-solid fa-flask"></i> Optional Homebrew</span>
+          <small>Applies only to Normalize from Compendiums</small>
+        </div>
+        <label class="cc-homebrew-toggle">
+          <input type="checkbox" name="normalization.firearmsToCrossbows" {{#if firearmsToCrossbows}}checked{{/if}}>
+          <span>
+            <strong>Convert Firearms to Random Crossbows</strong>
+            <small>Any weapon identified as a Firearm is replaced by a randomly selected Hand Crossbow, Light Crossbow, or Heavy Crossbow resolved from the normalization sources. The whole stack uses one result.</small>
+          </span>
+        </label>
+      </div>
+      <div class="cc-settings-source-actions">
+        <button type="button" data-action="clear-normalization"><i class="fa-solid fa-xmark"></i> Clear Sources</button>
+        <span class="cc-normalization-limit"><i class="fa-solid fa-arrow-down-1-9"></i> Priority is top to bottom · max {{normalizationMaxSources}}</span>
+      </div>
+      <div class="cc-settings-source-list cc-normalization-source-list">
+        {{#each normalizationSources}}
+        <article class="cc-settings-source-row {{#if selected}}selected{{/if}}">
+          <label>
+            <input type="checkbox" name="normalization.source" value="{{collection}}" {{#if selected}}checked{{/if}} {{#if disabled}}disabled{{/if}}>
+            <span title="{{collection}}">
+              <strong>{{sourceLabel}}</strong>
+              <small>{{packLabel}}</small>
+            </span>
+          </label>
+          <div class="cc-settings-source-priority">
+            {{#if selected}}<strong>#{{priority}}</strong>{{else}}<span>—</span>{{/if}}
+            <button type="button" data-action="normalization-up" data-collection="{{collection}}" {{#unless selected}}disabled{{/unless}} data-tooltip="Higher priority"><i class="fa-solid fa-chevron-up"></i></button>
+            <button type="button" data-action="normalization-down" data-collection="{{collection}}" {{#unless selected}}disabled{{/unless}} data-tooltip="Lower priority"><i class="fa-solid fa-chevron-down"></i></button>
+          </div>
+        </article>
+        {{else}}
+        <div class="cc-scanner-empty"><i class="fa-solid fa-box-archive"></i><strong>No compatible Item Compendiums found.</strong><span>Normalization will remove unmatched NPC items and keep only generated Crafting Core loot.</span></div>
+        {{/each}}
+      </div>
+    </section>
+  </div>
+
+  <footer class="cc-settings-footer">
+    <span class="cc-note"><i class="fa-solid fa-circle-info"></i> Normalization never fuzzy-matches unique monster gear: identifier/base item or exact name + Item type only.</span>
+    <button type="button" class="cc-primary-action" data-action="save-settings"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+  </footer>
+</section>

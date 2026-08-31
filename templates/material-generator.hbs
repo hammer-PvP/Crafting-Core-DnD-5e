@@ -1,0 +1,186 @@
+<section class="cc-generator-shell">
+  <header class="cc-generator-header">
+    <i class="fa-solid fa-dice-d20"></i>
+    <div>
+      <span class="cc-kicker">GM Tool · Manual Generation</span>
+      <h1>Generate Materials</h1>
+      <p>Describe the gathering context, roll a preview, then keep it as a Folder or place it as a hidden Item Pile.</p>
+    </div>
+  </header>
+
+  <div class="cc-generator-body">
+    <section class="cc-form-card cc-generator-config">
+      <label class="cc-generator-source"><span>Source / Origin</span><select name="source"><option value="creature" {{#if isCreature}}selected{{/if}}>Creature Harvest</option><option value="environment" {{#if isEnvironment}}selected{{/if}}>Environment Gathering</option><option value="hunt" {{#if isHunt}}selected{{/if}}>Game Hunt</option></select></label>
+
+      {{#if isCreature}}
+      <div class="cc-grid three cc-generator-fields">
+        <div class="cc-generator-multi-field cc-popover-field" data-multi-select="creature-natures" data-empty-label="Select creature types">
+          <span>Creature Types</span>
+          <button type="button" class="cc-generator-multi-trigger" data-cc-popover-trigger data-cc-popover-target="cc-gen-creature-natures-popover" aria-expanded="false">
+            <strong data-multi-summary>{{creatureSummary}}</strong><i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <div id="cc-gen-creature-natures-popover" class="cc-select-popover cc-generator-multi-options" data-cc-popover-panel popover="auto">
+            {{#each creatureOptions}}
+            <label><input type="checkbox" name="creatureNature" value="{{value}}" data-label="{{label}}" {{#if selected}}checked{{/if}}><span>{{label}}</span></label>
+            {{/each}}
+          </div>
+        </div>
+
+        <div class="cc-generator-multi-field cc-popover-field" data-multi-select="creature-profiles" data-empty-label="Select harvest profiles">
+          <span>Harvest Profiles</span>
+          <button type="button" class="cc-generator-multi-trigger" data-cc-popover-trigger data-cc-popover-target="cc-gen-creature-profiles-popover" aria-expanded="false">
+            <strong data-multi-summary>{{profileSummary}}</strong><i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <div id="cc-gen-creature-profiles-popover" class="cc-select-popover cc-generator-multi-options" data-cc-popover-panel data-popover-min-width="300" popover="auto">
+            {{#each profileOptions}}
+            <label class="{{#unless enabled}}disabled{{/unless}}"><input type="checkbox" name="creatureProfile" value="{{key}}" data-nature="{{nature}}" data-label="{{label}}" data-unavailable="{{#if enabled}}false{{else}}true{{/if}}" {{#if selected}}checked{{/if}} {{#unless enabled}}disabled{{/unless}}><span>{{label}}</span></label>
+            {{/each}}
+          </div>
+        </div>
+
+        <label><span>Sources / Bodies</span><input type="number" name="sources" min="1" max="100" step="1" value="{{state.sources}}"></label>
+      </div>
+
+      <div class="cc-generator-multi-field cc-generator-wide-field cc-popover-field" data-multi-select="essence-affinities" data-empty-label="No affinity · 50% Arcane fallback">
+        <span>Essence Affinities</span>
+        <button type="button" class="cc-generator-multi-trigger" data-cc-popover-trigger data-cc-popover-target="cc-gen-essence-affinities-popover" aria-expanded="false">
+          <strong data-multi-summary>{{#if state.essenceAffinities.length}}{{state.essenceAffinities.length}} selected{{else}}No affinity · 50% Arcane fallback{{/if}}</strong><i class="fa-solid fa-chevron-down"></i>
+        </button>
+        <div id="cc-gen-essence-affinities-popover" class="cc-select-popover cc-generator-multi-options cc-generator-affinity-options" data-cc-popover-panel data-popover-min-width="340" popover="auto">
+          {{#each essenceOptions}}
+          <label><input type="checkbox" name="essenceAffinity" value="{{value}}" data-label="{{label}}" {{#if selected}}checked{{/if}}><span>{{label}}</span></label>
+          {{/each}}
+        </div>
+        <small>With affinities selected: 45% Arcane / 55% split between the selected specific Essences.</small>
+      </div>
+      {{/if}}
+
+      {{#if isEnvironment}}
+      <div class="cc-grid four cc-generator-fields">
+        <div class="cc-generator-multi-field cc-popover-field" data-multi-select="environment-biomes" data-max-selections="3" data-empty-label="Select biomes">
+          <span>Biomes</span>
+          <button type="button" class="cc-generator-multi-trigger" data-cc-popover-trigger data-cc-popover-target="cc-gen-environment-biomes-popover" aria-expanded="false">
+            <strong data-multi-summary>{{environmentBiomeSummary}}</strong><i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <div id="cc-gen-environment-biomes-popover" class="cc-select-popover cc-generator-multi-options" data-cc-popover-panel popover="auto">
+            {{#each environmentBiomeOptions}}
+            <label><input type="checkbox" name="environmentBiome" value="{{value}}" data-label="{{label}}" {{#if selected}}checked{{/if}}><span>{{label}}</span></label>
+            {{/each}}
+          </div>
+        </div>
+
+        <div class="cc-generator-multi-field cc-popover-field" data-multi-select="environment-resources" data-empty-label="Select resources">
+          <span>Resources</span>
+          <button type="button" class="cc-generator-multi-trigger" data-cc-popover-trigger data-cc-popover-target="cc-gen-environment-resources-popover" aria-expanded="false">
+            <strong data-multi-summary>{{resourceSummary}}</strong><i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <div id="cc-gen-environment-resources-popover" class="cc-select-popover cc-generator-multi-options" data-cc-popover-panel data-popover-min-width="260" popover="auto">
+            {{#each resourceOptions}}
+            <label class="{{#unless enabled}}disabled{{/unless}}"><input type="checkbox" name="resourceCategory" value="{{value}}" data-biomes="{{biomesCsv}}" data-label="{{label}}" data-unavailable="{{#if enabled}}false{{else}}true{{/if}}" {{#if selected}}checked{{/if}} {{#unless enabled}}disabled{{/unless}}><span>{{label}}</span></label>
+            {{/each}}
+          </div>
+        </div>
+
+        <div class="cc-generator-multi-field cc-popover-field" data-multi-select="environment-abundance" data-max-selections="2" data-empty-label="Select abundance">
+          <span>Abundance</span>
+          <button type="button" class="cc-generator-multi-trigger" data-cc-popover-trigger data-cc-popover-target="cc-gen-environment-abundance-popover" aria-expanded="false">
+            <strong data-multi-summary>{{environmentAbundanceSummary}}</strong><i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <div id="cc-gen-environment-abundance-popover" class="cc-select-popover cc-generator-multi-options" data-cc-popover-panel popover="auto">
+            {{#each environmentAbundanceOptions}}
+            <label><input type="checkbox" name="environmentAbundance" value="{{value}}" data-label="{{label}}" {{#if selected}}checked{{/if}}><span>{{label}}</span></label>
+            {{/each}}
+          </div>
+        </div>
+
+        <label><span>Gather Attempts</span><input type="number" name="gatherAttempts" min="1" max="100" step="1" value="{{state.gatherAttempts}}"></label>
+      </div>
+      <p class="cc-note"><i class="fa-solid fa-compass"></i> Biomes and Resources expand the candidate pool. Attempts control gathering opportunities; selecting more categories does not multiply loot linearly.</p>
+      {{/if}}
+
+      {{#if isHunt}}
+      <div class="cc-grid three cc-generator-fields">
+        <div class="cc-generator-multi-field cc-popover-field" data-multi-select="hunt-biomes" data-max-selections="3" data-empty-label="Select hunt biomes">
+          <span>Biomes</span>
+          <button type="button" class="cc-generator-multi-trigger" data-cc-popover-trigger data-cc-popover-target="cc-gen-hunt-biomes-popover" aria-expanded="false">
+            <strong data-multi-summary>{{huntBiomeSummary}}</strong><i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <div id="cc-gen-hunt-biomes-popover" class="cc-select-popover cc-generator-multi-options" data-cc-popover-panel popover="auto">
+            {{#each huntBiomeOptions}}
+            <label><input type="checkbox" name="huntBiome" value="{{value}}" data-label="{{label}}" {{#if selected}}checked{{/if}}><span>{{label}}</span></label>
+            {{/each}}
+          </div>
+        </div>
+
+        <div class="cc-generator-multi-field cc-popover-field" data-multi-select="hunt-abundance" data-max-selections="2" data-empty-label="Select abundance">
+          <span>Abundance</span>
+          <button type="button" class="cc-generator-multi-trigger" data-cc-popover-trigger data-cc-popover-target="cc-gen-hunt-abundance-popover" aria-expanded="false">
+            <strong data-multi-summary>{{huntAbundanceSummary}}</strong><i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <div id="cc-gen-hunt-abundance-popover" class="cc-select-popover cc-generator-multi-options" data-cc-popover-panel popover="auto">
+            {{#each huntAbundanceOptions}}
+            <label><input type="checkbox" name="huntAbundance" value="{{value}}" data-label="{{label}}" {{#if selected}}checked{{/if}}><span>{{label}}</span></label>
+            {{/each}}
+          </div>
+        </div>
+
+        <label><span>Hunt Attempts</span><input type="number" name="huntAttempts" min="1" max="100" step="1" value="{{state.huntAttempts}}"></label>
+      </div>
+      <p class="cc-note"><i class="fa-solid fa-crosshairs"></i> Each Hunt Attempt is one hunting opportunity. Mixed biomes share the attempts instead of multiplying them.</p>
+      {{/if}}
+
+      <button type="button" class="cc-primary-action cc-generator-button" data-action="generate"><i class="fa-solid fa-dice"></i> Generate Materials</button>
+    </section>
+
+    <section class="cc-form-card cc-generator-result">
+      <div class="cc-card-heading cc-generator-result-heading">
+        <div><span class="cc-kicker">Last Generation</span><h3>Preview</h3></div>
+        {{#if lastResult.created}}<button type="button" class="cc-secondary-action cc-inline-action" data-action="open-items"><i class="fa-solid fa-folder-tree"></i> Item Directory</button>{{/if}}
+      </div>
+
+      {{#if lastResult}}
+        {{#if lastResult.empty}}
+        <div class="cc-generator-empty"><i class="fa-solid fa-wind"></i><strong>Nothing was found.</strong><small>No Folder or Item Pile was created. Generate again whenever you want.</small></div>
+        {{else}}
+        <div class="cc-generated-list">
+          {{#each lastResult.items}}
+          <div class="cc-generated-row"><img src="{{img}}" alt=""><span><strong>{{name}}</strong><small class="cc-rarity {{rarity}}">{{rarityLabel}}</small></span><b>×{{quantity}}</b></div>
+          {{/each}}
+        </div>
+        {{#if lastResult.created}}
+        <div class="cc-generated-folder"><i class="fa-solid fa-folder"></i><span><small>Created Folder</small><strong>{{lastResult.folderLabel}}</strong></span></div>
+        {{/if}}
+        {{#if lastResult.pileCreated}}
+        <div class="cc-generated-folder"><i class="fa-solid fa-eye-slash"></i><span><small>Hidden Item Pile</small><strong>{{lastResult.pileLabel}}</strong></span></div>
+        {{/if}}
+
+        {{#if itemPilesAvailable}}
+        {{#unless lastResult.pileCreated}}
+        <div class="cc-generated-drag-card" draggable="true" data-generated-loot-drag data-tooltip="Drag onto the Scene to create a hidden Item Pile at that position.">
+          <img src="{{lastResult.dragIcon}}" alt="">
+          <span><small>ITEM PILES · HIDDEN BY DEFAULT</small><strong>Drag Generated Loot to Scene</strong><em>Drop it exactly where the players should find it, then reveal it when ready.</em></span>
+          <i class="fa-solid fa-up-down-left-right"></i>
+        </div>
+        {{/unless}}
+        {{/if}}
+        {{/if}}
+
+        <div class="cc-generator-result-actions">
+          <button type="button" class="cc-secondary-action" data-action="generate-again"><i class="fa-solid fa-rotate"></i> Generate Again</button>
+          {{#unless lastResult.empty}}
+            {{#unless lastResult.created}}
+            <button type="button" class="cc-secondary-action" data-action="create-folder"><i class="fa-solid fa-folder-plus"></i> Create Loot Folder</button>
+            {{/unless}}
+            {{#if itemPilesAvailable}}
+              {{#unless lastResult.pileCreated}}
+              <button type="button" class="cc-secondary-action" data-action="create-item-pile"><i class="fa-solid fa-crosshairs"></i> Create Hidden at Scene Center</button>
+              {{/unless}}
+            {{/if}}
+          {{/unless}}
+        </div>
+      {{else}}
+      <div class="cc-generator-empty"><i class="fa-solid fa-box-open"></i><strong>No preview yet.</strong><small>Choose an origin and generate a material result.</small></div>
+      {{/if}}
+    </section>
+  </div>
+</section>

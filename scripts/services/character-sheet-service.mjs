@@ -1,0 +1,349 @@
+import { FLAGS, MODULE_ID } from "../constants.mjs";
+import { CraftingService } from "./crafting-service.mjs";
+import { KnowledgeItemService } from "./knowledge-item-service.mjs";
+import { RecipeService } from "./recipe-service.mjs";
+import { ResultDialog } from "../ui/result-dialog.mjs";
+
+export class CharacterSheetService {
+  static #selection = new Map();
+  static #selectionSnapshots = new Map();
+  static #patched = false;
+
+  static patchDnd5eSheet() {
+    if (this.#patched) return true;
+    const Sheet = globalThis.dnd5e?.applications?.actor?.CharacterActorSheet;
+    if (!Sheet) {
+      console.error(`${MODULE_ID} | D&D5e CharacterActorSheet was not available during initialization.`);
+      return false;
+    }
+    Sheet.PARTS.crafting = {
+      container: { classes: ["tab-body"], id: "tabs" },
+      template: `modules/${MODULE_ID}/templates/character-crafting.hbs`,
+      scrollable: [""]
+    };
+    if (!Sheet.TABS.some(entry => entry.tab === "crafting")) {
+      const effectsIndex = Sheet.TABS.findIndex(entry => entry.tab === "effects");
+      const descriptor = { tab: "crafting", label: "Crafting", icon: "fa-solid fa-hammer" };
+      Sheet.TABS.splice(effectsIndex >= 0 ? effectsIndex + 1 : Sheet.TABS.length, 0, descriptor);
+    }
+    this.#patched = true;
+    return true;
+  }
+
+  static installHooks() {
+    Hooks.on("dnd5e.prepareSheetContext", (sheet, partId, context) => {
+      if (partId !== "crafting") return;
+      const actor = sheet.actor ?? sheet.document;
+      if (!actor || actor.type !== "character") return;
+      Object.assign(context, this.#prepareContext(actor, sheet));
+    });
+
+    Hooks.on("renderApplicationV2", (app, element) => {
+      if (!this.#isCharacterSheet(app)) return;
+      const root = element instanceof HTMLElement ? element : app.element;
+      const tab = root?.querySelector('[data-tab="crafting"][data-group="primary"]');
+      if (!tab) return;
+      this.#activateListeners(app, root);
+      this.#animateTimedJob(app, root);
+    });
+
+    Hooks.on("updateActor", (actor, changes) => {
+      if (actor?.type !== "character") return;
+      const flagChanges = changes?.flags?.[MODULE_ID];
+      if (!flagChanges) return;
+      const watched = [FLAGS.CRAFTING_JOB, FLAGS.LEARNED_RECIPES, FLAGS.KNOWN_RECIPES];
+      const relevant = watched.some(flag => (flag in flagChanges) || (`-=${flag}` in flagChanges));
+      if (!relevant) return;
+      actor.sheet?.render?.({ force: true });
+    });
+
+    Hooks.on(`${MODULE_ID}.recipesChanged`, () => {
+      for (const app of Object.values(ui.windows ?? {})) if (this.#isCharacterSheet(app)) app.render({ force: true });
+    });
+  }
+
+  static #prepareContext(actor, sheet) {
+    const recipes = KnowledgeItemService.knownRecipes(actor);
+    const preparedRecipes = recipes.map(recipe => CraftingService.prepareRecipeForActor(actor, recipe));
+    const job = CraftingService.job(actor);
+    const activeProject = job?.mode === "project" ? CraftingService.prepareProjectForActor(actor, job) : null;
+    const key = sheet.id ?? actor.id;
+
+    let selected = this.#selection.get(key);
+    const knownIds = new Set(recipes.map(recipe => recipe.id));
+    const activeProjectId = activeProject?.recipeId ?? null;
+    if (!knownIds.has(selected) && selected !== activeProjectId) selected = activeProjectId ?? recipes[0]?.id ?? null;
+    if (selected) this.#selection.set(key, selected);
+    else {
+      this.#selection.delete(key);
+      this.#selectionSnapshots.delete(key);
+    }
+
+    const selectedKnownRecipe = selected ? recipes.find(recipe => recipe.id === selected) ?? null : null;
+    const selectedKnown = Boolean(selectedKnownRecipe);
+    const selectedIsActiveProject = Boolean(activeProject && selected === activeProject.recipeId);
+    let selectedStale = false;
+    let prepared = null;
+
+    if (selectedIsActiveProject) {
+      const frozen = RecipeService.snapshot(activeProject.recipe);
+      this.#selectionSnapshots.set(key, { recipeId: selected, recipe: frozen });
+      prepared = CraftingService.prepareRecipeForActor(actor, frozen);
+    } else if (selectedKnownRecipe) {
+      let cached = this.#selectionSnapshots.get(key);
+      if (!cached || cached.recipeId !== selected) {
+        cached = { recipeId: selected, recipe: RecipeService.snapshot(selectedKnownRecipe) };
+        this.#selectionSnapshots.set(key, cached);
+      }
+      selectedStale = !KnowledgeItemService.sameRecipeDefinition(cached.recipe, selectedKnownRecipe);
+      prepared = CraftingService.prepareRecipeForActor(actor, cached.recipe);
+    }
+
+    let timedJob = null;
+    if (job && job.mode !== "project" && ["active", "finalizing"].includes(job.status)) {
+      const now = CraftingService.serverTime();
+      const progress = job.status === "active"
+        ? Math.clamp(((now - Number(job.startedAt)) / Math.max(1, Number(job.endsAt) - Number(job.startedAt))) * 100, 0, 100)
+        : 100;
+      timedJob = { ...job, progress };
+    }
+
+    const busy = Boolean(job && ["active", "finalizing"].includes(job.status));
+    const list = preparedRecipes.map(recipe => ({
+      ...recipe,
+      selected: recipe.id === selected,
+      active: Boolean(activeProject && activeProject.recipeId === recipe.id),
+      knowledgeUnavailable: false,
+      modeLabel: recipe.craftingMode === "project" ? "Project" : "Timed"
+    }));
+
+    if (activeProject && !knownIds.has(activeProject.recipeId)) {
+      const frozenRow = CraftingService.prepareRecipeForActor(actor, activeProject.recipe);
+      list.unshift({
+        ...frozenRow,
+        selected: activeProject.recipeId === selected,
+        active: true,
+        knowledgeUnavailable: true,
+        modeLabel: "Project"
+      });
+    }
+
+    return {
+      craftingCore: {
+        recipes: list,
+        selectedRecipe: prepared,
+        hasRecipes: list.length > 0,
+        busy,
+        activeProject,
+        selectedKnown,
+        selectedStale,
+        selectedIsActiveProject,
+        timedJob,
+        hasActiveProject: Boolean(activeProject),
+        selectedCanStart: Boolean(selectedKnown && prepared?.canCraft && !busy),
+        selectedBlockedByOtherProject: Boolean(activeProject && prepared && activeProject.recipeId !== prepared.id)
+      }
+    };
+  }
+
+  static #activateListeners(app, root) {
+    root.querySelectorAll('.crafting-core-tab [data-action="select-recipe"][data-recipe-id]').forEach(button => {
+      if (button.dataset.ccBound) return;
+      button.dataset.ccBound = "true";
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        const actor = app.actor ?? app.document;
+        const key = app.id ?? actor?.id;
+        const recipeId = String(button.dataset.recipeId || "");
+        this.#selection.set(key, recipeId);
+        const current = KnowledgeItemService.recipeForActor(actor, recipeId);
+        const project = CraftingService.project(actor);
+        const source = current ?? (project?.recipeId === recipeId ? project.recipe : null);
+        if (source) this.#selectionSnapshots.set(key, { recipeId, recipe: RecipeService.snapshot(source) });
+        app.render({ force: true });
+      });
+    });
+
+    this.#bindAsync(root, app, "craft", async actor => {
+      const recipeId = this.#selection.get(app.id ?? actor.id);
+      if (!recipeId) return;
+      if (!await this.#ensureFreshSelection(app, actor, recipeId)) return { cancelled: true };
+      return CraftingService.requestCraft(actor, recipeId);
+    });
+    this.#bindAsync(root, app, "start-project", async actor => {
+      const recipeId = this.#selection.get(app.id ?? actor.id);
+      if (!recipeId) return;
+      if (!await this.#ensureFreshSelection(app, actor, recipeId)) return { cancelled: true };
+      return CraftingService.requestStartProject(actor, recipeId);
+    });
+    this.#bindAsync(root, app, "work-project", actor => CraftingService.requestWorkOnProject(actor));
+    this.#bindAsync(root, app, "extra-effort", actor => CraftingService.requestExtraEffort(actor));
+    this.#bindAsync(root, app, "final-project", actor => CraftingService.requestFinalCheck(actor));
+
+    const unlearn = root.querySelector('.crafting-core-tab [data-action="unlearn-recipe"]');
+    if (unlearn && !unlearn.dataset.ccBound) {
+      unlearn.dataset.ccBound = "true";
+      unlearn.addEventListener("click", async event => {
+        event.preventDefault();
+        const actor = app.actor ?? app.document;
+        const key = app.id ?? actor.id;
+        const recipeId = this.#selection.get(key);
+        if (!recipeId) return;
+        const recipe = KnowledgeItemService.recipeForActor(actor, recipeId);
+        if (!recipe) return;
+        const confirmed = await this.#confirmUnlearn(recipe);
+        if (!confirmed) return;
+        unlearn.disabled = true;
+        try {
+          const forgotten = await KnowledgeItemService.unlearn(actor, recipeId);
+          if (!forgotten) return;
+          this.#selectionSnapshots.delete(key);
+          this.#selection.delete(key);
+          await app.render({ force: true });
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          await ResultDialog.show({
+            title: "Recipe Forgotten",
+            message: `${actor.name} no longer knows ${recipe.name}.`,
+            tone: "warning",
+            icon: "fa-solid fa-book-open"
+          });
+        } catch (error) {
+          console.error(`${MODULE_ID} | Unlearn Recipe failed.`, error);
+          await ResultDialog.error(error.message ?? "Crafting Core could not forget that Recipe.", "Unable to Forget Recipe");
+          unlearn.disabled = false;
+        }
+      });
+    }
+
+    const cancel = root.querySelector('.crafting-core-tab [data-action="cancel-project"]');
+    if (cancel && !cancel.dataset.ccBound) {
+      cancel.dataset.ccBound = "true";
+      cancel.addEventListener("click", async event => {
+        event.preventDefault();
+        const confirmed = await foundry.applications.api.DialogV2.confirm({
+          window: { title: "Cancel Crafting Project" },
+          content: "<p>Cancel the active Crafting Project? All still-reserved materials will be returned.</p>",
+          yes: { label: "Cancel Project", icon: "fa-solid fa-ban" }, no: { label: "Keep Project" }
+        });
+        if (!confirmed) return;
+        cancel.disabled = true;
+        try {
+          await CraftingService.requestCancelProject(app.actor ?? app.document);
+          app.render({ force: true });
+        } catch (error) {
+          console.error(`${MODULE_ID} | Cancel project failed.`, error);
+          ui.notifications.error(error.message ?? "Crafting Core could not cancel the Project.");
+          cancel.disabled = false;
+        }
+      });
+    }
+  }
+
+  static async #ensureFreshSelection(app, actor, recipeId) {
+    const key = app.id ?? actor.id;
+    const current = KnowledgeItemService.recipeForActor(actor, recipeId);
+    if (!current) {
+      await ResultDialog.show({
+        title: "Recipe Unavailable",
+        message: "This Character no longer knows that Recipe. No materials or progress were changed.",
+        tone: "warning",
+        icon: "fa-solid fa-book-skull"
+      });
+      return false;
+    }
+
+    const cached = this.#selectionSnapshots.get(key);
+    if (!cached || cached.recipeId !== recipeId) {
+      this.#selectionSnapshots.set(key, { recipeId, recipe: RecipeService.snapshot(current) });
+      return true;
+    }
+    if (KnowledgeItemService.sameRecipeDefinition(cached.recipe, current)) return true;
+
+    this.#selectionSnapshots.set(key, { recipeId, recipe: RecipeService.snapshot(current) });
+    await ResultDialog.show({
+      title: "Recipe Updated",
+      message: "A newer published revision is available. The current Recipe view has been refreshed. Review it, then click Craft or Start Project again. No materials, rolls, progress, or reservations were changed.",
+      tone: "info",
+      icon: "fa-solid fa-arrows-rotate"
+    });
+    return false;
+  }
+
+  static async #confirmUnlearn(recipe) {
+    const DialogV2 = foundry.applications?.api?.DialogV2;
+    if (!DialogV2?.input) {
+      ui.notifications.warn("Crafting Core could not open the confirmation dialog.");
+      return false;
+    }
+    const name = foundry.utils.escapeHTML(String(recipe?.name || "this Recipe"));
+    const result = await DialogV2.input({
+      window: { title: "Forget Recipe" },
+      content: `<section class="cc-unlearn-dialog"><p>Forget <strong>${name}</strong>?</p><p>This removes the Recipe from this Character's learned knowledge. The Recipe can be learned again later from a valid Knowledge Source.</p><label class="cc-confirm-check"><input type="checkbox" name="confirmation"><span><strong>I agree</strong><small>I want this Character to forget the selected Recipe.</small></span></label></section>`,
+      ok: { label: "Forget Recipe", icon: "fa-solid fa-book-open" },
+      rejectClose: false,
+      modal: true,
+      render: (_event, dialog) => {
+        const root = dialog?.element;
+        const checkbox = root?.querySelector?.('input[name="confirmation"]');
+        const okButton = root?.querySelector?.('button[data-action="ok"]')
+          ?? [...(root?.querySelectorAll?.("button") ?? [])].find(button => String(button.textContent ?? "").includes("Forget Recipe"));
+        if (!checkbox || !okButton) return;
+        const sync = () => { okButton.disabled = !checkbox.checked; };
+        sync();
+        checkbox.addEventListener("change", sync);
+      }
+    });
+    if (!result) return false;
+    if (result.confirmation === true || result.confirmation === "true" || result.confirmation === "on") return true;
+    await ResultDialog.show({
+      title: "Confirmation Required",
+      message: "The Recipe was not forgotten. Check I agree before confirming.",
+      tone: "warning",
+      icon: "fa-solid fa-shield-halved"
+    });
+    return false;
+  }
+
+  static #bindAsync(root, app, action, handler) {
+    const button = root.querySelector(`.crafting-core-tab [data-action="${action}"]`);
+    if (!button || button.dataset.ccBound) return;
+    button.dataset.ccBound = "true";
+    button.addEventListener("click", async event => {
+      event.preventDefault(); button.disabled = true;
+      try {
+        const result = await handler(app.actor ?? app.document);
+        app.render({ force: true });
+        if (result?.feedback) await ResultDialog.show(result.feedback);
+        else if (result?.outcome === "failure") ui.notifications.warn("Crafting failed.");
+      } catch (error) {
+        console.error(`${MODULE_ID} | Crafting action failed.`, error);
+        await ResultDialog.error(error.message ?? "Crafting Core could not perform that crafting action.");
+        button.disabled = false;
+      }
+    });
+  }
+
+  static #animateTimedJob(app, root) {
+    const bar = root.querySelector('.crafting-core-tab [data-crafting-progress]');
+    if (!bar) return;
+    const actor = app.actor ?? app.document;
+    const job = CraftingService.job(actor);
+    if (!job || job.mode === "project" || job.status !== "active") return;
+    const jobId = job.id;
+    const tick = () => {
+      if (!bar.isConnected) return;
+      const current = CraftingService.job(actor);
+      if (!current || current.id !== jobId || current.mode === "project" || current.status !== "active") return;
+      const span = Math.max(1, Number(current.endsAt) - Number(current.startedAt));
+      const progress = Math.clamp(((CraftingService.serverTime() - Number(current.startedAt)) / span) * 100, 0, 100);
+      bar.style.width = `${progress}%`;
+      if (progress < 100) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
+  static #isCharacterSheet(app) {
+    const actor = app?.actor ?? app?.document;
+    return Boolean(actor?.type === "character" && (app.constructor?.name === "CharacterActorSheet" || app?.options?.classes?.includes?.("character")));
+  }
+}

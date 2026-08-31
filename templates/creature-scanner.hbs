@@ -1,0 +1,69 @@
+<section class="cc-scanner-shell">
+  <header class="cc-scanner-header">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <div>
+      <span class="cc-kicker">Creature Intelligence</span>
+      <h1>Creature Scanner</h1>
+      <p>Analyze configured D&D5e Actor sources and build editable Harvest Profiles without modifying source Actors or Compendiums.</p>
+    </div>
+  </header>
+
+  <div class="cc-scanner-toolbar">
+    <div class="cc-scanner-source-summary {{#unless sourcesConfigured}}empty{{/unless}}">
+      <i class="fa-solid fa-book"></i>
+      <span>
+        <strong>{{sourceCount}} source{{#unless (eq sourceCount 1)}}s{{/unless}} configured</strong>
+        <small>{{sourcePackCount}} Actor Compendium{{#unless (eq sourcePackCount 1)}}s{{/unless}}{{#if sourceLabels}} · {{#each sourceLabels}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}{{/if}}</small>
+      </span>
+    </div>
+    <button type="button" data-action="configure-sources"><i class="fa-solid fa-gear"></i> Configure Sources</button>
+    <button type="button" class="cc-primary-action" data-action="scan-packs" {{#unless sourcesConfigured}}disabled{{/unless}}><i class="fa-solid fa-wand-magic-sparkles"></i> Scan</button>
+    <div class="cc-scan-progress" data-scan-progress hidden>
+      <div><span data-scan-progress-bar></span></div>
+      <small data-scan-progress-label>Reading Compendium indexes…</small>
+    </div>
+  </div>
+
+  <section class="cc-form-card cc-scanner-profiles">
+    <div class="cc-card-heading cc-scanner-profile-heading">
+      <div><span class="cc-kicker">Crafting Core Metadata</span><h3>Harvest Profiles</h3></div>
+      <small>{{profileCount}} stored · {{visibleProfileCount}} visible</small>
+    </div>
+    <div class="cc-scanner-filters">
+      <div class="cc-scanner-search">
+        <input type="search" name="profile.search" value="{{filterSearch}}" placeholder="Search creature, pack, anatomy…">
+        <button type="button" data-action="apply-search" data-tooltip="Apply search"><i class="fa-solid fa-magnifying-glass"></i></button>
+        <button type="button" data-action="clear-search" data-tooltip="Clear search"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <select name="profile.type">
+        {{#each typeOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+      </select>
+    </div>
+    <div class="cc-profile-list">
+      {{#each profiles}}
+      <article class="cc-profile-row">
+        <img src="{{img}}" alt="">
+        <div class="cc-profile-summary">
+          <strong>{{name}}</strong>
+          <small>{{creatureTypeLabel}}{{#if subtype}} · {{subtype}}{{/if}} · CR {{cr}}</small>
+          <small class="cc-profile-anatomy">{{anatomyLabel}}</small>
+          <small class="cc-profile-essence">{{essenceLabel}}</small>
+        </div>
+        <div class="cc-profile-counts">
+          <span><strong>{{slotCount}}</strong><small>pools</small></span>
+          <span><strong>{{candidateCount}}</strong><small>Cand.</small></span>
+          <span><strong>{{essenceCount}}</strong><small>Ess.</small></span>
+          <span><strong>{{pinpointCount}}</strong><small>Pin.</small></span>
+        </div>
+        <div class="cc-profile-actions">
+          <button type="button" data-action="edit-profile" data-profile-id="{{id}}" data-tooltip="Edit Harvest Profile"><i class="fa-solid fa-pen"></i></button>
+          <button type="button" data-action="reanalyze-profile" data-profile-id="{{id}}" data-tooltip="Reanalyze source Actor"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
+          <button type="button" class="danger" data-action="delete-profile" data-profile-id="{{id}}" data-tooltip="Delete profile only"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </article>
+      {{else}}
+      <div class="cc-scanner-empty cc-profile-empty"><i class="fa-solid fa-paw"></i><strong>No Harvest Profiles yet.</strong><span>Configure Actor sources, then run the Creature Scanner.</span></div>
+      {{/each}}
+    </div>
+  </section>
+</section>

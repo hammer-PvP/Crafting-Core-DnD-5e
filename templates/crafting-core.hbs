@@ -1,0 +1,362 @@
+<section class="cc-shell">
+  <aside class="cc-sidebar">
+    <header class="cc-app-header">
+      <i class="fa-solid fa-hammer"></i>
+      <div>
+        <span class="cc-kicker">GM Tool</span>
+        <h1>Crafting Core</h1>
+        <p>Draft privately. Publish deliberately.</p>
+      </div>
+    </header>
+
+    <div class="cc-workspace-tabs">
+      <button type="button" class="{{#if (eq activeView "drafts")}}active{{/if}}" data-action="show-drafts"><i class="fa-solid fa-pen-ruler"></i><span>Drafts</span><small>{{recipeCount}}</small></button>
+      <button type="button" class="{{#if (eq activeView "knowledge")}}active{{/if}}" data-action="show-knowledge-base"><i class="fa-solid fa-book-bookmark"></i><span>Knowledge Base</span><small>{{publishedCount}}</small></button>
+    </div>
+
+    {{#if (eq activeView "drafts")}}
+    <button type="button" class="cc-new-recipe" data-action="new-recipe"><i class="fa-solid fa-plus"></i> New Recipe Draft</button>
+    {{else}}
+    <div class="cc-knowledge-authority-note"><i class="fa-solid fa-database"></i><span><strong>Learn Sources is authoritative.</strong><small>This view manages the published Compendium directly.</small></span></div>
+    {{/if}}
+
+    <div class="cc-sidebar-tools">
+      <button type="button" class="cc-materials-launch" data-action="open-material-catalog"><i class="fa-solid fa-boxes-stacked"></i><span>Materials</span></button>
+      <button type="button" class="cc-materials-launch cc-generator-launch" data-action="open-material-generator"><i class="fa-solid fa-dice-d20"></i><span>Generate</span></button>
+      <button type="button" class="cc-materials-launch cc-scanner-launch" data-action="open-creature-scanner"><i class="fa-solid fa-magnifying-glass"></i><span>Scanner</span></button>
+      <button type="button" class="cc-materials-launch" data-action="open-learn-sources"><i class="fa-solid fa-book"></i><span>Open Compendium</span></button>
+    </div>
+
+    {{#if (eq activeView "drafts")}}
+    <div class="cc-sidebar-section-label"><span>Builder Drafts</span><small>{{recipeCount}}</small></div>
+    <nav class="cc-recipe-list">
+      {{#each recipes}}
+      <button type="button" class="cc-recipe-nav {{#if selected}}active{{/if}}" data-recipe-id="{{id}}">
+        <img src="{{img}}" alt="">
+        <span><strong>{{name}}</strong><small>{{publicationStatus}} · {{#if (eq craftingMode "project")}}{{project.requiredWork}} work{{else}}{{craftingTime}} sec{{/if}}</small></span>
+      </button>
+      {{else}}
+      <div class="cc-empty-sidebar"><i class="fa-solid fa-scroll"></i><span>No Recipe Builder drafts.</span></div>
+      {{/each}}
+    </nav>
+    {{else}}
+    <div class="cc-sidebar-section-label"><span>Published Knowledge</span><small>{{publishedCount}}</small></div>
+    <nav class="cc-recipe-list">
+      {{#each publishedSources}}
+      <button type="button" class="cc-recipe-nav cc-published-nav {{#if selected}}active{{/if}}" data-published-recipe-id="{{recipeId}}">
+        <img src="{{img}}" alt="">
+        <span><strong>{{name}}</strong><small>{{sourceType}} · {{draftStatus}}</small></span>
+      </button>
+      {{else}}
+      <div class="cc-empty-sidebar"><i class="fa-solid fa-book-open"></i><span>No published Knowledge Sources.</span></div>
+      {{/each}}
+    </nav>
+    {{/if}}
+  </aside>
+
+  <main class="cc-main">
+    {{#if (eq activeView "drafts")}}
+    <div class="cc-content">
+      <header class="cc-section-header">
+        <div>
+          <span class="cc-kicker">Recipe Builder · {{#if published}}Published Draft{{else}}Draft{{/if}}</span>
+          <h2>{{draft.name}}</h2>
+          <p>The Builder is a GM workbench. Publish the finished Knowledge Source to the private Compendium, then this draft may be deleted safely.</p>
+        </div>
+        <img class="cc-recipe-image" src="{{draft.img}}" alt="">
+      </header>
+
+      {{#if published}}
+      <div class="cc-publication-banner {{#if draftHasUnpublishedChanges}}pending{{/if}}"><i class="fa-solid {{#if draftHasUnpublishedChanges}}fa-pen-to-square{{else}}fa-circle-check{{/if}}"></i><div><strong>{{#if draftHasUnpublishedChanges}}Published · Draft has unpublished changes{{else}}Published to Learn Sources · Up to date{{/if}}</strong><small>{{#if draftHasUnpublishedChanges}}Players and distributed Knowledge Sources still use the current Compendium version until you click Update Published Source.{{else}}This draft matches the authoritative Compendium definition. Deleting the Builder draft does not unpublish it.{{/if}}</small></div></div>
+      {{/if}}
+
+      <section class="cc-form-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Recipe</span><h3>Identity & Crafting Mode</h3></div><small>Choose the simple legacy timer or a persistent work-period Project.</small></div>
+        <div class="cc-grid two">
+          <label><span>Name</span><input type="text" name="name" value="{{draft.name}}"></label>
+          <label><span>Crafting Mode</span><select name="craftingMode" data-resolution-rerender>
+            <option value="timed" {{#if (eq draft.craftingMode "timed")}}selected{{/if}}>Timed / Seconds</option>
+            <option value="project" {{#if (eq draft.craftingMode "project")}}selected{{/if}}>Crafting Project</option>
+          </select></label>
+        </div>
+        {{#if (eq draft.craftingMode "timed")}}
+        <label><span>Crafting Time (seconds)</span><input type="number" min="0" step="1" name="craftingTime" value="{{draft.craftingTime}}"></label>
+        {{/if}}
+        <label class="cc-file-field"><span>Recipe Image</span><span><input type="text" name="img" value="{{draft.img}}"><button type="button" data-action="browse-image" data-target="img"><i class="fa-solid fa-folder-open"></i></button></span></label>
+        <label class="cc-description-field"><span>Additional Description (optional)</span><textarea name="description" rows="4" placeholder="Optional lore, instructions, flavor, or crafting notes for this recipe.">{{draft.description}}</textarea><small>This text can be revealed to players independently through Player Visibility.</small></label>
+      </section>
+
+      <section class="cc-form-card cc-crafting-resolution-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Proficiency & Access</span><h3>Who Can Craft</h3></div><small>All access and proficiency behavior stays together in this block.</small></div>
+        <div class="cc-resolution-section">
+          <div class="cc-resolution-heading"><strong>Relevant Proficiency</strong><small>Choose a Skill, a Tool, or both.</small></div>
+          <div class="cc-grid two cc-resolution-proficiencies">
+            <label><span>Proficiency 1</span><select name="proficiency1">
+              <option value="" {{#if (eq craftingResolutionOptions.proficiency1 "")}}selected{{/if}}>None</option>
+              <optgroup label="Skills">{{#each craftingResolutionOptions.skillOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.proficiency1)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+              <optgroup label="Tools">{{#each craftingResolutionOptions.toolOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.proficiency1)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            </select></label>
+            <label><span>Proficiency 2 (optional)</span><select name="proficiency2">
+              <option value="" {{#if (eq craftingResolutionOptions.proficiency2 "")}}selected{{/if}}>None</option>
+              <optgroup label="Skills">{{#each craftingResolutionOptions.skillOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.proficiency2)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+              <optgroup label="Tools">{{#each craftingResolutionOptions.toolOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.proficiency2)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            </select></label>
+          </div>
+          <div class="cc-grid three cc-resolution-policy-grid">
+            <label><span>If two are selected</span><select name="proficiencyMatch"><option value="any" {{#if (eq draft.craftingResolution.proficiencyMatch "any")}}selected{{/if}}>Any one qualifies</option><option value="all" {{#if (eq draft.craftingResolution.proficiencyMatch "all")}}selected{{/if}}>Both are required</option></select></label>
+            <label><span>Who can attempt</span><select name="attemptPolicy"><option value="anyone" {{#if (eq draft.craftingResolution.attemptPolicy "anyone")}}selected{{/if}}>Anyone</option><option value="requiresProficiency" {{#if (eq draft.craftingResolution.attemptPolicy "requiresProficiency")}}selected{{/if}}>Requires relevant proficiency</option></select></label>
+            <label><span>If proficient</span><select name="proficientPolicy"><option value="rollNormally" {{#if (eq draft.craftingResolution.proficientPolicy "rollNormally")}}selected{{/if}}>Roll normally</option><option value="automaticSuccess" {{#if (eq draft.craftingResolution.proficientPolicy "automaticSuccess")}}selected{{/if}}>Automatic final success</option></select></label>
+          </div>
+        </div>
+      </section>
+
+      {{#if (eq draft.craftingMode "project")}}
+      <section class="cc-form-card cc-project-config-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Crafting Time / Project</span><h3>Work Periods</h3></div><small>Starting the Project immediately performs the first Work Attempt. A compatible rest only unlocks the next attempt.</small></div>
+        <div class="cc-grid two">
+          <label><span>Required Work Periods</span><input type="number" min="1" max="99" step="1" name="requiredWork" value="{{draft.project.requiredWork}}"></label>
+          <label><span>Cadence</span><select name="projectCadence"><option value="long" {{#if (eq draft.project.cadence "long")}}selected{{/if}}>Long Rest</option><option value="short" {{#if (eq draft.project.cadence "short")}}selected{{/if}}>Short Rest (Short or Long Rest unlocks)</option></select></label>
+        </div>
+      </section>
+
+      <section class="cc-form-card cc-progress-check-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Progress Checks</span><h3>Checks During the Project</h3></div><small>Failure always consumes that Work Attempt. Consequences decide whether the project merely stalls, regresses, or fails completely.</small></div>
+        <label class="cc-resolution-toggle"><input type="checkbox" name="requireProgressCheck" data-resolution-rerender {{#if draft.project.progressCheck.required}}checked{{/if}}><span><strong>Require Progress Checks</strong><small>When disabled, each Work Attempt automatically adds +1 progress.</small></span></label>
+        {{#if draft.project.progressCheck.required}}
+        <div class="cc-grid three">
+          <label><span>When</span><select name="progressCheckTiming"><option value="every" {{#if (eq draft.project.progressCheck.timing "every")}}selected{{/if}}>Every Work Period</option><option value="midpoint" {{#if (eq draft.project.progressCheck.timing "midpoint")}}selected{{/if}}>Midpoint Only</option></select></label>
+          <label><span>Check</span><select name="progressCheck">
+            <optgroup label="Ability Checks">{{#each craftingResolutionOptions.abilityOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.progressCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            <optgroup label="Skills">{{#each craftingResolutionOptions.skillOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.progressCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            <optgroup label="Tools">{{#each craftingResolutionOptions.toolOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.progressCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            <optgroup label="Saving Throws">{{#each craftingResolutionOptions.saveOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.progressCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+          </select></label>
+          <label><span>Difficulty Class (DC)</span><input type="number" min="1" max="40" step="1" name="progressDC" value="{{draft.project.progressCheck.dc}}"></label>
+        </div>
+        <div class="cc-resolution-section cc-failure-outcome-block">
+          <div class="cc-resolution-heading"><strong>On Progress Check Failure</strong><small>Choose one project outcome. Material loss only exists when the entire Project fails.</small></div>
+          <div class="cc-failure-choice-grid">
+            <label class="cc-choice-card"><input type="radio" name="progressFailureMode" value="noProgress" data-resolution-rerender {{#if (eq draft.project.progressCheck.failure.mode "noProgress")}}checked{{/if}}><span><strong>No Progress</strong><small>Do not gain +1. Project stays where it is.</small></span></label>
+            <label class="cc-choice-card"><input type="radio" name="progressFailureMode" value="regress" data-resolution-rerender {{#if (eq draft.project.progressCheck.failure.mode "regress")}}checked{{/if}}><span><strong>Regress Progress</strong><small>Do not gain +1 and move backward.</small></span></label>
+            <label class="cc-choice-card"><input type="radio" name="progressFailureMode" value="failProject" data-resolution-rerender {{#if (eq draft.project.progressCheck.failure.mode "failProject")}}checked{{/if}}><span><strong>Fail Project</strong><small>End this Project and require a complete restart.</small></span></label>
+          </div>
+          {{#if (eq draft.project.progressCheck.failure.mode "regress")}}<label><span>Progress Lost</span><input type="number" min="1" max="99" step="1" name="progressRegressBy" value="{{draft.project.progressCheck.failure.regressBy}}"></label>{{/if}}
+          {{#if (eq draft.project.progressCheck.failure.mode "failProject")}}
+            <label class="cc-resolution-toggle"><input type="checkbox" name="progressFailLoseMaterials" data-resolution-rerender {{#if draft.project.progressCheck.failure.loseMaterials}}checked{{/if}}><span><strong>Lose materials when the Project fails</strong><small>Unchecked: all reserved materials return to the Actor.</small></span></label>
+            {{#if draft.project.progressCheck.failure.loseMaterials}}<label class="cc-loss-slider"><span>Materials Lost <output data-progress-failure-loss-output>{{draft.project.progressCheck.failure.lossPercent}}%</output></span><input type="range" min="0" max="100" step="5" name="progressFailLossPercent" value="{{draft.project.progressCheck.failure.lossPercent}}"></label>{{/if}}
+          {{/if}}
+        </div>
+        {{/if}}
+      </section>
+
+      <section class="cc-form-card cc-extra-effort-config-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Extra Effort</span><h3>Optional Second Work Attempt</h3></div><small>After the normal Work Attempt for a cycle, the crafter may push once more. Extra Effort uses its own check and never reserves or consumes materials again.</small></div>
+        <label class="cc-resolution-toggle"><input type="checkbox" name="enableExtraEffort" data-resolution-rerender {{#if draft.project.extraEffort.enabled}}checked{{/if}}><span><strong>Enable Extra Effort</strong><small>Allows one additional effort attempt after each normal Work Attempt.</small></span></label>
+        {{#if draft.project.extraEffort.enabled}}
+        <div class="cc-grid three">
+          <label><span>Extra Effort Check</span><select name="extraEffortCheck">
+            <optgroup label="Ability Checks">{{#each craftingResolutionOptions.abilityOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.extraEffortCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            <optgroup label="Skills">{{#each craftingResolutionOptions.skillOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.extraEffortCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            <optgroup label="Tools">{{#each craftingResolutionOptions.toolOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.extraEffortCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+            <optgroup label="Saving Throws">{{#each craftingResolutionOptions.saveOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.extraEffortCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+          </select></label>
+          <label><span>Difficulty Class (DC)</span><input type="number" min="1" max="40" step="1" name="extraEffortDC" value="{{draft.project.extraEffort.dc}}"></label>
+          <label><span>Progress on Success</span><input type="number" min="1" max="9" step="1" name="extraEffortProgressGain" value="{{draft.project.extraEffort.progressGain}}"></label>
+        </div>
+        <div class="cc-resolution-section cc-failure-outcome-block">
+          <div class="cc-resolution-heading"><strong>On Extra Effort Failure</strong><small>A failed Extra Effort always spends the opportunity and grants no extra progress. It never consumes more materials.</small></div>
+          <label class="cc-resolution-toggle"><input type="checkbox" name="extraEffortLoseProgress" data-resolution-rerender {{#if (eq draft.project.extraEffort.failure.mode "regress")}}checked{{/if}}><span><strong>Lose Progress on Failure</strong><small>Unchecked: failure has no penalty beyond spending this Extra Effort opportunity.</small></span></label>
+          {{#if (eq draft.project.extraEffort.failure.mode "regress")}}<label><span>Progress Lost on Failure</span><input type="number" min="1" max="99" step="1" name="extraEffortRegressBy" value="{{draft.project.extraEffort.failure.regressBy}}"></label>{{/if}}
+        </div>
+        {{/if}}
+      </section>
+      {{/if}}
+
+      <section class="cc-form-card cc-final-check-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Final Crafting Check</span><h3>Final Validation</h3></div><small>This is the v0.0.18 Crafting Check flow. Project Recipes gain configurable retry/regression/failure behavior around the same native D&D5e roll.</small></div>
+        <label class="cc-resolution-toggle"><input type="checkbox" name="requireCraftingCheck" data-resolution-rerender {{#if draft.craftingResolution.check.required}}checked{{/if}}><span><strong>Require a Final Crafting Check</strong><small>When disabled, an eligible crafter completes automatically after the required work.</small></span></label>
+        {{#if draft.craftingResolution.check.required}}
+        <div class="cc-grid two cc-resolution-check-grid">
+          <label><span>Check</span><select name="craftingCheck"><optgroup label="Ability Checks">{{#each craftingResolutionOptions.abilityOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup><optgroup label="Skills">{{#each craftingResolutionOptions.skillOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup><optgroup label="Tools">{{#each craftingResolutionOptions.toolOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup><optgroup label="Saving Throws">{{#each craftingResolutionOptions.saveOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup></select></label>
+          <label><span>Difficulty Class (DC)</span><input type="number" min="1" max="40" step="1" name="craftingDC" value="{{draft.craftingResolution.check.dc}}"></label>
+        </div>
+        {{#if (eq draft.craftingMode "project")}}
+        <div class="cc-resolution-section cc-failure-outcome-block">
+          <div class="cc-resolution-heading"><strong>On Final Check Failure</strong><small>The failed attempt is spent. Choose whether the Project stays ready, regresses, or fails completely.</small></div>
+          <div class="cc-failure-choice-grid">
+            <label class="cc-choice-card"><input type="radio" name="finalFailureMode" value="noProgress" data-resolution-rerender {{#if (eq draft.craftingResolution.failure.mode "noProgress")}}checked{{/if}}><span><strong>Stay Ready</strong><small>No progress is lost. Another compatible rest unlocks the next Final Check attempt.</small></span></label>
+            <label class="cc-choice-card"><input type="radio" name="finalFailureMode" value="regress" data-resolution-rerender {{#if (eq draft.craftingResolution.failure.mode "regress")}}checked{{/if}}><span><strong>Regress Project</strong><small>Move backward by a configured number of Work Periods.</small></span></label>
+            <label class="cc-choice-card"><input type="radio" name="finalFailureMode" value="failProject" data-resolution-rerender {{#if (eq draft.craftingResolution.failure.mode "failProject")}}checked{{/if}}><span><strong>Fail Project</strong><small>End the Project and require a complete restart.</small></span></label>
+          </div>
+          {{#if (eq draft.craftingResolution.failure.mode "regress")}}<label><span>Progress Lost</span><input type="number" min="1" max="99" step="1" name="finalRegressBy" value="{{draft.craftingResolution.failure.regressBy}}"></label>{{/if}}
+          {{#if (eq draft.craftingResolution.failure.mode "failProject")}}
+            <label class="cc-resolution-toggle"><input type="checkbox" name="loseMaterialsOnFailure" data-resolution-rerender {{#if draft.craftingResolution.failure.loseMaterials}}checked{{/if}}><span><strong>Lose materials when the Project fails</strong><small>Unchecked: all reserved materials return.</small></span></label>
+            {{#if draft.craftingResolution.failure.loseMaterials}}<label class="cc-loss-slider"><span>Materials Lost on Project Failure <output data-failure-loss-output>{{draft.craftingResolution.failure.lossPercent}}%</output></span><input type="range" min="0" max="100" step="5" name="failureLossPercent" value="{{draft.craftingResolution.failure.lossPercent}}"></label>{{/if}}
+          {{/if}}
+        </div>
+        {{else}}
+        <div class="cc-resolution-failure">
+          <label class="cc-resolution-toggle"><input type="checkbox" name="loseMaterialsOnFailure" data-resolution-rerender {{#if draft.craftingResolution.failure.loseMaterials}}checked{{/if}}><span><strong>Lose materials on failure</strong><small>Legacy timed crafting ends immediately on a failed Final Check.</small></span></label>
+          {{#if draft.craftingResolution.failure.loseMaterials}}<label class="cc-loss-slider"><span>Materials Lost on Failure <output data-failure-loss-output>{{draft.craftingResolution.failure.lossPercent}}%</output></span><input type="range" min="0" max="100" step="5" name="failureLossPercent" value="{{draft.craftingResolution.failure.lossPercent}}"></label>{{/if}}
+        </div>
+        {{/if}}
+        {{/if}}
+      </section>
+
+      <section class="cc-form-card cc-player-visibility-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Player Visibility</span><h3>What the Player Can See</h3></div><small>Hidden information remains stored and enforced. The Character Crafting tab and published Knowledge Source use the same visibility rules.</small></div>
+        <div class="cc-visibility-grid">
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.output" {{#if draft.playerVisibility.output}}checked{{/if}}><span><strong>Output</strong><small>Reveal the crafted Item.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.ingredients" {{#if draft.playerVisibility.ingredients}}checked{{/if}}><span><strong>Ingredients</strong><small>Reveal required Item names.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.ingredientQuantities" {{#if draft.playerVisibility.ingredientQuantities}}checked{{/if}}><span><strong>Ingredient Quantities</strong><small>Reveal required and available amounts.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftCount" {{#if draft.playerVisibility.craftCount}}checked{{/if}}><span><strong>Craftable Count</strong><small>Reveal the N× counter beside known Recipes.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.proficiencies" {{#if draft.playerVisibility.proficiencies}}checked{{/if}}><span><strong>Relevant Proficiencies</strong><small>Reveal Skill/Tool requirements.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.attemptPolicy" {{#if draft.playerVisibility.attemptPolicy}}checked{{/if}}><span><strong>Who Can Attempt</strong><small>Reveal whether proficiency is required.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingTime" {{#if draft.playerVisibility.craftingTime}}checked{{/if}}><span><strong>Crafting Time / Cadence</strong><small>Reveal seconds or required Work Periods and cadence.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.projectProgress" {{#if draft.playerVisibility.projectProgress}}checked{{/if}}><span><strong>Current Project Progress</strong><small>Reveal exact current / total Work Periods.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.progressCheck" {{#if draft.playerVisibility.progressCheck}}checked{{/if}}><span><strong>Progress Check</strong><small>Reveal the intermediate check and timing.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.progressDC" {{#if draft.playerVisibility.progressDC}}checked{{/if}}><span><strong>Progress DC</strong><small>Reveal its exact DC.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.progressFailure" {{#if draft.playerVisibility.progressFailure}}checked{{/if}}><span><strong>Progress Failure</strong><small>Reveal stall/regression/project-failure consequences.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.progressFailurePercent" {{#if draft.playerVisibility.progressFailurePercent}}checked{{/if}}><span><strong>Progress Material Loss %</strong><small>Reveal the exact loss percentage when a Progress Check can fail the Project.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.extraEffort" {{#if draft.playerVisibility.extraEffort}}checked{{/if}}><span><strong>Extra Effort</strong><small>Reveal whether the Recipe supports Extra Effort.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.extraEffortCheck" {{#if draft.playerVisibility.extraEffortCheck}}checked{{/if}}><span><strong>Extra Effort Check</strong><small>Reveal the roll used for Extra Effort.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.extraEffortDC" {{#if draft.playerVisibility.extraEffortDC}}checked{{/if}}><span><strong>Extra Effort DC</strong><small>Reveal its target DC.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.extraEffortFailure" {{#if draft.playerVisibility.extraEffortFailure}}checked{{/if}}><span><strong>Extra Effort Failure</strong><small>Reveal whether failure stalls or regresses progress.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingCheck" {{#if draft.playerVisibility.craftingCheck}}checked{{/if}}><span><strong>Final Crafting Check</strong><small>Reveal the final roll type.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingDC" {{#if draft.playerVisibility.craftingDC}}checked{{/if}}><span><strong>Final Crafting DC</strong><small>Reveal its target DC.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.failure" {{#if draft.playerVisibility.failure}}checked{{/if}}><span><strong>Final Failure Consequence</strong><small>Reveal what a failed final attempt does.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.failurePercent" {{#if draft.playerVisibility.failurePercent}}checked{{/if}}><span><strong>Final Material Loss %</strong><small>Reveal the exact percentage when Final Check Project failure can destroy materials.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.description" {{#if draft.playerVisibility.description}}checked{{/if}}><span><strong>Additional Description</strong><small>Reveal the optional GM-written text.</small></span></label>
+        </div>
+      </section>
+
+      <section class="cc-form-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Requirements</span><h3>Items Consumed</h3></div><small>Any D&D5e Item can be an input. Materials from Crafting Core — Materials are only the organized automatic source.</small></div>
+        <div class="cc-drop-zone" data-drop-kind="ingredient"><i class="fa-solid fa-arrow-down-to-line"></i><strong>Drop required Items here</strong></div>
+        <div class="cc-item-rows">
+          {{#each draft.ingredients}}
+          <div class="cc-item-row">
+            <img src="{{img}}" alt="">
+            <div class="cc-item-name"><strong>{{name}}</strong><small>{{type}}</small></div>
+            <label><span>Qty</span><input type="number" min="1" step="1" value="{{quantity}}" data-ingredient-quantity="{{@index}}"></label>
+            <button type="button" class="cc-icon-button danger" data-action="remove-ingredient" data-index="{{@index}}" aria-label="Remove"><i class="fa-solid fa-trash"></i></button>
+          </div>
+          {{else}}
+          <div class="cc-empty-row">No required Items yet.</div>
+          {{/each}}
+        </div>
+      </section>
+
+      <section class="cc-form-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Output</span><h3>Crafted Item</h3></div><small>The complete Item snapshot is reproduced when a Character crafts it, including Item Creator Activities, Effects and flags.</small></div>
+        {{#if draft.result}}
+        <div class="cc-result-card">
+          <img src="{{draft.result.img}}" alt="">
+          <div><strong>{{draft.result.name}}</strong><small>{{draft.result.type}}</small></div>
+          <label><span>Qty</span><input type="number" min="1" step="1" name="resultQuantity" value="{{draft.result.quantity}}"></label>
+          <button type="button" class="cc-icon-button danger" data-action="clear-result"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        {{else}}
+        <div class="cc-drop-zone result" data-drop-kind="result"><i class="fa-solid fa-box-open"></i><strong>Drop the final Item here</strong></div>
+        {{/if}}
+      </section>
+
+      <section class="cc-form-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Published Knowledge Source</span><h3>Recipe / Formula / Blueprint / Manual</h3></div><small>GM-only library source. Players see it only after the GM distributes a copy through an Actor, loot, chest, vendor or Supplier.</small></div>
+        <div class="cc-grid two">
+          <label><span>Source Type</span><select name="knowledgeLabel"><option value="Recipe" {{#if (eq draft.knowledge.label "Recipe")}}selected{{/if}}>Recipe</option><option value="Blueprint" {{#if (eq draft.knowledge.label "Blueprint")}}selected{{/if}}>Blueprint</option><option value="Formula" {{#if (eq draft.knowledge.label "Formula")}}selected{{/if}}>Formula</option><option value="Manual" {{#if (eq draft.knowledge.label "Manual")}}selected{{/if}}>Manual</option></select></label>
+          <label><span>Custom Item Name (optional)</span><input type="text" name="knowledgeName" value="{{draft.knowledge.name}}" placeholder="Recipe — {{draft.name}}"></label>
+        </div>
+        <label class="cc-file-field"><span>Knowledge Source Image</span><span><input type="text" name="knowledgeImg" value="{{draft.knowledge.img}}"><button type="button" data-action="browse-image" data-target="knowledgeImg"><i class="fa-solid fa-folder-open"></i></button></span></label>
+        <div class="cc-learning-access">
+          <label><span>Learning Access</span><select name="learningAccess">
+            <option value="followCraftingEligibility" {{#if (eq draft.learning.access "followCraftingEligibility")}}selected{{/if}}>Follow Crafting Eligibility</option>
+            <option value="anyone" {{#if (eq draft.learning.access "anyone")}}selected{{/if}}>Anyone Can Learn</option>
+          </select></label>
+          <small><strong>Follow Crafting Eligibility</strong> prevents a Character from learning when the Recipe requires proficiencies they do not satisfy. A rejected attempt does not consume the Knowledge Source.</small>
+        </div>
+        <div class="cc-knowledge-economy">
+          <span><strong>Rarity</strong>{{outputRarity}}</span>
+          <span><strong>Knowledge Price</strong>{{knowledgePrice}} gp</span>
+          <small>Rarity always comes from the crafted output. Price follows the D&D5e 5.3.3 magic crafting cost progression; Legendary = 100,000 gp.</small>
+        </div>
+        {{#unless editingExisting}}
+        <p class="cc-note"><i class="fa-solid fa-circle-info"></i> Save the draft before publishing its Knowledge Source.</p>
+        {{/unless}}
+      </section>
+    </div>
+
+    <footer class="cc-footer">
+      {{#if editingExisting}}<button type="button" class="cc-danger-action" data-action="delete-recipe"><i class="fa-solid fa-trash"></i> Delete Builder Draft</button>{{else}}<span></span>{{/if}}
+      <div class="cc-footer-actions">
+        {{#if editingExisting}}<button type="button" class="cc-primary-action cc-publish-action" data-action="publish-recipe"><i class="fa-solid fa-upload"></i> {{#if published}}Update Published Source{{else}}Publish to Private Compendium{{/if}}</button>{{/if}}
+        <button type="button" class="cc-primary-action" data-action="save-recipe"><i class="fa-solid fa-floppy-disk"></i> Save Draft</button>
+      </div>
+    </footer>
+    {{else}}
+
+    <div class="cc-content cc-knowledge-base-content">
+      {{#if selectedPublished}}
+      <header class="cc-section-header cc-knowledge-base-header">
+        <div>
+          <span class="cc-kicker">Knowledge Base · Published Authority</span>
+          <h2>{{selectedPublished.recipe.name}}</h2>
+          <p>This is the definition currently stored in Crafting Core — Learn Sources. Editing creates or opens a separate Builder draft; nothing changes for players until you publish again.</p>
+        </div>
+        <img class="cc-recipe-image" src="{{selectedPublished.img}}" alt="">
+      </header>
+
+      <div class="cc-publication-banner"><i class="fa-solid fa-database"></i><div><strong>{{selectedPublished.sourceName}}</strong><small>{{selectedPublished.sourceType}} · {{selectedPublished.draftStatus}}</small></div></div>
+
+      <section class="cc-form-card cc-knowledge-base-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Published State</span><h3>Authoritative Knowledge Source</h3></div><small>The Compendium Item is the source of truth. Internal indexes and Actor snapshots are derived caches.</small></div>
+        <div class="cc-knowledge-meta-grid">
+          <span><strong>Recipe ID</strong><code>{{selectedPublished.recipeId}}</code></span>
+          <span><strong>Source Type</strong>{{selectedPublished.sourceType}}</span>
+          <span><strong>Published</strong>{{selectedPublished.publishedAtLabel}}</span>
+          <span><strong>Last Compendium Update</strong>{{selectedPublished.updatedAtLabel}}</span>
+        </div>
+        <div class="cc-knowledge-actions">
+          <button type="button" class="cc-primary-action" data-action="edit-published-source"><i class="fa-solid fa-pen-to-square"></i> {{selectedPublished.draftActionLabel}}</button>
+          <button type="button" class="cc-secondary-action" data-action="open-published-item"><i class="fa-solid fa-up-right-from-square"></i> Open Published Item</button>
+          <button type="button" class="cc-danger-action" data-action="unpublish-source"><i class="fa-solid fa-book-skull"></i> Unpublish</button>
+        </div>
+      </section>
+
+      <section class="cc-form-card cc-knowledge-base-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Published Definition</span><h3>What Characters Learn</h3></div><small>Existing active Projects are not rewritten when this definition changes.</small></div>
+        {{#if selectedPublished.recipe.description}}<p class="cc-knowledge-description">{{selectedPublished.recipe.description}}</p>{{/if}}
+        <div class="cc-knowledge-summary-grid">
+          <div>
+            <span class="cc-kicker">Inputs</span>
+            <div class="cc-item-rows">
+              {{#each selectedPublished.recipe.ingredients}}
+              <div class="cc-item-row cc-knowledge-row"><img src="{{img}}" alt=""><div class="cc-item-name"><strong>{{name}}</strong><small>{{type}}</small></div><strong>×{{quantity}}</strong></div>
+              {{else}}<div class="cc-empty-row">No ingredients.</div>{{/each}}
+            </div>
+          </div>
+          <div>
+            <span class="cc-kicker">Output</span>
+            {{#if selectedPublished.recipe.result}}
+            <div class="cc-result-card cc-knowledge-result"><img src="{{selectedPublished.recipe.result.img}}" alt=""><div><strong>{{selectedPublished.recipe.result.name}}</strong><small>{{selectedPublished.recipe.result.type}}</small></div><strong>×{{selectedPublished.recipe.result.quantity}}</strong></div>
+            {{else}}<div class="cc-empty-row">No output snapshot.</div>{{/if}}
+          </div>
+        </div>
+      </section>
+      {{else}}
+      <div class="cc-knowledge-empty">
+        <i class="fa-solid fa-book-open"></i>
+        <strong>No published Knowledge Sources</strong>
+        <p>Create a Recipe draft, save it, and publish it to Learn Sources. It will appear here as the canonical published definition.</p>
+        <button type="button" class="cc-primary-action" data-action="show-drafts"><i class="fa-solid fa-pen-ruler"></i> Go to Drafts</button>
+      </div>
+      {{/if}}
+    </div>
+
+    <footer class="cc-footer cc-knowledge-footer">
+      <button type="button" class="cc-secondary-action" data-action="open-learn-sources"><i class="fa-solid fa-book"></i> Open Learn Sources</button>
+      <button type="button" class="cc-primary-action" data-action="show-drafts"><i class="fa-solid fa-pen-ruler"></i> Drafts / Recipe Builder</button>
+    </footer>
+    {{/if}}
+  </main>
+</section>
