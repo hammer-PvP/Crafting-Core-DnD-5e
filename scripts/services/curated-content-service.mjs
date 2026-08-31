@@ -1,5 +1,6 @@
 import { FLAGS, KNOWLEDGE_ICONS, MODULE_ID, SETTINGS } from "../constants.mjs";
 import { CURATED_CULINARY_RECIPES, CURATED_CULINARY_VERSION } from "../data/curated-culinary-catalog.mjs";
+import { CURATED_ALCOHOLIC_RECIPES, CURATED_NON_ALCOHOLIC_RECIPES, CURATED_DRINKS_VERSION } from "../data/curated-drinks-catalog.mjs";
 import { CompendiumService } from "./compendium-service.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
 import { MaterialCatalogService } from "./material-catalog-service.mjs";
@@ -10,6 +11,18 @@ const ITEM_CREATOR_MIN_VERSION = "0.7.1";
 const ITEM_CREATOR_SCHEMA_VERSION = 17;
 const ACTIVE_EFFECT_ICON = "systems/dnd5e/icons/svg/documents/active-effect.svg";
 const PRICE_CP = Object.freeze({ cp: 1, sp: 10, ep: 50, gp: 100, pp: 1000 });
+const FOOD_RUNTIME_KEY = "crafting-core:culinary:food-benefit";
+const LEGACY_FOOD_RUNTIME_KEY = "crafting-core:culinary:movement-benefit";
+const ALCOHOL_RUNTIME_KEY = "crafting-core:culinary:alcohol-benefit";
+const SIX_HOURS_SECONDS = 6 * 60 * 60;
+const CURATED_CONTENT_VERSION = Math.max(CURATED_CULINARY_VERSION, 5 + CURATED_DRINKS_VERSION - 1);
+const CURATED_RECIPES = Object.freeze([
+  ...CURATED_CULINARY_RECIPES,
+  ...CURATED_ALCOHOLIC_RECIPES,
+  ...CURATED_NON_ALCOHOLIC_RECIPES
+]);
+const CURATED_BY_PRODUCT_ID = new Map(CURATED_RECIPES.map(entry => [entry.productId, entry]));
+const CURATED_BY_RECIPE_ID = new Map(CURATED_RECIPES.map(entry => [entry.recipeId, entry]));
 
 function clone(value) {
   return foundry.utils.deepClone(value);
@@ -94,6 +107,29 @@ function formatPrice(price) {
   return `${Number(price?.value ?? 0)} ${String(price?.denomination ?? "gp")}`;
 }
 
+function titleCase(value) {
+  return String(value ?? "").replace(/[-_]+/g, " ").replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function itemFromActivity(activity) {
+  const parent = activity?.item ?? activity?.parent ?? activity?.document?.parent;
+  return parent?.documentName === "Item" || parent?.constructor?.documentName === "Item" ? parent : null;
+}
+
+function actorFromItem(item) {
+  const parent = item?.actor ?? item?.parent;
+  return parent?.documentName === "Actor" || parent?.constructor?.documentName === "Actor" ? parent : null;
+}
+
+function currentWorldTime() {
+  return Number(game.time?.worldTime) || 0;
+}
+
+function signed(value) {
+  const number = Number(value) || 0;
+  return number > 0 ? `+${number}` : String(number);
+}
+
 function normalizedRecipeBaseline(recipe) {
   const data = RecipeService.snapshot(recipe);
   delete data.createdAt;
@@ -157,7 +193,8 @@ function mergeProductPresentation(current, official, previousBaseline, entry) {
   const legacyPriceCp = entry.mealType === "complete" ? 100 : 50; // v0.2.0/v0.2.1 defaults.
   const currentPriceCp = priceToCopper(currentEditable.price);
   const officialPriceCp = priceToCopper(official.system?.price);
-  if (![legacyPriceCp, officialPriceCp].includes(currentPriceCp)) next.system.price = clone(currentEditable.price);
+  const previousSingleOutputPriceCp = officialPriceCp * Math.max(1, Number(entry.yield) || 1); // v0.2.3/v0.2.4 meal economy.
+  if (![legacyPriceCp, officialPriceCp, previousSingleOutputPriceCp].includes(currentPriceCp)) next.system.price = clone(currentEditable.price);
   if (currentEditable.rarity && currentEditable.rarity !== "common") next.system.rarity = currentEditable.rarity;
   return next;
 }
@@ -211,6 +248,7 @@ export class CuratedContentService {
   static PRODUCTS_PACK_ID = `world.${this.PRODUCTS_PACK_NAME}`;
   static #managedDeletes = new Set();
   static #hooksInstalled = false;
+  static #pendingConsumptions = new WeakMap();
 
   static registerSettings() {
     game.settings.register(MODULE_ID, SETTINGS.CURATED_CONTENT_STATE, {
@@ -252,7 +290,7 @@ export class CuratedContentService {
 
     // Products do not have a separate lifecycle service, so direct deletion from the
     // Products Compendium is the explicit signal that the GM wants that official Product
-    // suppressed until Restore Curated Culinary Defaults is used.
+    // suppressed until Restore Curated Product Defaults is used.
     Hooks.on("deleteItem", item => {
       if (!game.user?.isGM || !item?.pack) return;
       const token = `${item.pack}:${item.id}`;
@@ -269,12 +307,12 @@ export class CuratedContentService {
     // remove its published Curated source.
     Hooks.on(`${MODULE_ID}.knowledgeUnpublished`, recipeId => {
       const id = String(recipeId ?? "");
-      if (!CURATED_CULINARY_RECIPES.some(entry => entry.recipeId === id)) return;
+      if (!CURATED_BY_RECIPE_ID.has(id)) return;
       void this.#suppress("recipe", id);
     });
     Hooks.on(`${MODULE_ID}.knowledgePublished`, recipeId => {
       const id = String(recipeId ?? "");
-      if (!CURATED_CULINARY_RECIPES.some(entry => entry.recipeId === id)) return;
+      if (!CURATED_BY_RECIPE_ID.has(id)) return;
       // Republishing an intentionally/unintentionally missing official source makes it live
       // again. Clear stale suppression so a later GM startup cannot treat it as absent by design.
       // Then repair its official metadata/folder after the normal publish transaction finishes.
@@ -286,6 +324,171 @@ export class CuratedContentService {
         });
       }, 0);
     });
+
+    // Track Curated Food temporary HP around native D&D5e consumption. Persistent Food and
+    // Alcohol effects themselves remain Item Creator effects; Crafting Core only adds the
+    // missing "6 hours OR any Rest" boundary and safe ownership tracking for Food Temp HP.
+    Hooks.on("dnd5e.activityConsumption", activity => {
+      try {
+        const item = itemFromActivity(activity);
+        const actor = actorFromItem(item);
+        const productId = String(item?.getFlag?.(MODULE_ID, FLAGS.PRODUCT_ID) ?? "");
+        const entry = CURATED_BY_PRODUCT_ID.get(productId);
+        if (!actor || !entry) return;
+        this.#pendingConsumptions.set(activity, {
+          actor,
+          entry,
+          preTempHp: Math.max(0, Number(actor.system?.attributes?.hp?.temp) || 0)
+        });
+      } catch (error) {
+        console.warn(`${MODULE_ID} | Could not snapshot Curated consumable use.`, error);
+      }
+    });
+
+    Hooks.on("dnd5e.postUseActivity", async activity => {
+      try {
+        const snapshot = this.#pendingConsumptions.get(activity) ?? null;
+        this.#pendingConsumptions.delete(activity);
+        const item = itemFromActivity(activity);
+        const actor = snapshot?.actor ?? actorFromItem(item);
+        const productId = String(item?.getFlag?.(MODULE_ID, FLAGS.PRODUCT_ID) ?? "");
+        const entry = snapshot?.entry ?? CURATED_BY_PRODUCT_ID.get(productId);
+        if (!actor || !entry || entry.effectFamily !== "food") return;
+        await this.#removeRuntimeFamilyEffects(actor, [LEGACY_FOOD_RUNTIME_KEY]);
+        await this.#recordFoodUse(actor, entry, snapshot?.preTempHp ?? Math.max(0, Number(actor.system?.attributes?.hp?.temp) || 0));
+        setTimeout(() => void this.#capCurrentHp(actor), 0);
+      } catch (error) {
+        console.error(`${MODULE_ID} | Curated Food post-use tracking failed.`, error);
+      }
+    });
+
+    Hooks.on("dnd5e.restCompleted", async (actor, result) => {
+      try {
+        const restType = String(result?.type ?? result?.restType ?? "").toLowerCase();
+        if (!restType.includes("short") && !restType.includes("long")) return;
+        await this.#clearFoodState(actor, { reason: restType || "rest" });
+        await this.#removeRuntimeFamilyEffects(actor, [FOOD_RUNTIME_KEY, LEGACY_FOOD_RUNTIME_KEY, ALCOHOL_RUNTIME_KEY]);
+        await this.#capCurrentHp(actor);
+      } catch (error) {
+        console.error(`${MODULE_ID} | Curated Food/Alcohol rest cleanup failed.`, error);
+      }
+    });
+
+    Hooks.on("updateWorldTime", async worldTimeValue => {
+      try { await this.#expireFoodStates(Number(worldTimeValue) || currentWorldTime()); }
+      catch (error) { console.error(`${MODULE_ID} | Curated Food world-time cleanup failed.`, error); }
+    });
+
+    Hooks.on("updateActor", (actor, changes, options) => {
+      try { void this.#observeFoodTempHp(actor, changes, options); }
+      catch (error) { console.warn(`${MODULE_ID} | Curated Food Temp HP ownership tracking failed.`, error); }
+    });
+
+    Hooks.once("ready", () => {
+      if (!game.user?.isGM) return;
+      setTimeout(() => void this.#cleanupLegacyFoodRuntimeWorld(), 0);
+    });
+  }
+
+  static async #cleanupLegacyFoodRuntimeWorld() {
+    if (!game.user?.isGM) return 0;
+    let removed = 0;
+    for (const actor of game.actors ?? []) removed += await this.#removeRuntimeFamilyEffects(actor, [LEGACY_FOOD_RUNTIME_KEY]);
+    return removed;
+  }
+
+  static async #recordFoodUse(actor, entry, preTempHp=0) {
+    const previous = actor.getFlag?.(MODULE_ID, FLAGS.CURATED_FOOD_STATE) ?? null;
+    const currentTempHp = Math.max(0, Number(actor.system?.attributes?.hp?.temp) || 0);
+
+    // A new Food replaces the previous Food family. If the previous meal still owns
+    // remaining Temp HP and the new meal does not grant Temp HP, remove only that
+    // owned remainder. External Temp HP is left untouched.
+    if (!(Number(entry.tempHp) > 0) && previous?.tempHpOwned) {
+      const granted = Math.max(0, Number(previous.grantedTempHp) || 0);
+      if (currentTempHp > 0 && currentTempHp <= granted) {
+        await actor.update({ "system.attributes.hp.temp": 0 }, { craftingCoreCuratedFood: true, render: true });
+      }
+    }
+
+    const postTempHp = Math.max(0, Number(actor.system?.attributes?.hp?.temp) || 0);
+    const grantedTempHp = Math.max(0, Number(entry.tempHp) || 0);
+    const previousOwned = Boolean(previous?.tempHpOwned);
+    const tempHpOwned = grantedTempHp > 0 && postTempHp <= grantedTempHp && (
+      postTempHp > Math.max(0, Number(preTempHp) || 0) || previousOwned
+    );
+
+    await actor.setFlag(MODULE_ID, FLAGS.CURATED_FOOD_STATE, {
+      productId: entry.productId,
+      appliedAtWorldTime: currentWorldTime(),
+      expiresAtWorldTime: currentWorldTime() + SIX_HOURS_SECONDS,
+      tempHpOwned,
+      grantedTempHp,
+      lastObservedTempHp: postTempHp
+    });
+  }
+
+  static async #clearFoodState(actor, { reason="cleanup" }={}) {
+    if (!actor) return false;
+    const state = actor.getFlag?.(MODULE_ID, FLAGS.CURATED_FOOD_STATE) ?? null;
+    if (!state) return false;
+    const currentTempHp = Math.max(0, Number(actor.system?.attributes?.hp?.temp) || 0);
+    const granted = Math.max(0, Number(state.grantedTempHp) || 0);
+    if (state.tempHpOwned && currentTempHp > 0 && currentTempHp <= granted) {
+      await actor.update({ "system.attributes.hp.temp": 0 }, { craftingCoreCuratedFood: true, render: true, reason });
+    }
+    await actor.unsetFlag(MODULE_ID, FLAGS.CURATED_FOOD_STATE);
+    return true;
+  }
+
+  static async #removeRuntimeFamilyEffects(actor, keys) {
+    if (!actor) return 0;
+    const wanted = new Set((keys ?? []).map(String));
+    const ids = [...(actor.effects ?? [])].filter(effect => {
+      const flags = effect.flags?.[ITEM_CREATOR_ID] ?? {};
+      return flags.consumableApplied === true && wanted.has(String(flags.consumableSourceKey ?? ""));
+    }).map(effect => effect.id).filter(Boolean);
+    if (ids.length) await actor.deleteEmbeddedDocuments("ActiveEffect", ids, { craftingCoreCuratedCleanup: true, render: true });
+    return ids.length;
+  }
+
+  static async #capCurrentHp(actor) {
+    if (!actor) return false;
+    const current = Math.max(0, Number(actor.system?.attributes?.hp?.value) || 0);
+    const maximum = Math.max(0, Number(actor.system?.attributes?.hp?.max) || 0);
+    if (!maximum || current <= maximum) return false;
+    await actor.update({ "system.attributes.hp.value": maximum }, { craftingCoreCuratedCleanup: true, render: true });
+    return true;
+  }
+
+  static async #expireFoodStates(now=currentWorldTime()) {
+    if (!game.user?.isGM) return 0;
+    let expired = 0;
+    for (const actor of game.actors ?? []) {
+      const state = actor.getFlag?.(MODULE_ID, FLAGS.CURATED_FOOD_STATE) ?? null;
+      const expires = Number(state?.expiresAtWorldTime);
+      if (!Number.isFinite(expires) || expires <= 0 || expires > now) continue;
+      await this.#clearFoodState(actor, { reason: "6-hours" });
+      await this.#removeRuntimeFamilyEffects(actor, [FOOD_RUNTIME_KEY]);
+      await this.#capCurrentHp(actor);
+      expired += 1;
+    }
+    return expired;
+  }
+
+  static async #observeFoodTempHp(actor, changes, options={}) {
+    if (!actor || options?.craftingCoreCuratedFood) return;
+    if (!foundry.utils.hasProperty(changes ?? {}, "system.attributes.hp.temp")) return;
+    const state = actor.getFlag?.(MODULE_ID, FLAGS.CURATED_FOOD_STATE) ?? null;
+    if (!state?.tempHpOwned) return;
+    const current = Math.max(0, Number(actor.system?.attributes?.hp?.temp) || 0);
+    const previous = Math.max(0, Number(state.lastObservedTempHp) || 0);
+    const next = clone(state);
+    // Damage consumes owned Temp HP and therefore keeps ownership. A later increase from
+    // another source means the meal no longer owns the current Temp HP and must not erase it.
+    if (current > previous) next.tempHpOwned = false;
+    next.lastObservedTempHp = current;
+    await actor.setFlag(MODULE_ID, FLAGS.CURATED_FOOD_STATE, next);
   }
 
   static async #suppress(kind, id) {
@@ -337,24 +540,55 @@ export class CuratedContentService {
   static #productFolders() {
     return [
       { key: "culinary", name: "Culinary" },
-      { key: "culinary:dwarven", name: "Dwarven Cuisine", parent: "culinary" },
-      { key: "culinary:elven", name: "Elven Cuisine", parent: "culinary" },
-      { key: "culinary:common", name: "Common Cuisine", parent: "culinary" }
+      { key: "culinary:meals", name: "Meals", parent: "culinary" },
+      { key: "culinary:meals:dwarven", name: "Dwarven Cuisine", parent: "culinary:meals" },
+      { key: "culinary:meals:elven", name: "Elven Cuisine", parent: "culinary:meals" },
+      { key: "culinary:meals:common", name: "Common Cuisine", parent: "culinary:meals" },
+      { key: "culinary:alcohol", name: "Alcoholic Drinks", parent: "culinary" },
+      { key: "culinary:alcohol:mundane", name: "Mundane", parent: "culinary:alcohol" },
+      { key: "culinary:alcohol:dwarven", name: "Dwarven", parent: "culinary:alcohol" },
+      { key: "culinary:alcohol:elven", name: "Elven", parent: "culinary:alcohol" },
+      { key: "culinary:alcohol:cane-spirit", name: "Cane Spirits", parent: "culinary:alcohol" },
+      { key: "culinary:nonalcohol", name: "Non-Alcoholic Drinks", parent: "culinary" },
+      { key: "culinary:nonalcohol:mundane", name: "Mundane", parent: "culinary:nonalcohol" },
+      { key: "culinary:nonalcohol:dwarven", name: "Dwarven", parent: "culinary:nonalcohol" },
+      { key: "culinary:nonalcohol:elven", name: "Elven", parent: "culinary:nonalcohol" }
     ];
   }
 
+  static #productFolderKey(entry) {
+    if (entry.subcategory === "meal") return `culinary:meals:${entry.culture}`;
+    if (entry.subcategory === "alcoholic-drink") return `culinary:alcohol:${entry.culture}`;
+    if (entry.subcategory === "non-alcoholic-drink") return `culinary:nonalcohol:${entry.culture}`;
+    return "culinary";
+  }
+
   static #knowledgeFolders() {
-    // Compendium folders have a finite nesting depth. Keeping Curated content outside the
-    // generic Recipe folder gives us the three useful levels the GM actually needs while the
-    // Item itself still remains Source Type = Recipe:
-    // Crafting Core Curated -> Culinary -> <Culture> Cuisine.
+    // Foundry Compendium folder nesting is finite, so Curated knowledge uses three levels:
+    // Crafting Core Curated -> Product Family -> Culture.
     return [
       { key: "curated", name: "Crafting Core Curated" },
-      { key: "curated:culinary", name: "Culinary", parent: "curated" },
-      { key: "curated:culinary:dwarven", name: "Dwarven Cuisine", parent: "curated:culinary" },
-      { key: "curated:culinary:elven", name: "Elven Cuisine", parent: "curated:culinary" },
-      { key: "curated:culinary:common", name: "Common Cuisine", parent: "curated:culinary" }
+      { key: "curated:meals", name: "Culinary Meals", parent: "curated" },
+      { key: "curated:meals:dwarven", name: "Dwarven Cuisine", parent: "curated:meals" },
+      { key: "curated:meals:elven", name: "Elven Cuisine", parent: "curated:meals" },
+      { key: "curated:meals:common", name: "Common Cuisine", parent: "curated:meals" },
+      { key: "curated:alcohol", name: "Alcoholic Drinks", parent: "curated" },
+      { key: "curated:alcohol:mundane", name: "Mundane", parent: "curated:alcohol" },
+      { key: "curated:alcohol:dwarven", name: "Dwarven", parent: "curated:alcohol" },
+      { key: "curated:alcohol:elven", name: "Elven", parent: "curated:alcohol" },
+      { key: "curated:alcohol:cane-spirit", name: "Cane Spirits", parent: "curated:alcohol" },
+      { key: "curated:nonalcohol", name: "Non-Alcoholic Drinks", parent: "curated" },
+      { key: "curated:nonalcohol:mundane", name: "Mundane", parent: "curated:nonalcohol" },
+      { key: "curated:nonalcohol:dwarven", name: "Dwarven", parent: "curated:nonalcohol" },
+      { key: "curated:nonalcohol:elven", name: "Elven", parent: "curated:nonalcohol" }
     ];
+  }
+
+  static #knowledgeFolderKey(entry) {
+    if (entry.subcategory === "meal") return `curated:meals:${entry.culture}`;
+    if (entry.subcategory === "alcoholic-drink") return `curated:alcohol:${entry.culture}`;
+    if (entry.subcategory === "non-alcoholic-drink") return `curated:nonalcohol:${entry.culture}`;
+    return "curated";
   }
 
   static async syncIfNeeded() {
@@ -389,16 +623,16 @@ export class CuratedContentService {
       await this.#saveState(repairedState);
     }
 
-    const expectedProducts = CURATED_CULINARY_RECIPES
+    const expectedProducts = CURATED_RECIPES
       .filter(entry => !repairedState.suppressedProducts.includes(entry.productId))
       .map(entry => entry.productId);
-    const expectedRecipes = CURATED_CULINARY_RECIPES
+    const expectedRecipes = CURATED_RECIPES
       .filter(entry => !repairedState.suppressedRecipes.includes(entry.recipeId))
       .map(entry => entry.recipeId);
 
     const productsComplete = expectedProducts.every(id => presentProductIds.has(id));
     const recipesComplete = expectedRecipes.every(id => presentRecipeIds.has(id));
-    if (repairedState.culinaryVersion >= CURATED_CULINARY_VERSION && productsComplete && recipesComplete) {
+    if (repairedState.culinaryVersion >= CURATED_CONTENT_VERSION && productsComplete && recipesComplete) {
       return { skipped: true, reason: "current", products: expectedProducts.length, recipes: expectedRecipes.length };
     }
     return this.sync({ restore: false });
@@ -406,7 +640,7 @@ export class CuratedContentService {
 
   static async restoreAll() {
     if (!game.user?.isGM) throw new Error("Only a GM can restore Crafting Core Curated content.");
-    if (!this.itemCreatorCompatible()) throw new Error(`Curated Culinary Products require active DnD 5e Item Creator ${ITEM_CREATOR_MIN_VERSION} or newer.`);
+    if (!this.itemCreatorCompatible()) throw new Error(`Persistent Curated Food and Alcohol Products require active DnD 5e Item Creator ${ITEM_CREATOR_MIN_VERSION} or newer.`);
     const state = this.state();
     state.suppressedProducts = [];
     state.suppressedRecipes = [];
@@ -416,7 +650,7 @@ export class CuratedContentService {
 
   static async sync({ restore=false }={}) {
     if (!game.user?.isGM) throw new Error("Only a GM can synchronize Crafting Core Curated content.");
-    if (!this.itemCreatorCompatible()) throw new Error(`Curated Culinary Products require active DnD 5e Item Creator ${ITEM_CREATOR_MIN_VERSION} or newer.`);
+    if (!this.itemCreatorCompatible()) throw new Error(`Persistent Curated Food and Alcohol Products require active DnD 5e Item Creator ${ITEM_CREATOR_MIN_VERSION} or newer.`);
 
     const state = this.state();
     if (restore) {
@@ -426,7 +660,7 @@ export class CuratedContentService {
     const materialDocs = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
     const products = await this.#syncProducts(state, materialDocs);
     const recipes = await this.#syncRecipes(state, materialDocs, products.documentsByProductId);
-    state.culinaryVersion = CURATED_CULINARY_VERSION;
+    state.culinaryVersion = CURATED_CONTENT_VERSION;
     state.productBaselines = products.baselines;
     state.recipeBaselines = recipes.baselines;
     await this.#saveState(state);
@@ -436,7 +670,7 @@ export class CuratedContentService {
 
   static async saveProductIconChoice(productId, path) {
     if (!game.user?.isGM) throw new Error("Only a GM can change Curated Product presentation.");
-    const entry = CURATED_CULINARY_RECIPES.find(row => row.productId === String(productId));
+    const entry = CURATED_BY_PRODUCT_ID.get(String(productId));
     if (!entry) throw new Error("Unknown Curated Product.");
     if (!entry.icons.includes(String(path))) throw new Error("Choose one of the three official Foundry Core icons.");
     const state = this.state();
@@ -455,14 +689,29 @@ export class CuratedContentService {
     const pack = this.productsPack();
     const docs = pack ? await pack.getDocuments() : [];
     const byId = new Map(docs.map(item => [String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? ""), item]).filter(([id]) => id));
-    const products = CURATED_CULINARY_RECIPES.map(entry => {
+
+    const benefitLabel = entry => {
+      if (entry.subcategory === "meal") {
+        if (entry.mealType === "complete") return "+5 Max HP + 5 ft Speed";
+        if (entry.mealType === "hearty") return "5 Temp HP";
+        return "+5 ft Speed";
+      }
+      if (entry.subcategory === "alcoholic-drink") {
+        return Object.entries(entry.abilityModifiers ?? {}).map(([ability, value]) => `${ability.toUpperCase()} ${signed(value)}`).join(" / ");
+      }
+      if (entry.subcategory === "non-alcoholic-drink") return `Restore ${Number(entry.healing) || 0} HP`;
+      return "—";
+    };
+
+    const products = CURATED_RECIPES.map(entry => {
       const item = byId.get(entry.productId) ?? null;
       const ingredientCostCopper = entry.ingredients.reduce((total, row) => {
         const material = materialMap.get(row.materialId);
         const price = material ? { value: material.price, denomination: material.denomination } : { value: 0, denomination: "gp" };
         return total + priceToCopper(price) * row.quantity;
       }, 0);
-      const buyPrice = priceFromCopper(ingredientCostCopper * entry.priceMultiplier);
+      const yieldCount = Math.max(1, Number(entry.yield) || 1);
+      const buyPrice = priceFromCopper(Math.round((ingredientCostCopper * entry.priceMultiplier) / yieldCount));
       const selectedIcon = String(state.productIcons?.[entry.productId] || item?.img || entry.icons[0]);
       return {
         ...clone(entry),
@@ -470,24 +719,45 @@ export class CuratedContentService {
         selectedIcon,
         ingredientCostLabel: formatPrice(priceFromCopper(ingredientCostCopper)),
         priceLabel: formatPrice(item?.system?.price ?? buyPrice),
-        benefitLabel: entry.mealType === "complete" ? "5 Temp HP + 5 ft" : entry.mealType === "hearty" ? "5 Temp HP" : "+5 ft Speed",
+        benefitLabel: benefitLabel(entry),
+        yieldLabel: `${yieldCount} serving${yieldCount === 1 ? "" : "s"}`,
         iconCandidates: entry.icons.map((icon, index) => ({ path: icon, index: index + 1, selected: icon === selectedIcon }))
       };
     });
-    const cultures = ["dwarven", "elven", "common"];
-    const groups = cultures.map(culture => ({
-      culture,
-      label: `${culture.charAt(0).toUpperCase()}${culture.slice(1)} Cuisine`,
-      products: products.filter(row => row.culture === culture),
-      count: products.filter(row => row.culture === culture).length
-    }));
+
+    const cultureLabel = culture => ({
+      common: "Common Cuisine",
+      mundane: "Mundane",
+      dwarven: "Dwarven",
+      elven: "Elven",
+      "cane-spirit": "Cane Spirits"
+    })[culture] ?? titleCase(culture);
+
+    const sectionSpecs = [
+      { key: "meals", label: "Meals", subcategory: "meal", cultures: ["dwarven", "elven", "common"] },
+      { key: "alcohol", label: "Alcoholic Drinks", subcategory: "alcoholic-drink", cultures: ["mundane", "dwarven", "elven", "cane-spirit"] },
+      { key: "nonalcohol", label: "Non-Alcoholic Drinks", subcategory: "non-alcoholic-drink", cultures: ["mundane", "dwarven", "elven"] }
+    ];
+    const sections = sectionSpecs.map(section => {
+      const sectionProducts = products.filter(row => row.subcategory === section.subcategory);
+      return {
+        ...section,
+        count: sectionProducts.length,
+        groups: section.cultures.map(culture => {
+          const rows = sectionProducts.filter(row => row.culture === culture);
+          return { culture, label: cultureLabel(culture), products: rows, count: rows.length };
+        }).filter(group => group.count > 0)
+      };
+    });
+
     return {
       compatible: this.itemCreatorCompatible(),
       itemCreatorVersion: this.itemCreatorVersion(),
       requiredVersion: ITEM_CREATOR_MIN_VERSION,
       packExists: Boolean(pack),
       count: products.filter(row => row.exists).length,
-      groups
+      total: products.length,
+      sections
     };
   }
 
@@ -510,16 +780,26 @@ export class CuratedContentService {
   }
 
   static #productDescription(entry) {
-    const benefit = entry.mealType === "complete"
-      ? "<strong>5 Temporary Hit Points</strong> and <strong>+5 ft Walking Speed</strong>"
-      : entry.mealType === "hearty"
-        ? "<strong>5 Temporary Hit Points</strong>"
-        : "<strong>+5 ft Walking Speed</strong>";
-    return `<p>${entry.description}</p><p><strong>Meal Benefit:</strong> ${benefit}.</p><p><strong>Duration:</strong> Until the next Long Rest.</p><p><em>Official Crafting Core Curated Culinary Product. Persistent movement effects are managed by DnD 5e Item Creator.</em></p><section class="item-creator-generated" data-item-creator-generated="consumable-runtime"><h3>Consumable Use</h3><ul><li><strong>Activation:</strong> Action.</li><li><strong>Effect Duration:</strong> Until next Long Rest.</li></ul></section>`;
+    const yieldCount = Math.max(1, Number(entry.yield) || 1);
+    const batch = `<p><strong>Official Recipe Yield:</strong> ${yieldCount} serving${yieldCount === 1 ? "" : "s"} per craft. This Item represents one serving.</p>`;
+    if (entry.subcategory === "meal") {
+      const benefit = entry.mealType === "complete"
+        ? "<strong>+5 Maximum Hit Points</strong> and <strong>+5 ft Walking Speed</strong>"
+        : entry.mealType === "hearty"
+          ? "<strong>5 Temporary Hit Points</strong>"
+          : "<strong>+5 ft Walking Speed</strong>";
+      return `<p>${entry.description}</p><p><strong>Meal Benefit:</strong> ${benefit}.</p><p><strong>Duration:</strong> Up to 6 hours or until the next Short Rest, whichever happens first. A Long Rest also removes the effect.</p>${batch}<p><em>Curated Food effects do not stack with another Curated Food; the newest meal replaces the previous Food family. Food and Alcohol may coexist.</em></p>`;
+    }
+    if (entry.subcategory === "alcoholic-drink") {
+      const modifiers = Object.entries(entry.abilityModifiers ?? {}).map(([ability, value]) => `<strong>${ability.toUpperCase()} ${signed(value)}</strong>`).join(" / ");
+      return `<p>${entry.description}</p><p><strong>Alcohol Effect:</strong> ${modifiers}.</p><p><strong>Duration:</strong> Up to 6 hours or until the next Short Rest, whichever happens first. A Long Rest also removes the effect.</p><p><strong>Limits:</strong> Alcohol cannot raise an Ability Score above 20 or reduce one below 1.</p>${batch}<p><em>Curated Alcohol effects do not stack with another Curated Alcohol; the newest drink replaces the previous Alcohol family. Alcohol and Food may coexist.</em></p>`;
+    }
+    return `<p>${entry.description}</p><p><strong>Refreshment:</strong> Restore <strong>${Math.max(0, Number(entry.healing) || 0)} Hit Points</strong> immediately, never above maximum HP.</p><p><strong>Duration:</strong> Instantaneous; no persistent effect.</p>${batch}<p><em>Official Crafting Core Curated Non-Alcoholic Drink.</em></p>`;
   }
 
   static #baseProductData(entry, state, existing, materialDocs, folderId) {
-    const price = priceFromCopper(this.#ingredientCost(entry, materialDocs) * entry.priceMultiplier);
+    const yieldCount = Math.max(1, Number(entry.yield) || 1);
+    const price = priceFromCopper(Math.round((this.#ingredientCost(entry, materialDocs) * entry.priceMultiplier) / yieldCount));
     return {
       name: entry.name,
       type: "consumable",
@@ -547,14 +827,18 @@ export class CuratedContentService {
           [FLAGS.CURATED]: true,
           [FLAGS.CURATED_ID]: entry.id,
           [FLAGS.CURATED_KIND]: "culinary-product",
-          [FLAGS.CURATED_VERSION]: CURATED_CULINARY_VERSION,
+          [FLAGS.CURATED_VERSION]: CURATED_CONTENT_VERSION,
           [FLAGS.PRODUCT]: true,
           [FLAGS.PRODUCT_ID]: entry.productId,
           [FLAGS.PRODUCT_CATEGORY]: entry.category,
           [FLAGS.PRODUCT_SUBCATEGORY]: entry.subcategory,
           [FLAGS.PRODUCT_CULTURE]: entry.culture,
           [FLAGS.PRODUCT_RARITY]: entry.rarity,
-          [FLAGS.PRODUCT_MEAL_TYPE]: entry.mealType,
+          [FLAGS.PRODUCT_MEAL_TYPE]: entry.mealType ?? "",
+          [FLAGS.PRODUCT_TIER]: entry.tier ?? "",
+          [FLAGS.PRODUCT_DRINK_TYPE]: entry.drinkType ?? "",
+          [FLAGS.PRODUCT_EFFECT_FAMILY]: entry.effectFamily ?? "",
+          [FLAGS.PRODUCT_YIELD]: yieldCount,
           [FLAGS.PRODUCT_ICON_CANDIDATES]: clone(entry.icons),
           [FLAGS.PRODUCT_MANAGED]: true
         }
@@ -564,16 +848,18 @@ export class CuratedContentService {
   }
 
   static #managedActivity(entry, itemData) {
-    const ActivityClass = entry.tempHp > 0
+    const healingAmount = Math.max(0, Number(entry.tempHp) || Number(entry.healing) || 0);
+    const isHeal = healingAmount > 0;
+    const ActivityClass = isHeal
       ? CONFIG.DND5E.activityTypes?.heal?.documentClass
       : CONFIG.DND5E.activityTypes?.utility?.documentClass;
-    if (!ActivityClass) throw new Error(`D&D5e ${entry.tempHp > 0 ? "Heal" : "Utility"} Activity support is unavailable.`);
+    if (!ActivityClass) throw new Error(`D&D5e ${isHeal ? "Heal" : "Utility"} Activity support is unavailable.`);
     const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
     const provisional = new ItemClass(clone(itemData), { temporary: true });
     const document = new ActivityClass({}, { parent: provisional });
     const activity = cleanDocumentSource(document.toObject?.(false) ?? document);
-    activity._id = stableId(`culinary-activity:${entry.id}`);
-    activity.type = entry.tempHp > 0 ? "heal" : "utility";
+    activity._id = stableId(`culinary-activity:${entry.productId}`);
+    activity.type = isHeal ? "heal" : "utility";
     activity.name = "Consume";
     activity.activation ??= {};
     activity.activation.type = "action";
@@ -595,64 +881,83 @@ export class CuratedContentService {
     activity.range.override = false;
     activity.range.units = "self";
     activity.flags ??= {};
-    activity.flags[ITEM_CREATOR_ID] = { ...(activity.flags[ITEM_CREATOR_ID] ?? {}), consumableUse: true };
-    if (entry.tempHp > 0) {
+    if (entry.effectFamily) activity.flags[ITEM_CREATOR_ID] = { ...(activity.flags[ITEM_CREATOR_ID] ?? {}), consumableUse: true };
+    if (isHeal) {
       activity.healing ??= {};
       activity.healing.number = 0;
       activity.healing.denomination = 0;
-      activity.healing.bonus = String(entry.tempHp);
-      activity.healing.types = ["temphp"];
+      activity.healing.bonus = String(healingAmount);
+      activity.healing.types = [Number(entry.tempHp) > 0 ? "temphp" : "healing"];
       activity.healing.custom = { enabled: false };
       activity.healing.scaling = { number: 1 };
     }
     return activity;
   }
 
-  static #movementBlueprint(entry) {
-    if (entry.movementBonus <= 0) return null;
+  static #persistentBlueprint(entry) {
+    if (!entry.effectFamily) return null;
+    const changes = [];
+    const add = CONST.ACTIVE_EFFECT_MODES.ADD;
+    const downgrade = CONST.ACTIVE_EFFECT_MODES.DOWNGRADE ?? 3;
+    const upgrade = CONST.ACTIVE_EFFECT_MODES.UPGRADE ?? 4;
+
+    if (entry.effectFamily === "food") {
+      if (Number(entry.maximumHpBonus) > 0) changes.push({
+        key: "system.attributes.hp.bonuses.overall", mode: add, value: String(entry.maximumHpBonus), priority: 20
+      });
+      if (Number(entry.movementBonus) > 0) changes.push({
+        key: "system.attributes.movement.walk", mode: add, value: String(entry.movementBonus), priority: 20
+      });
+    } else if (entry.effectFamily === "alcohol") {
+      for (const [ability, raw] of Object.entries(entry.abilityModifiers ?? {})) {
+        const value = Number(raw) || 0;
+        if (!value) continue;
+        changes.push({ key: `system.abilities.${ability}.value`, mode: add, value: String(value), priority: 20 });
+        if (value > 0) changes.push({ key: `system.abilities.${ability}.value`, mode: downgrade, value: "20", priority: 30 });
+        if (value < 0) changes.push({ key: `system.abilities.${ability}.value`, mode: upgrade, value: "1", priority: 40 });
+      }
+    }
+
     return {
-      _id: stableId(`culinary-effect:movement:${entry.id}`),
+      _id: stableId(`culinary-effect:${entry.productId}`),
       type: "base",
-      name: "Item Creator — Movement Bonus",
+      name: entry.effectFamily === "food" ? "Item Creator — Food Benefit" : "Item Creator — Alcohol Effect",
       img: ACTIVE_EFFECT_ICON,
-      description: `Culinary movement benefit from ${entry.name}.`,
+      description: entry.effectFamily === "food"
+        ? `Curated Food benefit from ${entry.name}.`
+        : `Curated Alcohol modifiers from ${entry.name}.`,
       disabled: false,
       transfer: false,
       statuses: [],
-      changes: [{
-        key: "system.attributes.movement.walk",
-        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
-        value: String(entry.movementBonus)
-      }],
+      changes,
       flags: {
         [ITEM_CREATOR_ID]: {
           blueprint: true,
-          key: "movementBonus",
+          key: entry.effectFamily === "food" ? "curatedFoodBenefit" : "curatedAlcoholEffect",
           availability: "consumableUse",
           unlockOnLevel: false,
           unlockLevel: 1,
-          progressionGroupId: "effect:movementBonus",
+          progressionGroupId: entry.effectFamily === "food" ? "effect:curatedFood" : "effect:curatedAlcohol",
           progressionTierId: "base",
           progressionTierOrder: 0,
           consumableBlueprint: true
         }
       }
-      // Intentionally no duration object. Item Creator v0.7.1 materializes the
-      // applied Actor effect and owns its Long Rest duration/cleanup.
     };
   }
 
   static #itemCreatorFlags(entry) {
+    if (!entry.effectFamily) return null;
     const config = {
       activation: "action",
       reactionTrigger: "",
-      durationMode: "longRest",
-      durationValue: 1,
+      durationMode: "hours",
+      durationValue: 6,
       stacking: "replace",
       removeExhaustion: false,
       removeExhaustionAmount: "1"
     };
-    const movement = entry.movementBonus > 0;
+    const runtimeKey = entry.effectFamily === "food" ? FOOD_RUNTIME_KEY : ALCOHOL_RUNTIME_KEY;
     return {
       created: true,
       schemaVersion: ITEM_CREATOR_SCHEMA_VERSION,
@@ -664,7 +969,7 @@ export class CuratedContentService {
       importedItem: false,
       runtime: {
         consumable: {
-          key: movement ? "crafting-core:culinary:movement-benefit" : `crafting-core:culinary:${entry.id}`,
+          key: runtimeKey,
           config: clone(config)
         }
       },
@@ -672,16 +977,8 @@ export class CuratedContentService {
         customized: {},
         overrides: {},
         consumableConfig: clone(config),
-        grantedEffects: movement ? { movementBonus: true } : {},
-        grantedEffectValues: movement ? {
-          movementBonus: {
-            entries: [{ type: "walk", bonus: entry.movementBonus, units: "ft" }],
-            availability: "consumableUse",
-            unlockOnLevel: false,
-            unlockLevel: 1,
-            progressionGroupId: "effect:movementBonus"
-          }
-        } : {},
+        grantedEffects: {},
+        grantedEffectValues: {},
         customImportedEffects: [],
         importedBaseSummary: [],
         descriptionCustomized: true
@@ -693,9 +990,10 @@ export class CuratedContentService {
     const data = this.#baseProductData(entry, state, existing, materialDocs, folderId);
     const activity = this.#managedActivity(entry, data);
     data.system.activities = { [activity._id]: activity };
-    const movement = this.#movementBlueprint(entry);
-    data.effects = movement ? [movement] : [];
-    data.flags[ITEM_CREATOR_ID] = this.#itemCreatorFlags(entry);
+    const effect = this.#persistentBlueprint(entry);
+    data.effects = effect ? [effect] : [];
+    const itemCreatorFlags = this.#itemCreatorFlags(entry);
+    if (itemCreatorFlags) data.flags[ITEM_CREATOR_ID] = itemCreatorFlags;
     this.#validateItemSource(data, `Curated Product ${entry.name}`);
     return data;
   }
@@ -780,10 +1078,10 @@ export class CuratedContentService {
       let updated = 0;
       let repairedLegacyEffects = 0;
 
-      for (const entry of CURATED_CULINARY_RECIPES) {
+      for (const entry of CURATED_RECIPES) {
         if (suppressed.has(entry.productId)) continue;
         const existing = byId.get(entry.productId) ?? null;
-        const folder = folders.get(`culinary:${entry.culture}`) ?? folders.get("culinary") ?? null;
+        const folder = folders.get(this.#productFolderKey(entry)) ?? folders.get("culinary") ?? null;
         const official = this.#buildProductData(entry, state, existing, materialDocs, folder?.id ?? null);
         baselines[entry.productId] = editableProductSnapshot(official);
         if (!existing) {
@@ -858,7 +1156,7 @@ export class CuratedContentService {
         img: product.img,
         type: product.type,
         identifier: String(product.system?.identifier ?? ""),
-        quantity: 1,
+        quantity: Math.max(1, Number(entry.yield) || 1),
         snapshot: product.toObject(false)
       },
       knowledge: {
@@ -903,7 +1201,7 @@ export class CuratedContentService {
       let updated = 0;
       const folderRepairIds = new Set();
 
-      for (const entry of CURATED_CULINARY_RECIPES) {
+      for (const entry of CURATED_RECIPES) {
         if (suppressed.has(entry.recipeId)) continue;
         const product = productDocs.get(entry.productId);
         if (!product) continue;
@@ -924,7 +1222,7 @@ export class CuratedContentService {
           };
         }
         baselines[entry.recipeId] = normalizedRecipeBaseline(officialRecipe);
-        const folder = folders.get(`curated:culinary:${entry.culture}`) ?? folders.get("curated:culinary") ?? folders.get("curated") ?? null;
+        const folder = folders.get(this.#knowledgeFolderKey(entry)) ?? folders.get("curated") ?? null;
         const targetFolderId = String(folder?.id ?? "");
         const currentFolderId = String(existing?.folder?.id ?? existing?.folder ?? "");
         if (existing && currentFolderId !== targetFolderId) folderRepairIds.add(entry.recipeId);
@@ -935,13 +1233,17 @@ export class CuratedContentService {
           [FLAGS.CURATED]: true,
           [FLAGS.CURATED_ID]: entry.id,
           [FLAGS.CURATED_KIND]: "culinary-recipe",
-          [FLAGS.CURATED_VERSION]: CURATED_CULINARY_VERSION,
+          [FLAGS.CURATED_VERSION]: CURATED_CONTENT_VERSION,
           [FLAGS.PRODUCT_ID]: entry.productId,
           [FLAGS.PRODUCT_CATEGORY]: entry.category,
           [FLAGS.PRODUCT_SUBCATEGORY]: entry.subcategory,
           [FLAGS.PRODUCT_CULTURE]: entry.culture,
           [FLAGS.PRODUCT_RARITY]: entry.rarity,
-          [FLAGS.PRODUCT_MEAL_TYPE]: entry.mealType
+          [FLAGS.PRODUCT_MEAL_TYPE]: entry.mealType ?? "",
+          [FLAGS.PRODUCT_TIER]: entry.tier ?? "",
+          [FLAGS.PRODUCT_DRINK_TYPE]: entry.drinkType ?? "",
+          [FLAGS.PRODUCT_EFFECT_FAMILY]: entry.effectFamily ?? "",
+          [FLAGS.PRODUCT_YIELD]: Math.max(1, Number(entry.yield) || 1)
         };
         preserveExternalFlags(existing?.toObject(false), data);
         this.#validateItemSource(data, `Curated Learn Source ${entry.name}`);
@@ -963,11 +1265,11 @@ export class CuratedContentService {
       // Verify the persisted post-condition from the Compendium itself. Draft state is never
       // authoritative for Curated publication, and folder placement is repaired even when the
       // documents already existed before this version.
-      for (const entry of CURATED_CULINARY_RECIPES) {
+      for (const entry of CURATED_RECIPES) {
         if (suppressed.has(entry.recipeId)) continue;
         const item = documentsByRecipeId.get(entry.recipeId);
         if (!item) throw new Error(`Curated Learn Source ${entry.name} was not persisted in Crafting Core — Learn Sources.`);
-        const folder = folders.get(`curated:culinary:${entry.culture}`) ?? folders.get("curated:culinary") ?? folders.get("curated") ?? null;
+        const folder = folders.get(this.#knowledgeFolderKey(entry)) ?? folders.get("curated") ?? null;
         const targetFolderId = String(folder?.id ?? "");
         const persistedFolderId = String(item.folder?.id ?? item.folder ?? "");
         if (persistedFolderId !== targetFolderId) {

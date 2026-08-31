@@ -20,7 +20,7 @@ const essence = (id, name, nature, {tags=[], quantity="1"}={}) => ({
   tags: ["essence", ...tags], requires: [], biomes: [], quantity, chance: 100
 });
 
-export const MATERIAL_CATALOG_VERSION = 8;
+export const MATERIAL_CATALOG_VERSION = 9;
 
 export const DEFAULT_MATERIALS = Object.freeze([
   // Aberration
@@ -263,6 +263,7 @@ export const DEFAULT_MATERIALS = Object.freeze([
   profession("trade-barley", "Barley", "cultivated", "common", {tags:["cultivated","crop","grain","food"]}),
   profession("trade-rice", "Rice", "cultivated", "common", {tags:["cultivated","crop","grain","food"]}),
   profession("trade-oats", "Oats", "cultivated", "common", {tags:["cultivated","crop","grain","food"]}),
+  profession("trade-sugar-cane", "Sugar Cane", "cultivated", "common", {tags:["cultivated","crop","food","brewing","cane"]}),
   profession("trade-potato", "Potato", "cultivated", "common", {tags:["cultivated","crop","vegetable","food"]}),
   profession("trade-onion", "Onion", "cultivated", "common", {tags:["cultivated","crop","vegetable","food"]}),
   profession("trade-garlic", "Garlic", "cultivated", "common", {tags:["cultivated","crop","vegetable","food"]}),

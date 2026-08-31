@@ -1,8 +1,8 @@
 {
   "id": "dnd5e-crafting-core",
   "title": "Crafting Core (DnD 5e)",
-  "description": "A D&D5e crafting, harvesting, and material framework for Foundry VTT 14 with GM-authored Recipes, Compendium-backed Knowledge, persistent Crafting Projects, curated materials and Products, harvesting, gathering, and player-facing crafting workflows. Complete manual: https://github.com/hammer-PvP/Crafting-Core-DnD-5e/blob/main/docs/Crafting-Core-Complete-Manual.pdf",
-  "version": "0.2.4",
+  "description": "A D&D5e crafting, harvesting, materials, Recipe Knowledge, and curated consumables framework for Foundry VTT 14. Includes 230 canonical Materials, 58 Curated Products, batch/serving crafting, harvesting, gathering, and player-facing Crafting Projects. Complete manual: https://github.com/hammer-PvP/Crafting-Core-DnD-5e/blob/main/docs/Crafting-Core-Complete-Manual.pdf",
+  "version": "0.3.0",
   "authors": [
     {
       "name": "Raphael Andrade"
@@ -48,6 +48,6 @@
   "readme": "README.md",
   "url": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e",
   "manifest": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e/releases/latest/download/module.json",
-  "download": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e/releases/download/v0.2.4/crafting-core.zip",
+  "download": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e/releases/download/v0.3.0/crafting-core.zip",
   "socket": true
 }

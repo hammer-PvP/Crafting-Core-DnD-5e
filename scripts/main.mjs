@@ -143,10 +143,10 @@ Hooks.once("ready", async () => {
     }
     try {
       const curated = await CuratedContentService.syncIfNeeded();
-      if (!curated?.skipped) console.info(`${MODULE_TITLE} | Curated Culinary library synchronized:`, curated);
+      if (!curated?.skipped) console.info(`${MODULE_TITLE} | Curated Product library synchronized:`, curated);
     } catch (error) {
-      console.error(`${MODULE_TITLE} | Curated Culinary synchronization failed.`, error);
-      ui.notifications?.error?.("Crafting Core could not synchronize the Curated Culinary library. Check the console for details.");
+      console.error(`${MODULE_TITLE} | Curated Product synchronization failed.`, error);
+      ui.notifications?.error?.("Crafting Core could not synchronize the Curated Product library. Check the console for details.");
     }
   }
 });

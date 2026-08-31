@@ -851,6 +851,11 @@ const ICON_SETS = Object.freeze({
     "icons/containers/bags/sack-open-grain-red-tan.webp",
     "icons/consumables/grains/wheat-yellow.webp",
   ]),
+  "sugar_cane": Object.freeze([
+    "icons/consumables/plants/grass-bundle-green.webp",
+    "icons/consumables/plants/grass-dried-bundle-brown.webp",
+    "icons/consumables/plants/flax-leaves-spiked-bundle-orange.webp",
+  ]),
   "potato": Object.freeze([
     "icons/consumables/vegetable/root-potato-brown.webp",
     "icons/consumables/vegetable/root-potato-leafy-brown.webp",
@@ -1328,6 +1333,7 @@ const MATERIAL_ICON_SET = Object.freeze({
   "trade-barley": "barley",
   "trade-rice": "rice",
   "trade-oats": "oats",
+  "trade-sugar-cane": "sugar_cane",
   "trade-potato": "potato",
   "trade-onion": "onion",
   "trade-garlic": "garlic",

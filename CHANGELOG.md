@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.3.0 — Curated Drinks, Serving Yields & Six-Hour Food Runtime
+
+- Expanded the canonical Material Catalog from **229 to 230 Materials** with **Sugar Cane**, a Common cultivated culinary/brewing ingredient.
+- Expanded the official Product library from **15 to 58 Curated Products** and the matching official Recipe Knowledge library from **15 to 58 Learn Sources**.
+- Added **28 Curated Alcoholic Drinks** across Mundane, Dwarven, Elven, and Cane Spirit traditions.
+- Added **15 Curated Non-Alcoholic Drinks** across Mundane, Dwarven, and Elven traditions. Non-alcoholic drinks use only native instantaneous HP healing: Simple 1 HP, Prepared 2 HP, Specialty 3 HP.
+- Added generic Recipe **batch/yield** handling to official Curated Products. Meals now produce 1-4 servings; Alcohol batches produce 100/20/10 servings for Cheap/Proper/Reserve; Non-Alcoholic batches produce 100/40/30 servings for Simple/Prepared/Specialty.
+- Curated Product unit prices now follow **(2 x current ingredient cost) / Recipe yield**, while each Product Item remains one individually sellable serving.
+- Retuned Curated Food duration from Long Rest to **6 hours or the next Short Rest, whichever happens first**; Long Rest also clears the effect.
+- Retuned **Complete Meals** from 5 Temporary HP + movement to **+5 Maximum HP +5 ft Walking Speed**. Hearty remains 5 Temporary HP; Energizing remains +5 ft Walking Speed.
+- Curated Food uses one shared replacement family: a new Food replaces the previous Food effect rather than stacking. Curated Alcohol uses a separate shared replacement family, so **one Food and one Alcohol may coexist**, but two Foods or two Alcohols cannot stack.
+- Alcohol uses a generic Item Creator-backed Ability Score effect declaration rather than product-name-specific runtime logic. Cheap drinks apply one -1 penalty; Proper/Reserve drinks use the approved +2/-4 tradeoff.
+- Alcohol never grants positive Constitution. The initial positive distribution is STR x4, DEX x4, INT x3, WIS x3, CHA x6, CON x0; the INT/WIS drinks use intentionally mild/contemplative themes.
+- Alcohol Ability Score effects are constrained to a maximum of 20 and minimum of 1, last up to 6 hours, and are removed on Short or Long Rest.
+- Added safe Food temporary-HP ownership tracking so the module can clear meal-owned Temporary HP at expiration/rest without erasing unrelated Temporary HP from another source.
+- Reorganized official Products and Learn Sources by family and culture so Meals, Alcoholic Drinks, and Non-Alcoholic Drinks are ready for tavern/vendor/Supplier stock workflows.
+- Expanded the Curated Products administration UI to all 58 Products, including benefit, Recipe yield, live ingredient cost, per-serving price, and three selectable Foundry Core icon candidates.
+
 ## v0.2.4 — Curated Learn Source Persistence & Catalog UI Fix
 
 - Fixed the Curated Products catalog regression where the UI reported **15 / 15** Products but hid all Product groups because the Materials search routine looked only for `.cc-material-table-row`. Product groups now render normally with their three icon choices.

@@ -65,7 +65,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     root.querySelector('[data-action="restore-curated-culinary"]')?.addEventListener("click", event => this.#restoreCuratedCulinary(event));
     root.querySelector('[data-action="open-products"]')?.addEventListener("click", event => {
       event.preventDefault();
-      if (!CuratedContentService.openProductsPack()) ui.notifications.warn("Restore the Curated Culinary library first.");
+      if (!CuratedContentService.openProductsPack()) ui.notifications.warn("Restore the Curated Product library first.");
     });
     root.querySelectorAll('[data-action="choose-product-icon"]').forEach(input => input.addEventListener("change", event => this.#chooseProductIcon(event)));
     root.querySelector('[data-action="sync-materials"]')?.addEventListener("click", event => this.#sync(event));
@@ -237,9 +237,9 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     event.preventDefault();
     const button = event.currentTarget;
     const confirmed = await foundry.applications.api.DialogV2.confirm({
-      window: { title: "Restore Curated Culinary Library" },
-      content: "<p>Repair and restore the <strong>15 official Culinary Products and Recipe Learn Sources</strong>?</p><p>Missing official content is recreated. Fields that still match older Crafting Core defaults are upgraded. GM-customized fields are preserved.</p>",
-      yes: { label: "Restore Culinary Defaults", icon: "fa-solid fa-utensils" },
+      window: { title: "Restore Curated Product Library" },
+      content: "<p>Repair and restore the <strong>58 official Curated Products and Recipe Learn Sources</strong>?</p><p>This includes 15 Meals, 28 Alcoholic Drinks, and 15 Non-Alcoholic Drinks. Missing official content is recreated. Fields that still match older Crafting Core defaults are upgraded. GM-customized presentation fields are preserved.</p>",
+      yes: { label: "Restore Curated Defaults", icon: "fa-solid fa-utensils" },
       no: { label: "Cancel" }
     });
     if (!confirmed) return;
@@ -250,11 +250,11 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       const recipes = result.recipes ?? {};
       const repairedFolders = Number(recipes.foldersRepaired ?? 0);
       const folderSuffix = repairedFolders ? `; ${repairedFolders} Recipe folder placement${repairedFolders === 1 ? "" : "s"} repaired` : "";
-      ui.notifications.info(`Culinary library restored: ${products.created ?? 0} Products created, ${products.updated ?? 0} updated; ${recipes.created ?? 0} Recipes created, ${recipes.updated ?? 0} updated${folderSuffix}.`);
+      ui.notifications.info(`Curated Product library restored: ${products.created ?? 0} Products created, ${products.updated ?? 0} updated; ${recipes.created ?? 0} Recipes created, ${recipes.updated ?? 0} updated${folderSuffix}.`);
       this.render({ force: true });
     } catch (error) {
-      console.error(`${MODULE_ID} | Curated Culinary restore failed.`, error);
-      ui.notifications.error(error.message ?? "Crafting Core could not restore the Curated Culinary library.");
+      console.error(`${MODULE_ID} | Curated Product restore failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not restore the Curated Product library.");
       if (button) button.disabled = false;
     }
   }

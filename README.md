@@ -13,11 +13,11 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.2.4
+- **Crafting Core:** v0.3.0
 - **Foundry VTT:** minimum 14, verified 14.365
 - **D&D 5e:** 5.3.3
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
-- **DnD 5e Item Creator:** optional for the core module; **0.7.1+ is required for the official Curated Culinary Products**
+- **DnD 5e Item Creator:** optional for the core module; **0.7.1+ is required for the official persistent Curated Food and Alcohol Products**
 
 Crafting Core is intentionally version-bound to the D&D 5e system version it was built and tested against.
 
@@ -27,7 +27,7 @@ Crafting Core is intentionally version-bound to the D&D 5e system version it was
 
 The private **Crafting Core - Materials** Compendium contains the built-in material catalog used by harvesting, gathering, generation, and Recipe building.
 
-The catalog currently contains **229 curated materials** covering:
+The catalog currently contains **230 curated materials** covering:
 
 - Creature Harvest materials;
 - magical Essences;
@@ -146,26 +146,63 @@ The GM can override built-in material presentation and values. Curated defaults 
 
 Any D&D 5e Item can still be used directly in a Recipe even if it is not registered in the Materials catalog.
 
-## Curated Culinary Library
+## Curated Products and Batch Crafting
 
-With **DnD 5e Item Creator 0.7.1+** active, Crafting Core maintains an official Culinary library:
+With **DnD 5e Item Creator 0.7.1+** active, Crafting Core maintains an official vendor-ready library of **58 Curated Products** and **58 matching Recipe Knowledge Sources**. Products remain ordinary D&D 5e consumable Items in **Crafting Core - Products**, while their learnable Recipes live in **Crafting Core - Learn Sources**.
 
-- **15 Curated Products** in **Crafting Core - Products**;
-- **15 Recipe Knowledge Sources** in **Crafting Core - Learn Sources**;
+The library is divided into three families.
+
+### Meals - 15 Products
+
 - 5 Dwarven, 5 Elven, and 5 Common dishes;
-- three selectable Foundry Core icon candidates per Product.
-
-Meal types:
-
+- each Recipe produces **1 to 4 servings** depending on the dish;
+- each Product Item represents one serving and is priced/sold individually;
 - **Hearty:** 5 Temporary Hit Points;
-- **Energizing:** +5 ft Walking Speed until the next Long Rest;
-- **Complete:** both benefits.
+- **Energizing:** +5 ft Walking Speed;
+- **Complete:** +5 Maximum Hit Points and +5 ft Walking Speed;
+- persistent Food benefits last **up to 6 hours or until the next Short Rest, whichever happens first**; a Long Rest also removes them;
+- one Curated Food replaces another Curated Food rather than stacking with it.
 
-The movement benefit is managed by Item Creator and uses replacement stacking, so multiple Culinary movement bonuses do not accumulate.
+### Alcoholic Drinks - 28 Products
 
-All official Culinary Recipes use **10 seconds** of crafting time. The prepared Product price is calculated as **2x the current value of its ingredients**, making crafting economically preferable to buying the finished meal.
+The initial alcohol library contains Mundane, Dwarven, Elven, and Cane Spirit traditions. Recipes are produced in economic batches: **100 servings for Cheap**, **20 for Proper**, and **10 for Reserve** drinks.
 
-Use **Restore Curated Culinary Defaults** to repair missing official Products or Recipe Sources and restore their managed organization while preserving unrelated GM content.
+Alcohol follows a deliberately risky tradeoff model:
+
+- Cheap alcohol applies a single **-1 Ability Score** penalty;
+- Proper/Reserve alcohol normally applies **+2 to one Ability Score and -4 to another**;
+- alcohol never grants a positive Constitution bonus;
+- positive INT/WIS options are reserved for mild, contemplative drinks;
+- Ability Scores cannot be raised above 20 or reduced below 1 by Curated Alcohol;
+- one Curated Alcohol replaces another Curated Alcohol rather than stacking with it;
+- Alcohol and Food are separate families, so **one Food benefit and one Alcohol effect may coexist**;
+- alcohol lasts **up to 6 hours or until the next Short Rest, whichever happens first**; a Long Rest also removes it.
+
+The v0.3.0 material catalog also adds **Sugar Cane** as a Common cultivated Material for cane spirits and future culinary/brewing Recipes.
+
+### Non-Alcoholic Drinks - 15 Products
+
+The non-alcoholic library contains 5 Mundane, 5 Dwarven, and 5 Elven drinks. These deliberately avoid a persistent subsystem:
+
+- **Simple:** restore 1 HP, 100 servings per craft;
+- **Prepared:** restore 2 HP, 40 servings per craft;
+- **Specialty:** restore 3 HP, 30 servings per craft.
+
+The healing is instantaneous, never exceeds maximum HP, creates no persistent Active Effect, and uses normal D&D 5e healing semantics.
+
+### Economy and Recipe Yield
+
+Curated Products use batch/serving economics. The total value of the batch targets approximately:
+
+`2 x current ingredient cost`
+
+The unit price is therefore:
+
+`(2 x ingredient cost) / Recipe yield`
+
+This lets crafted meals and drinks be produced in sensible quantities while taverns, vendors, loot, and Supplier-style inventories continue to buy, sell, and store individual Product units.
+
+All official Curated Product Recipes use **10 seconds** of crafting time. Each Product offers three Foundry Core icon candidates through the Materials & Products interface. **Restore Curated Product Defaults** repairs missing official Products and matching Recipe Sources while preserving unrelated GM content and supported presentation customizations.
 
 ## Creature Scanner and Harvest Profiles
 
@@ -228,19 +265,17 @@ Crafting Core uses private world Compendiums as durable content stores and inter
 
 ### Crafting Core - Materials
 
-229 curated crafting materials plus GM-registered material content.
+230 curated crafting materials plus GM-registered material content, including Sugar Cane as a Common cultivated brewing/culinary ingredient.
 
 ### Crafting Core - Learn Sources
 
 Published Recipe, Formula, Blueprint, and Manual Items. This is the authoritative published Knowledge database.
 
-The official Culinary Recipes are organized under:
-
-`Crafting Core Curated -> Culinary -> Dwarven / Elven / Common Cuisine`
+The official Curated Recipe library is organized by Product family and culture under `Crafting Core Curated`, with separate branches for **Culinary Meals**, **Alcoholic Drinks**, and **Non-Alcoholic Drinks**.
 
 ### Crafting Core - Products
 
-Created and maintained when the Curated Culinary library is available. Contains ready-to-buy/use official Culinary Products and provides a clean source for vendor or Supplier-style stock generation.
+Created and maintained when the Curated Product library is available. Contains the 58 ready-to-buy/use official Meals, Alcoholic Drinks, and Non-Alcoholic Drinks, organized by family and culture for vendor, loot, drag-and-drop, and Supplier-style stock generation.
 
 ## Game Settings
 

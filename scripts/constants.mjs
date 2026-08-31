@@ -1,6 +1,6 @@
 export const MODULE_ID = "dnd5e-crafting-core";
 export const MODULE_TITLE = "Crafting Core (DnD 5e)";
-export const MODULE_VERSION = "0.2.4";
+export const MODULE_VERSION = "0.3.0";
 
 export const SETTINGS = Object.freeze({
   RECIPES: "recipes",
@@ -52,8 +52,13 @@ export const FLAGS = Object.freeze({
   PRODUCT_CULTURE: "productCulture",
   PRODUCT_RARITY: "productRarity",
   PRODUCT_MEAL_TYPE: "productMealType",
+  PRODUCT_TIER: "productTier",
+  PRODUCT_DRINK_TYPE: "productDrinkType",
+  PRODUCT_EFFECT_FAMILY: "productEffectFamily",
+  PRODUCT_YIELD: "productYield",
   PRODUCT_ICON_CANDIDATES: "productIconCandidates",
-  PRODUCT_MANAGED: "productManaged"
+  PRODUCT_MANAGED: "productManaged",
+  CURATED_FOOD_STATE: "curatedFoodState"
 });
 
 export const DEFAULT_MATERIAL_ICON = "icons/containers/bags/coinpouch-simple-leather-silver-brown.webp";
