@@ -1,3 +1,5 @@
+import { bundledMaterialIconCandidates } from "./bundled-icon-catalog.mjs";
+
 /**
  * Curated Foundry Core icon references for Crafting Core materials.
  *
@@ -1431,8 +1433,17 @@ const LEGACY_CURATED_DEFAULTS = Object.freeze({
 });
 
 export function materialIconCandidates(materialId) {
-  const key = MATERIAL_ICON_SET[String(materialId ?? "")];
-  return key ? [...(ICON_SETS[key] ?? [])] : [];
+  const id = String(materialId ?? "");
+  const key = MATERIAL_ICON_SET[id];
+  const native = key ? [...(ICON_SETS[key] ?? [])] : [];
+  const bundled = bundledMaterialIconCandidates(id);
+
+  // Preserve the long-standing Foundry/D&D5e default as candidate #1, then add
+  // semantically matched bundled artwork before filling the third slot natively.
+  // This avoids silently changing existing worlds while making the new library
+  // immediately available in the Materials curation UI.
+  const combined = [native[0], bundled[0], bundled[1] ?? native[1], ...native.slice(1), ...bundled];
+  return [...new Set(combined.filter(Boolean))];
 }
 
 export function materialDefaultIcon(materialId) {

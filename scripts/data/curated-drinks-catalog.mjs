@@ -1,3 +1,5 @@
+import { curatedDrinkIconCandidates } from "./bundled-icon-catalog.mjs";
+
 /**
  * Crafting Core official Curated Drink libraries.
  *
@@ -8,7 +10,7 @@
  * Non-alcoholic drinks are intentionally simple native D&D5e healing consumables.
  */
 
-export const CURATED_DRINKS_VERSION = 1;
+export const CURATED_DRINKS_VERSION = 2;
 
 const alcoholIcons = {
   beer: [
@@ -79,7 +81,7 @@ function alcoholic({ id, name, culture, tier, drinkType, ingredients, yieldCount
     abilityModifiers: { ...modifiers },
     description,
     ingredients: ingredients.map(([materialId, quantity=1]) => ({ materialId, quantity })),
-    icons: [...(alcoholIcons[iconSet] ?? alcoholIcons.spirit)]
+    icons: curatedDrinkIconCandidates({ id, drinkType, nonAlcoholic: false }, alcoholIcons[iconSet] ?? alcoholIcons.spirit)
   };
 }
 
@@ -106,7 +108,7 @@ function nonAlcoholic({ id, name, culture, tier, drinkType, ingredients, yieldCo
     healing,
     description,
     ingredients: ingredients.map(([materialId, quantity=1]) => ({ materialId, quantity })),
-    icons: [...(nonAlcoholIcons[iconSet] ?? nonAlcoholIcons.tonic)]
+    icons: curatedDrinkIconCandidates({ id, drinkType, nonAlcoholic: true }, nonAlcoholIcons[iconSet] ?? nonAlcoholIcons.tonic)
   };
 }
 

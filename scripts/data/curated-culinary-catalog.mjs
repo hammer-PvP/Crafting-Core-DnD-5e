@@ -1,3 +1,5 @@
+import { curatedMealIconCandidates } from "./bundled-icon-catalog.mjs";
+
 /**
  * Crafting Core official Curated Culinary library.
  *
@@ -5,7 +7,7 @@
  * materializes them into the private Products and Learn Sources world Compendiums.
  */
 
-export const CURATED_CULINARY_VERSION = 5;
+export const CURATED_CULINARY_VERSION = 6;
 
 const MEAL = Object.freeze({
   HEARTY: "hearty",
@@ -38,7 +40,7 @@ const recipe = ({ id, name, culture, mealType, description, ingredients, icons, 
   craftingTime: 10,
   description,
   ingredients: ingredients.map(([materialId, quantity=1]) => ({ materialId, quantity })),
-  icons: [...icons].slice(0, 3)
+  icons: curatedMealIconCandidates(id, icons)
 });
 
 export const CURATED_CULINARY_RECIPES = Object.freeze([

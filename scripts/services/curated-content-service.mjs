@@ -672,14 +672,20 @@ export class CuratedContentService {
     if (!game.user?.isGM) throw new Error("Only a GM can change Curated Product presentation.");
     const entry = CURATED_BY_PRODUCT_ID.get(String(productId));
     if (!entry) throw new Error("Unknown Curated Product.");
-    if (!entry.icons.includes(String(path))) throw new Error("Choose one of the three official Foundry Core icons.");
     const state = this.state();
+    const pack = this.productsPack();
+    const docs = pack ? await pack.getDocuments() : [];
+    const existing = docs.find(item => String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? "") === entry.productId) ?? null;
+    const allowed = new Set(entry.icons.map(String));
+    if (existing?.img) allowed.add(String(existing.img));
+    if (state.productIcons?.[entry.productId]) allowed.add(String(state.productIcons[entry.productId]));
+    if (!allowed.has(String(path))) throw new Error("Choose one of the curated icon options.");
     state.productIcons[entry.productId] = String(path);
     await this.#saveState(state);
     await this.sync({ restore: false });
-    const pack = this.productsPack();
-    const docs = pack ? await pack.getDocuments() : [];
-    return docs.find(item => String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? "") === entry.productId) ?? null;
+    const refreshed = this.productsPack();
+    const refreshedDocs = refreshed ? await refreshed.getDocuments() : [];
+    return refreshedDocs.find(item => String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? "") === entry.productId) ?? null;
   }
 
   static async culinaryCatalogContext() {
@@ -713,6 +719,9 @@ export class CuratedContentService {
       const yieldCount = Math.max(1, Number(entry.yield) || 1);
       const buyPrice = priceFromCopper(Math.round((ingredientCostCopper * entry.priceMultiplier) / yieldCount));
       const selectedIcon = String(state.productIcons?.[entry.productId] || item?.img || entry.icons[0]);
+      const iconPaths = entry.icons.includes(selectedIcon)
+        ? entry.icons.slice(0, 3)
+        : [selectedIcon, ...entry.icons.filter(icon => icon !== selectedIcon)].slice(0, 3);
       return {
         ...clone(entry),
         exists: Boolean(item),
@@ -721,7 +730,7 @@ export class CuratedContentService {
         priceLabel: formatPrice(item?.system?.price ?? buyPrice),
         benefitLabel: benefitLabel(entry),
         yieldLabel: `${yieldCount} serving${yieldCount === 1 ? "" : "s"}`,
-        iconCandidates: entry.icons.map((icon, index) => ({ path: icon, index: index + 1, selected: icon === selectedIcon }))
+        iconCandidates: iconPaths.map((icon, index) => ({ path: icon, index: index + 1, selected: icon === selectedIcon }))
       };
     });
 

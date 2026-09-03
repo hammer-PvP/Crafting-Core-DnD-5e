@@ -88,14 +88,14 @@
       <details class="cc-material-group" open>
         <summary><span>{{label}}</span><small data-role="group-visible-count">{{count}} materials</small></summary>
         <div class="cc-material-table">
-          <div class="cc-material-table-head"><span>Material</span><span>Rarity</span><span>Chance</span><span>Qty</span><span>Core Icon — choose 1 of 3</span><span></span></div>
+          <div class="cc-material-table-head"><span>Material</span><span>Rarity</span><span>Chance</span><span>Qty</span><span>Icon — choose 1 of 3</span><span></span></div>
           {{#each materials}}
           <div class="cc-material-table-row" data-material-row="{{id}}" data-current-icon="{{selectedIcon}}" data-search="{{searchText}}">
             <span class="cc-material-name"><img src="{{selectedIcon}}" alt=""><strong>{{name}}</strong></span>
             <span class="cc-rarity {{rarity}}">{{rarityLabel}}</span>
             <span>{{chance}}%</span>
             <span>{{quantity}}</span>
-            <span class="cc-icon-curation" role="radiogroup" aria-label="Core icon choices for {{name}}">
+            <span class="cc-icon-curation" role="radiogroup" aria-label="Icon choices for {{name}}">
               {{#each iconCandidates}}
               <label class="cc-icon-choice {{#if selected}}selected{{/if}}" title="{{path}}">
                 <input type="radio" name="material-icon-{{../id}}" value="{{path}}" data-action="choose-material-icon" data-material-id="{{../id}}" {{#if selected}}checked{{/if}}>
@@ -160,7 +160,7 @@
         <details class="cc-material-group" open>
           <summary><span>{{label}}</span><small>{{count}} products</small></summary>
           <div class="cc-product-table">
-            <div class="cc-product-table-head"><span>Product</span><span>Benefit</span><span>Yield</span><span>Ingredient Cost</span><span>Unit Price</span><span>Core Icon — choose 1 of 3</span></div>
+            <div class="cc-product-table-head"><span>Product</span><span>Benefit</span><span>Yield</span><span>Ingredient Cost</span><span>Unit Price</span><span>Icon — choose 1 of 3</span></div>
             {{#each products}}
             <div class="cc-product-table-row" data-product-id="{{productId}}" data-current-icon="{{selectedIcon}}">
               <span class="cc-material-name"><img src="{{selectedIcon}}" alt=""><span><strong>{{name}}</strong><small>{{#if exists}}Published Product{{else}}Missing — restore defaults{{/if}}</small></span></span>
@@ -168,7 +168,7 @@
               <span>{{yieldLabel}}</span>
               <span>{{ingredientCostLabel}}</span>
               <span><strong>{{priceLabel}}</strong></span>
-              <span class="cc-icon-curation" role="radiogroup" aria-label="Core icon choices for {{name}}">
+              <span class="cc-icon-curation" role="radiogroup" aria-label="Icon choices for {{name}}">
                 {{#each iconCandidates}}
                 <label class="cc-icon-choice {{#if selected}}selected{{/if}}" title="{{path}}">
                   <input type="radio" name="product-icon-{{../id}}" value="{{path}}" data-action="choose-product-icon" data-product-id="{{../productId}}" {{#if selected}}checked{{/if}} {{#unless ../exists}}disabled{{/unless}}>

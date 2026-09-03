@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1
+
+### Curated Icon Library
+- Bundles the approved lightweight Crafting Core icon library under `icons/` (120 WebP assets).
+- Curated Meals and Drinks now mix bundled artwork with Foundry/D&D5e native candidates while keeping three choices per Product.
+- Materials gain semantically matched bundled candidates for creature parts, fungi, alchemical ingredients, ores, resources, hides, bones, herbs, and related categories.
+- Existing GM-selected Product and Material icons are preserved; the new library expands presentation choices rather than forcing replacements in established worlds.
+- Material/Product catalog labels now refer to curated icon choices rather than Foundry Core-only artwork.
+
 ## v0.3.0 — Curated Drinks, Serving Yields & Six-Hour Food Runtime
 
 - Expanded the canonical Material Catalog from **229 to 230 Materials** with **Sugar Cane**, a Common cultivated culinary/brewing ingredient.
