@@ -88,15 +88,20 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
       huntAbundanceSummary: this.#summary(this.state.huntAbundances, value => MaterialGenerationService.GAME_HUNT_ABUNDANCE[value]?.label ?? MaterialGenerationService.title(value), "Select abundance"),
       essenceOptions: MaterialGenerationService.essenceAffinityOptions(this.state.essenceAffinities),
       itemPilesAvailable: ItemPilesBridge.isAvailable(),
-      lastResult: this.lastResult ? {
-        ...this.lastResult,
-        empty: !this.lastResult.items?.length,
-        created: Boolean(this.lastResult.folder),
-        pileCreated: Boolean(this.lastResult.itemPile?.uuid),
-        folderLabel: this.lastResult.folder?.name ?? "",
-        pileLabel: this.lastResult.itemPile?.uuid ? "Hidden Item Pile created on the viewed Scene" : "",
-        dragIcon: this.#dominantIcon(this.lastResult)
-      } : null
+      lastResult: this.lastResult ? (() => {
+        const materialized = Boolean(this.lastResult.folder || this.lastResult.itemPile?.uuid);
+        return {
+          ...this.lastResult,
+          items: (this.lastResult.items ?? []).map(row => ({ ...row, editable: !materialized })),
+          empty: !this.lastResult.items?.length,
+          created: Boolean(this.lastResult.folder),
+          pileCreated: Boolean(this.lastResult.itemPile?.uuid),
+          editable: !materialized,
+          folderLabel: this.lastResult.folder?.name ?? "",
+          pileLabel: this.lastResult.itemPile?.uuid ? "Hidden Item Pile created on the viewed Scene" : "",
+          dragIcon: this.#dominantIcon(this.lastResult)
+        };
+      })() : null
     };
   }
 
@@ -126,6 +131,8 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
     root.querySelector('[data-action="generate-again"]')?.addEventListener("click", event => this.#generate(event));
     root.querySelector('[data-action="create-folder"]')?.addEventListener("click", event => this.#createFolder(event));
     root.querySelector('[data-action="create-item-pile"]')?.addEventListener("click", event => this.#createItemPile(event));
+    root.querySelectorAll('[data-generated-quantity]').forEach(input => input.addEventListener("change", event => this.#updateGeneratedQuantity(event)));
+    root.querySelectorAll('[data-action="remove-generated-item"]').forEach(button => button.addEventListener("click", event => this.#removeGeneratedItem(event)));
     root.querySelector('[data-action="open-items"]')?.addEventListener("click", event => {
       event.preventDefault();
       ui.items?.render?.(true);
@@ -323,6 +330,28 @@ export class MaterialGeneratorApp extends HandlebarsApplicationMixin(Application
       ui.notifications.error(error.message ?? "Crafting Core could not generate materials.");
       button.disabled = false;
     }
+  }
+
+  #updateGeneratedQuantity(event) {
+    event.preventDefault();
+    if (!this.lastResult?.items?.length || this.lastResult.folder || this.lastResult.itemPile?.uuid) return;
+    const input = event.currentTarget;
+    const materialId = String(input.dataset.materialId ?? "");
+    const row = this.lastResult.items.find(item => String(item.materialId) === materialId);
+    if (!row) return;
+    const quantity = Math.clamp(Math.floor(Number(input.value) || 1), 1, 9999);
+    row.quantity = quantity;
+    input.value = String(quantity);
+    this.render({ force: true });
+  }
+
+  #removeGeneratedItem(event) {
+    event.preventDefault();
+    if (!this.lastResult?.items?.length || this.lastResult.folder || this.lastResult.itemPile?.uuid) return;
+    const materialId = String(event.currentTarget.dataset.materialId ?? "");
+    if (!materialId) return;
+    this.lastResult.items = this.lastResult.items.filter(item => String(item.materialId) !== materialId);
+    this.render({ force: true });
   }
 
   async #createFolder(event) {

@@ -48,11 +48,31 @@ export class MaterialGenerationService {
     };
   }
 
+  /**
+   * Environment abundance changes how often useful material nodes are discovered,
+   * not how large an individual harvested stack becomes. Per-occurrence quantity
+   * remains owned by each Material's quantity formula (for example Common 1d4,
+   * Uncommon 1d3, Rare 1d2). Richer environments also apply a modest rarity bias
+   * so better materials become more likely without turning one rare discovery into
+   * a giant stack.
+   */
   static ABUNDANCE = Object.freeze({
-    scarce: { label: "Scarce", findChance: 55, discoveries: 1, maxTypes: 1, quantityFactor: 1 },
-    normal: { label: "Normal", findChance: 75, discoveries: 1, maxTypes: 2, quantityFactor: 1 },
-    rich: { label: "Rich", findChance: 90, discoveries: 2, maxTypes: 3, quantityFactor: 1.5 },
-    abundant: { label: "Abundant", findChance: 100, discoveries: 2, maxTypes: 4, quantityFactor: 2 }
+    scarce: {
+      label: "Scarce", findChance: 55, discoveries: 1, maxTypes: 1,
+      rarityWeights: Object.freeze({ common: 1.10, uncommon: 0.90, rare: 0.80, veryRare: 0.70, legendary: 0.60 })
+    },
+    normal: {
+      label: "Normal", findChance: 75, discoveries: 1, maxTypes: 2,
+      rarityWeights: Object.freeze({ common: 1.00, uncommon: 1.00, rare: 1.00, veryRare: 1.00, legendary: 1.00 })
+    },
+    rich: {
+      label: "Rich", findChance: 90, discoveries: 2, maxTypes: 3,
+      rarityWeights: Object.freeze({ common: 0.90, uncommon: 1.20, rare: 1.40, veryRare: 1.60, legendary: 1.80 })
+    },
+    abundant: {
+      label: "Abundant", findChance: 100, discoveries: 3, maxTypes: 4,
+      rarityWeights: Object.freeze({ common: 0.80, uncommon: 1.40, rare: 1.80, veryRare: 2.20, legendary: 2.50 })
+    }
   });
 
   static GAME_HUNT_ABUNDANCE = Object.freeze({
@@ -323,11 +343,15 @@ export class MaterialGenerationService {
         const chosenResource = viableResources[Math.floor(Math.random() * viableResources.length)];
         const candidates = eligible.filter(entry => !used.has(entry.id)
           && (entry.biomes ?? []).includes(chosenBiome) && String(entry.category) === chosenResource);
-        const material = this.#weightedPick(candidates.map(entry => ({ entry, weight: Math.max(1, Number(entry.chance) || 1) })))?.entry ?? null;
+        const material = this.#weightedPick(candidates.map(entry => ({
+          entry,
+          weight: this.#environmentGatherWeight(entry, abundanceData)
+        })))?.entry ?? null;
         if (!material) continue;
         used.add(material.id);
-        const rolled = await this.#rollQuantity(material.quantity);
-        const quantity = Math.max(1, Math.round(rolled * abundanceData.quantityFactor));
+        // Abundance must never multiply one harvested node. The Material's own
+        // quantity formula defines the size of this individual occurrence.
+        const quantity = await this.#rollQuantity(material.quantity);
         this.#aggregate(aggregate, material, quantity);
         discoveries.push({
           biome: chosenBiome, resource: chosenResource, materialId: material.id, name: material.name,
@@ -580,6 +604,13 @@ export class MaterialGenerationService {
       if (roll < 0) return row;
     }
     return rows.at(-1) ?? null;
+  }
+
+  static #environmentGatherWeight(material, abundanceData) {
+    const base = Math.max(1, Number(material?.chance) || 1);
+    const rarity = String(material?.rarity ?? "common");
+    const rarityFactor = Math.max(0.05, Number(abundanceData?.rarityWeights?.[rarity]) || 1);
+    return base * rarityFactor;
   }
 
   static #matchesProfile(entry, profile) {

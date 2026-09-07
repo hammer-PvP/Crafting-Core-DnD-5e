@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.2 — Environment Gathering Balance & Editable Generated Batches
+
+- Retuned **Environment Gathering abundance** so it no longer multiplies the quantity rolled for one Material occurrence. Individual stack size now always comes from the Material's own quantity formula.
+- Abundance now primarily increases discovery opportunities: Scarce/Normal/Rich/Abundant use 1/1/2/3 discoveries per successful Gather Attempt, while retaining their existing find-chance progression.
+- Rich and Abundant environments apply a modest rarity bias toward Uncommon/Rare/Very Rare/Legendary candidates instead of creating oversized stacks of Common materials.
+- Added editable quantities to the **Last Generation** preview. The GM may change any stack before creating a Loot Folder or Item Pile.
+- Added per-row removal to the generated preview. Removing a Material affects only that generated batch; it never removes the Material from the Catalog, Environment Profile, or future generation pools.
+- Once a preview has been materialized through the built-in Folder / Item Pile actions, its rows become read-only so the displayed batch cannot silently diverge from the created loot.
+- No Recipe, Product, Knowledge, Harvest Profile, Token Harvest, Item Creator, Supplier, or material-catalog content was changed.
+
 ## 0.3.1
 
 ### Curated Icon Library

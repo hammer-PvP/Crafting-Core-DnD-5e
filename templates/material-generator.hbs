@@ -95,7 +95,7 @@
 
         <label><span>Gather Attempts</span><input type="number" name="gatherAttempts" min="1" max="100" step="1" value="{{state.gatherAttempts}}"></label>
       </div>
-      <p class="cc-note"><i class="fa-solid fa-compass"></i> Biomes and Resources expand the candidate pool. Attempts control gathering opportunities; selecting more categories does not multiply loot linearly.</p>
+      <p class="cc-note"><i class="fa-solid fa-compass"></i> Biomes and Resources expand the candidate pool. Attempts control gathering opportunities. Abundance increases discovery frequency and modestly improves the rarity mix, but never multiplies the quantity of one harvested occurrence.</p>
       {{/if}}
 
       {{#if isHunt}}
@@ -142,9 +142,25 @@
         {{#if lastResult.empty}}
         <div class="cc-generator-empty"><i class="fa-solid fa-wind"></i><strong>Nothing was found.</strong><small>No Folder or Item Pile was created. Generate again whenever you want.</small></div>
         {{else}}
+        {{#if lastResult.editable}}
+        <p class="cc-note cc-generated-edit-note"><i class="fa-solid fa-sliders"></i> Adjust quantities or remove a material before creating the Folder / Item Pile. These edits affect only this generated batch.</p>
+        {{/if}}
         <div class="cc-generated-list">
           {{#each lastResult.items}}
-          <div class="cc-generated-row"><img src="{{img}}" alt=""><span><strong>{{name}}</strong><small class="cc-rarity {{rarity}}">{{rarityLabel}}</small></span><b>×{{quantity}}</b></div>
+          <div class="cc-generated-row" data-generated-material-id="{{materialId}}">
+            <img src="{{img}}" alt="">
+            <span><strong>{{name}}</strong><small class="cc-rarity {{rarity}}">{{rarityLabel}}</small></span>
+            {{#if editable}}
+            <div class="cc-generated-row-controls">
+              <label class="cc-generated-quantity-control" data-tooltip="Quantity for this generated batch only">
+                <span>×</span><input type="number" min="1" max="9999" step="1" value="{{quantity}}" data-generated-quantity data-material-id="{{materialId}}">
+              </label>
+              <button type="button" class="cc-icon-button cc-generated-remove" data-action="remove-generated-item" data-material-id="{{materialId}}" data-tooltip="Remove from this generated batch"><i class="fa-solid fa-trash-can"></i></button>
+            </div>
+            {{else}}
+            <b>×{{quantity}}</b>
+            {{/if}}
+          </div>
           {{/each}}
         </div>
         {{#if lastResult.created}}

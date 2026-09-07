@@ -235,7 +235,9 @@ The GM-only **Generate Materials** tool uses the shared material generation engi
 - **Environment Gathering**;
 - **Game Hunt**.
 
-Generation is preview-first. The GM sees the rolled result before choosing a destination.
+Generation is preview-first. The GM sees the rolled result before choosing a destination. Before materializing the result, the GM can edit each generated stack quantity or remove an individual Material from the current batch without changing the Material Catalog or generation Profile.
+
+For **Environment Gathering**, abundance now controls discovery pressure rather than stack inflation: richer environments produce more discovery opportunities and modestly improve the rarity mix, while each individual occurrence keeps the Material's own quantity formula.
 
 Accepted results can become:
 
