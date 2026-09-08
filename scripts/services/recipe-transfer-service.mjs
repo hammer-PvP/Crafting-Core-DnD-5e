@@ -12,7 +12,8 @@ import { RecipeService } from "./recipe-service.mjs";
  */
 export class RecipeTransferService {
   static FORMAT = "crafting-core-recipes";
-  static SCHEMA_VERSION = 1;
+  static SCHEMA_VERSION = 2;
+  static SUPPORTED_SCHEMA_VERSIONS = new Set([1, 2]);
   static CUSTOM_ITEMS_FOLDER = "Custom Items";
 
   static listRecipes() {
@@ -69,14 +70,22 @@ export class RecipeTransferService {
     for (const ingredient of normalized.ingredients ?? []) {
       const doc = await this.#resolveReferenceDocument(ingredient);
       const materialId = String(doc?.getFlag?.(MODULE_ID, FLAGS.MATERIAL_ID) ?? "");
+      const explicitMode = ["baseItem", "exact"].includes(String(ingredient.matchMode)) ? String(ingredient.matchMode) : "";
+      const matchMode = materialId ? "exact" : (explicitMode || (doc ? RecipeService.ingredientMatchMode(doc) : "legacy"));
       ingredients.push({
         name: String(ingredient.name || doc?.name || "Item"),
+        img: String(ingredient.img || doc?.img || ""),
         type: String(ingredient.type || doc?.type || ""),
         identifier: String(ingredient.identifier || doc?.system?.identifier || ""),
         sourceUuid: String(ingredient.sourceUuid || RecipeService.canonicalUuid(doc) || ingredient.uuid || ""),
         quantity: Math.max(1, Math.floor(Number(ingredient.quantity) || 1)),
         materialId,
-        kind: materialId ? "material" : "external-item"
+        kind: materialId ? "material" : "external-item",
+        matchMode,
+        baseItemIdentifier: String(ingredient.baseItemIdentifier || RecipeService.baseItemIdentifier(doc) || ingredient.identifier || ""),
+        exactSignature: matchMode === "exact"
+          ? String(ingredient.exactSignature || (doc ? RecipeService.itemDefinitionSignature(doc) : ""))
+          : ""
       });
     }
 
@@ -127,7 +136,7 @@ export class RecipeTransferService {
     const errors = [];
     if (!value || typeof value !== "object" || Array.isArray(value)) errors.push("The selected file does not contain a JSON object.");
     if (value?.format !== this.FORMAT) errors.push("This is not a Crafting Core Recipe export.");
-    if (Number(value?.schemaVersion) !== this.SCHEMA_VERSION) errors.push(`Unsupported Recipe transfer schema: ${value?.schemaVersion ?? "missing"}.`);
+    if (!this.SUPPORTED_SCHEMA_VERSIONS.has(Number(value?.schemaVersion))) errors.push(`Unsupported Recipe transfer schema: ${value?.schemaVersion ?? "missing"}.`);
     if (!Array.isArray(value?.entries)) errors.push("Recipe entries are missing.");
     if (value?.systemId && value.systemId !== "dnd5e") errors.push(`The export targets ${value.systemId}, not dnd5e.`);
     return { valid: !errors.length, errors };
@@ -145,15 +154,28 @@ export class RecipeTransferService {
       const resolvedIngredients = [];
 
       for (const ingredient of raw?.ingredients ?? []) {
-        const resolved = await this.#resolveImportedIngredient(ingredient, materialById);
+        const resolution = await this.#resolveImportedIngredient(ingredient, materialById);
+        const resolved = resolution?.doc ?? null;
         dependencies.push({
           name: String(ingredient?.name || "Item"),
           quantity: Math.max(1, Number(ingredient?.quantity) || 1),
           kind: String(ingredient?.kind || "external-item"),
+          matchMode: String(resolution?.matchMode || ingredient?.matchMode || "legacy"),
           status: resolved ? "ready" : "missing",
           resolvedName: resolved?.name ?? ""
         });
-        if (resolved) resolvedIngredients.push(RecipeService.itemReference(resolved, ingredient.quantity));
+        if (resolved) {
+          const ref = RecipeService.itemReference(resolved, ingredient.quantity, {
+            ingredient: true,
+            matchMode: resolution.matchMode,
+            baseItemIdentifier: resolution.baseItemIdentifier,
+            exactSignature: resolution.exactSignature
+          });
+          // Generic Base Item dependencies retain the canonical exported label instead of
+          // borrowing the name/icon of an arbitrary local derivative.
+          if (resolution.matchMode === "baseItem" && ingredient?.name) ref.name = String(ingredient.name);
+          resolvedIngredients.push(ref);
+        }
       }
 
       const missingDependencies = dependencies.filter(row => row.status === "missing");
@@ -185,28 +207,155 @@ export class RecipeTransferService {
 
   static async #resolveImportedIngredient(ingredient, materialById) {
     const materialId = String(ingredient?.materialId || "");
-    if (materialId && materialById.has(materialId)) return materialById.get(materialId);
+    if (materialId && materialById.has(materialId)) {
+      const doc = materialById.get(materialId);
+      return {
+        doc,
+        matchMode: "exact",
+        baseItemIdentifier: String(ingredient?.baseItemIdentifier || RecipeService.baseItemIdentifier(doc) || ingredient?.identifier || ""),
+        exactSignature: String(ingredient?.exactSignature || RecipeService.itemDefinitionSignature(doc))
+      };
+    }
 
-    // Non-canonical/custom ingredient: resolve conservatively from existing World/Compendium Items.
-    const identifier = String(ingredient?.identifier || "").trim();
+    const requestedMode = ["baseItem", "exact"].includes(String(ingredient?.matchMode)) ? String(ingredient.matchMode) : "legacy";
+    if (requestedMode === "baseItem") {
+      const doc = await this.#findCanonicalBaseIngredient(ingredient);
+      return doc ? {
+        doc,
+        matchMode: "baseItem",
+        baseItemIdentifier: String(ingredient?.baseItemIdentifier || RecipeService.baseItemIdentifier(doc) || ingredient?.identifier || ""),
+        exactSignature: ""
+      } : null;
+    }
+    if (requestedMode === "exact") {
+      const doc = await this.#findExactIngredient(ingredient);
+      return doc ? {
+        doc,
+        matchMode: "exact",
+        baseItemIdentifier: String(ingredient?.baseItemIdentifier || RecipeService.baseItemIdentifier(doc) || ingredient?.identifier || ""),
+        exactSignature: String(ingredient?.exactSignature || RecipeService.itemDefinitionSignature(doc))
+      } : null;
+    }
+
+    // v0.4.0 transfer compatibility. Old bundles did not declare generic vs exact identity,
+    // so provenance is our strongest migration signal:
+    // - an official D&D source (or no source at all) may resolve as a canonical Base Item;
+    // - a World/custom source is resolved exactly first and is never silently collapsed to its base.
+    const legacySourceUuid = String(ingredient?.sourceUuid || "").trim();
+    const officialLegacySource = this.#looksLikeOfficialDndSource(legacySourceUuid);
+    let canonical = null;
+    if (!legacySourceUuid || officialLegacySource) {
+      canonical = await this.#findCanonicalBaseIngredient(ingredient, { requireNameMatch: true });
+      // If the legacy export points at an official D&D Compendium Base Item, prefer that
+      // provenance even when the destination World localizes/renames the Item label.
+      if (!canonical && officialLegacySource) {
+        try {
+          const source = await fromUuid(legacySourceUuid);
+          if (source instanceof Item && RecipeService.ingredientMatchMode(source) === "baseItem") canonical = source;
+        } catch (_) { /* the official source pack may not be installed in this World */ }
+        if (!canonical) canonical = await this.#findCanonicalBaseIngredient(ingredient, { requireNameMatch: false });
+      }
+    }
+    if (canonical) {
+      return {
+        doc: canonical,
+        matchMode: RecipeService.ingredientMatchMode(canonical),
+        baseItemIdentifier: RecipeService.baseItemIdentifier(canonical),
+        exactSignature: ""
+      };
+    }
+
+    const exact = await this.#findExactIngredient(ingredient);
+    if (!exact) return null;
+    const mode = RecipeService.ingredientMatchMode(exact);
+    return {
+      doc: exact,
+      matchMode: mode,
+      baseItemIdentifier: RecipeService.baseItemIdentifier(exact),
+      exactSignature: mode === "exact" ? RecipeService.itemDefinitionSignature(exact) : ""
+    };
+  }
+
+  static #looksLikeOfficialDndSource(uuid) {
+    const value = String(uuid || "");
+    return /^Compendium\.(?:dnd5e|dnd-[^.]+)\./i.test(value);
+  }
+
+  static #preferredItemPacks() {
+    const packs = game.packs.filter(pack => pack.documentName === "Item");
+    return packs.sort((a, b) => {
+      const score = pack => {
+        const packageType = String(pack.metadata?.packageType || "");
+        const packageName = String(pack.metadata?.packageName || pack.metadata?.package || pack.collection || "");
+        if (packageType === "system") return 0;
+        if (/^dnd(?:5e|-)/i.test(packageName)) return 1;
+        if (packageName === MODULE_ID) return 3;
+        return 2;
+      };
+      return score(a) - score(b);
+    });
+  }
+
+  static async #findCanonicalBaseIngredient(ingredient, { requireNameMatch=false }={}) {
+    const identifier = String(ingredient?.baseItemIdentifier || ingredient?.identifier || "").trim();
     const type = String(ingredient?.type || "");
     const name = String(ingredient?.name || "").trim();
+    if (!identifier && !name) return null;
 
-    const worldMatch = game.items?.contents?.find(item => {
-      if (identifier && String(item.system?.identifier || "") === identifier && (!type || item.type === type)) return true;
-      return Boolean(name && item.name === name && (!type || item.type === type));
-    });
+    for (const pack of this.#preferredItemPacks()) {
+      try {
+        const index = await pack.getIndex({ fields: ["name", "type", "system.identifier", "system.type.baseItem", "system.rarity", "system.magicalBonus", "system.properties", "flags.dnd5e-item-creator.created"] });
+        const rows = index.filter(entry => {
+          if (type && entry.type !== type) return false;
+          const entryIdentifier = String(entry.system?.identifier || "").trim();
+          const entryBase = String(entry.system?.type?.baseItem || entryIdentifier || "").trim();
+          const nameMatch = Boolean(name && entry.name === name);
+          const keyMatch = Boolean(identifier && (entryIdentifier === identifier || entryBase === identifier));
+          return requireNameMatch ? nameMatch && (!identifier || keyMatch) : (keyMatch || nameMatch);
+        });
+        for (const row of rows) {
+          const doc = await pack.getDocument(row._id);
+          if (doc && RecipeService.ingredientMatchMode(doc) === "baseItem") return doc;
+        }
+      } catch (_) { /* skip inaccessible packs */ }
+    }
+
+    // A clean World copy of a canonical mundane Base Item is an acceptable fallback. Custom
+    // Item Creator derivatives are rejected here by ingredientMatchMode().
+    return game.items?.contents?.find(item => {
+      if (type && item.type !== type) return false;
+      if (RecipeService.ingredientMatchMode(item) !== "baseItem") return false;
+      const key = RecipeService.baseItemIdentifier(item);
+      if (requireNameMatch && name && item.name !== name) return false;
+      return identifier ? (key === identifier || String(item.system?.identifier || "") === identifier) : item.name === name;
+    }) ?? null;
+  }
+
+  static async #findExactIngredient(ingredient) {
+    const type = String(ingredient?.type || "");
+    const name = String(ingredient?.name || "").trim();
+    const sourceUuid = String(ingredient?.sourceUuid || "").trim();
+    const signature = String(ingredient?.exactSignature || "").trim();
+
+    const accepts = item => {
+      if (!item || (type && item.type !== type)) return false;
+      if (signature) return RecipeService.itemDefinitionSignature(item) === signature;
+      if (sourceUuid && RecipeService.sourceCandidates(item).has(sourceUuid)) return true;
+      return Boolean(name && item.name === name);
+    };
+
+    const worldMatch = game.items?.contents?.find(accepts);
     if (worldMatch) return worldMatch;
 
-    for (const pack of game.packs.filter(pack => pack.documentName === "Item")) {
+    for (const pack of this.#preferredItemPacks()) {
       try {
-        const index = await pack.getIndex({ fields: ["name", "type", "system.identifier"] });
-        const row = index.find(entry => {
-          if (identifier && String(entry.system?.identifier || "") === identifier && (!type || entry.type === type)) return true;
-          return Boolean(name && entry.name === name && (!type || entry.type === type));
-        });
-        if (row) return await pack.getDocument(row._id);
-      } catch (_) { /* a pack that cannot be indexed is simply skipped */ }
+        const index = await pack.getIndex({ fields: ["name", "type"] });
+        const rows = index.filter(entry => (!type || entry.type === type) && (!name || entry.name === name));
+        for (const row of rows) {
+          const doc = await pack.getDocument(row._id);
+          if (accepts(doc)) return doc;
+        }
+      } catch (_) { /* skip inaccessible packs */ }
     }
     return null;
   }

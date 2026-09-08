@@ -1,4 +1,4 @@
-import { DEFAULT_KNOWLEDGE_ICON, KNOWLEDGE_ICONS, MODULE_ID, SETTINGS } from "../constants.mjs";
+import { DEFAULT_KNOWLEDGE_ICON, FLAGS, KNOWLEDGE_ICONS, MODULE_ID, SETTINGS } from "../constants.mjs";
 
 export class RecipeService {
   static #toolLabels = new Map();
@@ -89,6 +89,9 @@ export class RecipeService {
           img: String(row.img || "icons/svg/item-bag.svg"),
           type: String(row.type || ""),
           identifier: String(row.identifier || ""),
+          matchMode: ["baseItem", "exact", "legacy"].includes(String(row.matchMode)) ? String(row.matchMode) : "legacy",
+          baseItemIdentifier: String(row.baseItemIdentifier || ""),
+          exactSignature: String(row.exactSignature || ""),
           quantity: Math.max(1, Math.floor(Number(row.quantity) || 1))
         })),
       result: recipe.result?.uuid ? {
@@ -138,7 +141,13 @@ export class RecipeService {
       .slice(0, 2);
 
     const check = source.check && typeof source.check === "object" ? source.check : {};
-    const checkType = ["ability", "skill", "tool", "save"].includes(String(check.type)) ? String(check.type) : "skill";
+    // v0.4.1: Final Crafting Checks use the Recipe's eligible proficiency list.
+    // Proficiency 1 is the default roll; a Project may freeze Proficiency 2 instead when chosen at start.
+    // Legacy Recipes without relevant proficiencies retain their old check identity until the GM edits them.
+    const legacyCheckType = ["ability", "skill", "tool", "save"].includes(String(check.type)) ? String(check.type) : "skill";
+    const primaryProficiency = normalizedProficiencies[0] ?? null;
+    const checkType = primaryProficiency?.type ?? legacyCheckType;
+    const checkId = primaryProficiency?.id ?? String(check.id || (checkType === "save" ? "con" : checkType === "ability" ? "int" : ""));
     const failure = source.failure && typeof source.failure === "object" ? source.failure : {};
     const failureMode = ["noProgress", "regress", "failProject"].includes(String(failure.mode))
       ? String(failure.mode)
@@ -152,7 +161,7 @@ export class RecipeService {
       check: {
         required: Boolean(check.required),
         type: checkType,
-        id: String(check.id || (checkType === "save" ? "con" : checkType === "ability" ? "int" : "")),
+        id: checkId,
         dc: Math.clamp(Math.floor(Number(check.dc) || 10), 1, 40)
       },
       failure: {
@@ -369,9 +378,104 @@ export class RecipeService {
     ) || null;
   }
 
-  static itemReference(item, quantity=1, { snapshot=false }={}) {
+  static baseItemIdentifier(itemOrReference) {
+    if (!itemOrReference) return "";
+    const system = itemOrReference.system ?? {};
+    return String(
+      itemOrReference.baseItemIdentifier
+      ?? system?.type?.baseItem
+      ?? system?.baseItem
+      ?? itemOrReference.identifier
+      ?? system?.identifier
+      ?? ""
+    ).trim();
+  }
+
+  static hasOfficialDndProvenance(item) {
+    if (!item) return false;
+    const creator = item.flags?.["dnd5e-item-creator"] ?? {};
+    const candidates = [
+      item.uuid,
+      item.getFlag?.("core", "sourceId"),
+      item.flags?.core?.sourceId,
+      item._stats?.compendiumSource,
+      item._stats?.duplicateSource,
+      creator.templateUuid,
+      creator.baseWeaponUuid
+    ].filter(Boolean).map(String);
+    return candidates.some(value => /^Compendium\.(?:dnd5e|dnd-[^.]+)\./i.test(value));
+  }
+
+  static ingredientMatchMode(item) {
+    if (!item) return "exact";
+    if (item.getFlag?.(MODULE_ID, FLAGS.MATERIAL_ID) || item.flags?.[MODULE_ID]?.[FLAGS.MATERIAL_ID]) return "exact";
+
+    const creator = Boolean(item.getFlag?.("dnd5e-item-creator", "created") ?? item.flags?.["dnd5e-item-creator"]?.created);
+    const importedCustom = Boolean(item.getFlag?.(MODULE_ID, "importedCustomItem") ?? item.flags?.[MODULE_ID]?.importedCustomItem);
+    const managedProduct = Boolean(item.getFlag?.(MODULE_ID, FLAGS.PRODUCT) ?? item.flags?.[MODULE_ID]?.[FLAGS.PRODUCT]);
+    if (creator || importedCustom || managedProduct) return "exact";
+
+    const base = this.baseItemIdentifier(item);
+    const identifier = String(item.system?.identifier ?? "").trim();
+    const magicalBonus = String(item.system?.magicalBonus ?? "").trim();
+    const properties = item.system?.properties;
+    const magical = Boolean(magicalBonus)
+      || (properties?.has?.("mgc") ?? (Array.isArray(properties) && properties.includes("mgc")));
+
+    // Base Item matching is deliberately reserved for a demonstrably canonical D&D Base Item
+    // (or a normal World copy that still points back to one). A homebrew/custom Item that merely
+    // reuses identifier/baseItem="maul" remains exact instead of silently becoming generic.
+    if (base && identifier && base === identifier && !magical && this.hasOfficialDndProvenance(item)) return "baseItem";
+    return "exact";
+  }
+
+  static itemDefinitionSignature(itemOrData) {
+    if (!itemOrData) return "";
+    const raw = itemOrData.toObject?.() ?? foundry.utils.deepClone(itemOrData);
+    const system = foundry.utils.deepClone(raw?.system ?? {});
+    delete system.quantity;
+    delete system.equipped;
+    delete system.attuned;
+    delete system.container;
+    if (system.uses && typeof system.uses === "object") system.uses.spent = 0;
+    if (system.activities && typeof system.activities === "object") {
+      for (const activity of Object.values(system.activities)) {
+        if (activity?.uses && typeof activity.uses === "object") activity.uses.spent = 0;
+      }
+    }
+
+    const creatorFlags = foundry.utils.deepClone(raw?.flags?.["dnd5e-item-creator"] ?? {});
+    const identity = {
+      name: String(raw?.name ?? itemOrData.name ?? ""),
+      type: String(raw?.type ?? itemOrData.type ?? ""),
+      system,
+      creator: creatorFlags
+    };
+
+    const canonicalize = value => {
+      if (Array.isArray(value)) return value.map(canonicalize);
+      if (!value || typeof value !== "object") return value;
+      const out = {};
+      for (const key of Object.keys(value).sort()) {
+        if (["_id", "sort"].includes(key)) continue;
+        out[key] = canonicalize(value[key]);
+      }
+      return out;
+    };
+    const text = JSON.stringify(canonicalize(identity));
+    let hash = 14695981039346656037n;
+    const prime = 1099511628211n;
+    const mask = 0xffffffffffffffffn;
+    for (let i = 0; i < text.length; i += 1) {
+      hash ^= BigInt(text.charCodeAt(i));
+      hash = (hash * prime) & mask;
+    }
+    return `ccsig-${hash.toString(16).padStart(16, "0")}`;
+  }
+
+  static itemReference(item, quantity=1, { snapshot=false, ingredient=false, matchMode=null, baseItemIdentifier="", exactSignature="" }={}) {
     if (!item) return null;
-    return {
+    const reference = {
       // uuid is the exact definition selected by the GM and is used when materializing the crafted result.
       uuid: String(item.uuid),
       // sourceUuid is a provenance identity used to recognize copies in Actor inventories.
@@ -383,6 +487,40 @@ export class RecipeService {
       quantity: Math.max(1, Math.floor(Number(quantity) || 1)),
       ...(snapshot ? { snapshot: item.toObject() } : {})
     };
+    if (ingredient) {
+      const mode = ["baseItem", "exact"].includes(String(matchMode)) ? String(matchMode) : this.ingredientMatchMode(item);
+      reference.matchMode = mode;
+      reference.baseItemIdentifier = String(baseItemIdentifier || this.baseItemIdentifier(item) || reference.identifier || "");
+      reference.exactSignature = mode === "exact"
+        ? String(exactSignature || this.itemDefinitionSignature(item))
+        : "";
+      // Exact ingredients keep the concrete document selected by the GM as their provenance.
+      // This prevents a custom derivative from inheriting a broad Base Item source UUID and
+      // accidentally matching unrelated Items from the same family. Cross-World portability is
+      // provided by exactSignature when the original document UUID no longer exists.
+      if (mode === "exact") reference.sourceUuid = String(item.uuid || reference.sourceUuid || "");
+    }
+    return reference;
+  }
+
+  static referencesEquivalent(a, b) {
+    if (!a || !b) return false;
+    const aMode = String(a.matchMode || "legacy");
+    const bMode = String(b.matchMode || "legacy");
+    if (aMode === "baseItem" && bMode === "baseItem") {
+      const ak = String(a.baseItemIdentifier || a.identifier || "");
+      const bk = String(b.baseItemIdentifier || b.identifier || "");
+      return Boolean(ak && bk && ak === bk && (!a.type || !b.type || a.type === b.type));
+    }
+    if (aMode === "exact" && bMode === "exact") {
+      if (a.exactSignature && b.exactSignature) return a.exactSignature === b.exactSignature;
+      if (a.sourceUuid && b.sourceUuid) return a.sourceUuid === b.sourceUuid;
+      return Boolean(a.uuid && b.uuid && a.uuid === b.uuid);
+    }
+    if (aMode !== bMode && aMode !== "legacy" && bMode !== "legacy") return false;
+    return Boolean(a.uuid === b.uuid
+      || (a.sourceUuid && b.sourceUuid && a.sourceUuid === b.sourceUuid)
+      || (a.identifier && b.identifier && a.identifier === b.identifier && a.type === b.type));
   }
 
   static sourceCandidates(item) {
@@ -399,19 +537,37 @@ export class RecipeService {
 
   static itemMatchesReference(item, reference) {
     if (!item || !reference) return false;
+    const mode = String(reference.matchMode || "legacy");
     const candidates = this.sourceCandidates(item);
     const uuid = String(reference.uuid || "");
     const sourceUuid = String(reference.sourceUuid || "");
+
+    if (mode === "exact") {
+      if (uuid && candidates.has(uuid)) return true;
+      if (sourceUuid && candidates.has(sourceUuid)) return true;
+      const signature = String(reference.exactSignature || "");
+      if (signature && signature === this.itemDefinitionSignature(item)) return true;
+      // Exact references created before a signature existed retain same-name fallback only.
+      return Boolean(!signature && reference.name && item.name === reference.name && (!reference.type || item.type === reference.type));
+    }
+
+    if (mode === "baseItem") {
+      const key = String(reference.baseItemIdentifier || reference.identifier || "").trim();
+      if (!key || (reference.type && item.type !== reference.type)) return false;
+      const itemIdentifier = String(item.system?.identifier ?? "").trim();
+      const itemBase = this.baseItemIdentifier(item);
+      return itemIdentifier === key || itemBase === key;
+    }
+
+    // Legacy v0.4.0 and older behavior is intentionally retained for existing saved Recipes.
     if (uuid && candidates.has(uuid)) return true;
     if (sourceUuid && candidates.has(sourceUuid)) return true;
-
     const refIdentifier = String(reference.identifier || "").trim();
     const itemIdentifier = String(item.system?.identifier ?? "").trim();
     if (refIdentifier && itemIdentifier && refIdentifier === itemIdentifier) {
       return !reference.type || item.type === reference.type;
     }
-
-    // Last-resort support for custom world Items without stable provenance metadata.
     return Boolean(reference.name && item.name === reference.name && (!reference.type || item.type === reference.type));
   }
 }
+

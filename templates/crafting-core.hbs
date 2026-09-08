@@ -87,9 +87,9 @@
       </section>
 
       <section class="cc-form-card cc-crafting-resolution-card">
-        <div class="cc-card-heading"><div><span class="cc-kicker">Proficiency & Access</span><h3>Who Can Craft</h3></div><small>All access and proficiency behavior stays together in this block.</small></div>
+        <div class="cc-card-heading"><div><span class="cc-kicker">Proficiency, Access & Final Check</span><h3>Who Can Craft</h3></div><small>The Recipe defines the eligible Skill/Tool checks. Proficiency 1 is the default option when a roll is required.</small></div>
         <div class="cc-resolution-section">
-          <div class="cc-resolution-heading"><strong>Relevant Proficiency</strong><small>Choose a Skill, a Tool, or both.</small></div>
+          <div class="cc-resolution-heading"><strong>Relevant Proficiency</strong><small>Choose the Skill/Tool options that can qualify a crafter and can be used for the Final Crafting Check.</small></div>
           <div class="cc-grid two cc-resolution-proficiencies">
             <label><span>Proficiency 1</span><select name="proficiency1">
               <option value="" {{#if (eq craftingResolutionOptions.proficiency1 "")}}selected{{/if}}>None</option>
@@ -102,12 +102,20 @@
               <optgroup label="Tools">{{#each craftingResolutionOptions.toolOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.proficiency2)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
             </select></label>
           </div>
-          <div class="cc-grid three cc-resolution-policy-grid">
+          <div class="cc-grid two cc-resolution-policy-grid">
             <label><span>If two are selected</span><select name="proficiencyMatch"><option value="any" {{#if (eq draft.craftingResolution.proficiencyMatch "any")}}selected{{/if}}>Any one qualifies</option><option value="all" {{#if (eq draft.craftingResolution.proficiencyMatch "all")}}selected{{/if}}>Both are required</option></select></label>
             <label><span>Who can attempt</span><select name="attemptPolicy"><option value="anyone" {{#if (eq draft.craftingResolution.attemptPolicy "anyone")}}selected{{/if}}>Anyone</option><option value="requiresProficiency" {{#if (eq draft.craftingResolution.attemptPolicy "requiresProficiency")}}selected{{/if}}>Requires relevant proficiency</option></select></label>
-            <label><span>If proficient</span><select name="proficientPolicy"><option value="rollNormally" {{#if (eq draft.craftingResolution.proficientPolicy "rollNormally")}}selected{{/if}}>Roll normally</option><option value="automaticSuccess" {{#if (eq draft.craftingResolution.proficientPolicy "automaticSuccess")}}selected{{/if}}>Automatic final success</option></select></label>
           </div>
-          <div class="cc-proficiency-rule-summary"><i class="fa-solid fa-circle-info"></i><span>{{proficiencyRuleSummary}}</span></div>
+
+          <div class="cc-resolution-heading cc-final-check-inline-heading"><strong>Final Crafting Check</strong><small>When enabled, qualified crafters may auto-succeed; non-qualified crafters who are allowed to attempt must roll one eligible proficiency.</small></div>
+          <label class="cc-resolution-toggle"><input type="checkbox" name="requireCraftingCheck" data-resolution-rerender {{#if draft.craftingResolution.check.required}}checked{{/if}}><span><strong>Require a Final Crafting Check</strong><small>When disabled, an eligible crafter completes automatically after the required work.</small></span></label>
+          {{#if draft.craftingResolution.check.required}}
+          <div class="cc-grid two cc-resolution-check-grid">
+            <label><span>If qualified</span><select name="proficientPolicy"><option value="rollNormally" {{#if (eq draft.craftingResolution.proficientPolicy "rollNormally")}}selected{{/if}}>Roll normally</option><option value="automaticSuccess" {{#if (eq draft.craftingResolution.proficientPolicy "automaticSuccess")}}selected{{/if}}>Automatic final success</option></select></label>
+            <label><span>Difficulty Class (DC)</span><input type="number" min="1" max="40" step="1" name="craftingDC" value="{{draft.craftingResolution.check.dc}}"></label>
+          </div>
+          {{#if (eq draft.craftingResolution.proficiencies.length 2)}}<p class="cc-inline-rule-note"><i class="fa-solid fa-dice-d20"></i> If a roll is required, the crafter chooses between the two eligible proficiencies before starting. Proficiency 1 is pre-selected.</p>{{/if}}
+          {{/if}}
         </div>
       </section>
 
@@ -173,14 +181,9 @@
       </section>
       {{/if}}
 
+      {{#if draft.craftingResolution.check.required}}
       <section class="cc-form-card cc-final-check-card">
-        <div class="cc-card-heading"><div><span class="cc-kicker">Final Crafting Check</span><h3>Final Validation</h3></div><small>This is the v0.0.18 Crafting Check flow. Project Recipes gain configurable retry/regression/failure behavior around the same native D&D5e roll.</small></div>
-        <label class="cc-resolution-toggle"><input type="checkbox" name="requireCraftingCheck" data-resolution-rerender {{#if draft.craftingResolution.check.required}}checked{{/if}}><span><strong>Require a Final Crafting Check</strong><small>When disabled, an eligible crafter completes automatically after the required work.</small></span></label>
-        {{#if draft.craftingResolution.check.required}}
-        <div class="cc-grid two cc-resolution-check-grid">
-          <label><span>Check</span><select name="craftingCheck"><optgroup label="Ability Checks">{{#each craftingResolutionOptions.abilityOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup><optgroup label="Skills">{{#each craftingResolutionOptions.skillOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup><optgroup label="Tools">{{#each craftingResolutionOptions.toolOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup><optgroup label="Saving Throws">{{#each craftingResolutionOptions.saveOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.checkValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup></select></label>
-          <label><span>Difficulty Class (DC)</span><input type="number" min="1" max="40" step="1" name="craftingDC" value="{{draft.craftingResolution.check.dc}}"></label>
-        </div>
+        <div class="cc-card-heading"><div><span class="cc-kicker">Final Check Failure</span><h3>On a Failed Final Check</h3></div><small>Configure only the consequence of a failed roll. The eligible check itself is defined in Who Can Craft.</small></div>
         {{#if (eq draft.craftingMode "project")}}
         <div class="cc-resolution-section cc-failure-outcome-block">
           <div class="cc-resolution-heading"><strong>On Final Check Failure</strong><small>The failed attempt is spent. Choose whether the Project stays ready, regresses, or fails completely.</small></div>
@@ -201,8 +204,8 @@
           {{#if draft.craftingResolution.failure.loseMaterials}}<label class="cc-loss-slider"><span>Materials Lost on Failure <output data-failure-loss-output>{{draft.craftingResolution.failure.lossPercent}}%</output></span><input type="range" min="0" max="100" step="5" name="failureLossPercent" value="{{draft.craftingResolution.failure.lossPercent}}"></label>{{/if}}
         </div>
         {{/if}}
-        {{/if}}
       </section>
+      {{/if}}
 
       <section class="cc-form-card cc-player-visibility-card">
         <div class="cc-card-heading"><div><span class="cc-kicker">Player Visibility</span><h3>What the Player Can See</h3></div><small>Hidden information remains stored and enforced. The Character Crafting tab and published Knowledge Source use the same visibility rules.</small></div>
@@ -238,7 +241,7 @@
           {{#each draft.ingredients}}
           <div class="cc-item-row">
             <img src="{{img}}" alt="">
-            <div class="cc-item-name"><strong>{{name}}</strong><small>{{type}}</small></div>
+            <div class="cc-item-name"><strong>{{name}}</strong><small>{{type}}{{#if (eq matchMode "baseItem")}} · Base Item match{{/if}}{{#if (eq matchMode "exact")}} · Exact Item{{/if}}</small></div>
             <label><span>Qty</span><input type="number" min="1" step="1" value="{{quantity}}" data-ingredient-quantity="{{@index}}"></label>
             <button type="button" class="cc-icon-button danger" data-action="remove-ingredient" data-index="{{@index}}" aria-label="Remove"><i class="fa-solid fa-trash"></i></button>
           </div>

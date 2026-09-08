@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.1 — Unified Final Checks & Ingredient Identity
+
+- Unified **Relevant Proficiency** and **Final Crafting Check** authoring. Recipes now use their configured Proficiency 1 / Proficiency 2 as the eligible final checks instead of a second independent `Check` dropdown.
+- **Proficiency 1** is the primary/default final-check option. When two proficiencies are eligible and a roll is required, the crafter chooses which one to use before starting; Proficiency 1 is pre-selected. Crafting Projects freeze the selected check in their Project snapshot.
+- Preserved the existing qualification semantics: with `Any one qualifies` + `Automatic final success`, proficiency in either eligible option skips the Final Crafting Check. A non-qualified crafter may still roll when `Who Can Attempt = Anyone`; proficiency-gated Recipes still block non-qualified attempts. Learning Access remains a separate gate.
+- Preserved active pre-v0.4.1 Crafting Projects: Projects that already froze the old independent Final Check continue using that original check until completion rather than being rewritten mid-project.
+- Added explicit ingredient identity modes for new/updated Recipes: **Base Item match** for generic canonical equipment and **Exact Item** for Materials, Curated/managed Products, Item Creator/custom Items, and other specific derivatives.
+- Generic Base Item requirements are intentionally asymmetric: a Recipe requiring `Maul` may accept a valid Item derived from the Maul base family, while a Recipe requiring a specific custom Maul derivative does not accept an ordinary Maul in its place.
+- Recipe Transfer schema advances to v2 while retaining import support for v1 exports from v0.4.0. Transfer now preserves Base Item vs Exact Item semantics and exact-definition signatures for custom dependencies.
+- Fixed the v0.4.0 import resolver that could display a World custom derivative (for example, `Malho da Vigília Intocada`) in place of an exported generic Base Item (`Maul`) simply because both shared `system.identifier = maul`. Canonical Base Items are now resolved before arbitrary World derivatives, and generic dependencies retain their exported canonical label.
+- No Settings compaction, Generate Materials Preview, icon distribution, gathering balance, Curated Product mechanics, Knowledge lifecycle, Supplier behavior, or crafting economy changes are included in this patch.
+
 ## 0.4.0 — Recipe Portability & Interface Polish
 
 - Added a GM-only **Recipe Transfer** section to Crafting Core Settings with dedicated Import and Export managers, keeping administrative transfer tools out of day-to-day crafting UI.

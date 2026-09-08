@@ -2092,3 +2092,30 @@
   overflow: visible;
   padding-right: 0;
 }
+
+/* v0.4.1 — Unified proficiency/final-check authoring */
+.cc-final-check-inline-heading {
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--cc-border-soft);
+}
+.cc-inline-rule-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 8px;
+  border-left: 2px solid rgba(181,155,97,.5);
+  background: rgba(181,155,97,.045);
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: rgba(255,255,255,.72);
+}
+.cc-inline-rule-note > i { color: var(--cc-gold); margin-top: 2px; }
+.cc-final-check-choice { display: grid; gap: 10px; min-width: min(430px, 80vw); }
+.cc-final-check-choice > p { margin: 0; line-height: 1.4; }
+.cc-final-check-choice > label { display: grid; gap: 5px; }
+.cc-final-check-choice > label > span { font-weight: 700; }
+.cc-final-check-choice select { width: 100%; }
+.cc-final-check-choice small { opacity: .7; }

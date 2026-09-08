@@ -74,7 +74,6 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       value: `save:${id}`, label: `${localizeLabel(data) || id} Saving Throw`
     }));
     const proficiencyValues = (this.draft?.craftingResolution?.proficiencies ?? []).map(row => `${row.type}:${row.id}`);
-    const checkValue = `${this.draft?.craftingResolution?.check?.type ?? "skill"}:${this.draft?.craftingResolution?.check?.id ?? ""}`;
     const progressCheckValue = `${this.draft?.project?.progressCheck?.type ?? "tool"}:${this.draft?.project?.progressCheck?.id ?? ""}`;
     const extraEffortCheckValue = `${this.draft?.project?.extraEffort?.type ?? "ability"}:${this.draft?.project?.extraEffort?.id ?? ""}`;
     return {
@@ -139,7 +138,6 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
         skillOptions, toolOptions, abilityOptions, saveOptions,
         proficiency1: proficiencyValues[0] ?? "",
         proficiency2: proficiencyValues[1] ?? "",
-        checkValue,
         progressCheckValue,
         extraEffortCheckValue
       }
@@ -194,7 +192,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     root.querySelector('[data-action="edit-published-source"]')?.addEventListener("click", event => this.#editPublished(event));
     root.querySelector('[data-action="open-published-item"]')?.addEventListener("click", event => this.#openPublishedItem(event));
     root.querySelector('[data-action="unpublish-source"]')?.addEventListener("click", event => this.#unpublish(event));
-    for (const name of ["proficiency1", "proficiency2", "proficiencyMatch", "attemptPolicy", "proficientPolicy", "requireCraftingCheck", "craftingCheck", "craftingDC"]) {
+    for (const name of ["proficiency1", "proficiency2", "proficiencyMatch", "attemptPolicy", "proficientPolicy", "requireCraftingCheck", "craftingDC"]) {
       root.querySelector(`[name="${name}"]`)?.addEventListener("change", () => {
         this.#syncDraftFromForm();
         this.#rerenderPreservingScroll();
@@ -451,9 +449,12 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     resolution.proficientPolicy = root.querySelector('[name="proficientPolicy"]')?.value ?? resolution.proficientPolicy ?? "rollNormally";
     resolution.check ??= {};
     resolution.check.required = Boolean(root.querySelector('[name="requireCraftingCheck"]')?.checked);
-    const [checkType, checkId] = String(root.querySelector('[name="craftingCheck"]')?.value || "skill:arc").split(":", 2);
-    resolution.check.type = checkType;
-    resolution.check.id = checkId;
+    // v0.4.1: the Final Crafting Check is one of the Recipe's relevant proficiencies.
+    // Proficiency 1 is the authoring default; a non-qualified crafter may choose another eligible proficiency at Project start.
+    if (resolution.proficiencies[0]) {
+      resolution.check.type = resolution.proficiencies[0].type;
+      resolution.check.id = resolution.proficiencies[0].id;
+    }
     resolution.check.dc = Math.clamp(Math.floor(Number(root.querySelector('[name="craftingDC"]')?.value) || 10), 1, 40);
     resolution.failure ??= {};
     resolution.failure.mode = root.querySelector('[name="finalFailureMode"]:checked')?.value ?? resolution.failure.mode ?? "failProject";
@@ -503,12 +504,10 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
         ui.notifications.warn("Crafting Core could not resolve that Item.");
         return;
       }
-      const ref = RecipeService.itemReference(item, 1, { snapshot: kind === "result" });
+      const ref = RecipeService.itemReference(item, 1, { snapshot: kind === "result", ingredient: kind !== "result" });
       if (kind === "result") this.draft.result = ref;
       else {
-        const existing = this.draft.ingredients.find(row => row.uuid === ref.uuid
-          || (row.sourceUuid && ref.sourceUuid && row.sourceUuid === ref.sourceUuid)
-          || (row.identifier && ref.identifier && row.identifier === ref.identifier && row.type === ref.type));
+        const existing = this.draft.ingredients.find(row => RecipeService.referencesEquivalent(row, ref));
         if (existing) existing.quantity += 1;
         else this.draft.ingredients.push(ref);
       }
@@ -547,8 +546,8 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (resolution.attemptPolicy === "requiresProficiency" && !resolution.proficiencies.length) {
       throw new Error("Choose at least one relevant proficiency when the recipe requires proficiency to attempt.");
     }
-    if (resolution.check.required && !resolution.check.id) {
-      throw new Error("Choose a valid Crafting Check.");
+    if (resolution.check.required && !resolution.proficiencies.length) {
+      throw new Error("Choose at least one relevant proficiency for the Final Crafting Check.");
     }
     if (this.draft.craftingMode === "project") {
       const project = RecipeService.normalizeProject(this.draft.project);

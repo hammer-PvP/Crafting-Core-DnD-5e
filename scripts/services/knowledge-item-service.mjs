@@ -522,7 +522,10 @@ export class KnowledgeItemService {
 
     if (visibility.craftingCheck && resolution.check.required) {
       const dc = visibility.craftingDC ? ` — DC ${resolution.check.dc}` : "";
-      lines.push(`<p><strong>Crafting Check:</strong> ${escape(RecipeService.checkLabel(resolution.check))}${dc}</p>`);
+      const labels = resolution.proficiencies.length
+        ? resolution.proficiencies.map(row => RecipeService.proficiencyLabel(row)).join(" or ")
+        : RecipeService.checkLabel(resolution.check);
+      lines.push(`<p><strong>Crafting Check:</strong> ${escape(labels)}${dc}</p>`);
     }
 
     if (visibility.failure && resolution.check.required) {

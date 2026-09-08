@@ -13,7 +13,7 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.4.0
+- **Crafting Core:** v0.4.1
 - **Foundry VTT:** minimum 14, verified 14.365
 - **D&D 5e:** 5.3.3
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
@@ -52,7 +52,7 @@ A Recipe can define:
 
 **Save Draft** only saves the private GM workbench state. It never changes the published Recipe used by players.
 
-The proficiency block is deliberately explicit: **Relevant Proficiency** defines what qualifies, **Who Can Attempt** decides whether proficiency is a gate, and **If Proficient** decides whether a qualified crafter rolls normally or receives automatic final success. With `Anyone` + `Automatic final success`, proficient crafters skip the final check while non-proficient crafters may still attempt it normally.
+The unified **Proficiency, Access & Final Check** block defines the eligible Skill/Tool proficiencies and uses those same proficiencies for the optional Final Crafting Check. **Proficiency 1** is the primary/default option and **Proficiency 2** is an alternate eligible option. With `Anyone` + `Automatic final success`, a crafter who qualifies through the configured proficiency rule skips the final check; a non-qualified crafter may still attempt it normally. When a roll is required and two proficiencies are eligible, the crafter chooses which one to use before starting, with Proficiency 1 pre-selected. Crafting Projects freeze that choice in the Project snapshot.
 
 ### 3. Publish the Knowledge Source
 
@@ -118,11 +118,11 @@ An active Project stores a frozen Recipe snapshot. Later Recipe edits, Unlearn, 
 
 ## Recipe Transfer Between Worlds
 
-Crafting Core v0.4.0 adds a GM-only **Recipe Transfer** workflow under **Game Settings -> Crafting Core -> Configure Crafting Core**. Administrative transfer controls stay out of the normal crafting UI.
+Crafting Core includes a GM-only **Recipe Transfer** workflow under **Game Settings -> Crafting Core -> Configure Crafting Core**. Administrative transfer controls stay out of the normal crafting UI.
 
 - **Export Recipes** lists Builder drafts with checkbox selection and click-to-inspect rows.
 - A Recipe bundle contains the Recipe definition plus a complete snapshot of its Result Item, including Activities, Effects, flags, and output quantity when present.
-- Ingredient references are exported semantically. Canonical Crafting Core Materials are resolved by stable Material identity in the destination World rather than by the source World's UUID.
+- Ingredient references are exported semantically. Canonical Crafting Core Materials are resolved by stable Material identity in the destination World rather than by the source World's UUID. Generic D&D Base Items retain a `Base Item` match (for example, `Maul` may be satisfied by a valid Maul derivative), while custom/specific Items retain an `Exact Item` identity so a Recipe requiring that specific Item cannot be satisfied by an unrelated Item from the same base family.
 - **Import Recipes** validates the JSON content/schema, previews dependencies and conflicts, and imports selected entries as private Builder drafts. Import never publishes Knowledge Sources automatically.
 - Imported Result Items are materialized in **Crafting Core - Products -> Custom Items**. Official Curated Products are never overwrite targets for imported custom content.
 - Existing Recipe/Result conflicts are reviewed explicitly: update, use existing, import a new copy/new Recipe ID, or skip.

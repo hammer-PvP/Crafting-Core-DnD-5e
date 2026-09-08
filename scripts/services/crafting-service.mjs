@@ -63,6 +63,62 @@ export class CraftingService {
     return this.#requestTimedCraft(actor, recipeId);
   }
 
+  static #finalCheckChoices(recipe) {
+    const resolution = RecipeService.normalizeCraftingResolution(recipe?.craftingResolution);
+    if (resolution.proficiencies.length) {
+      return resolution.proficiencies.map(entry => ({ type: entry.type, id: entry.id, dc: resolution.check.dc }));
+    }
+    return resolution.check?.id ? [{ type: resolution.check.type, id: resolution.check.id, dc: resolution.check.dc }] : [];
+  }
+
+  static #resolveFinalCheck(recipe, selection=null) {
+    const resolution = RecipeService.normalizeCraftingResolution(recipe?.craftingResolution);
+    if (!resolution.check.required) return { ...resolution.check };
+    const choices = this.#finalCheckChoices(recipe);
+    if (!choices.length) throw new Error("This Recipe requires a Final Crafting Check but has no relevant proficiency configured.");
+    if (selection?.type && selection?.id) {
+      const chosen = choices.find(row => row.type === String(selection.type) && row.id === String(selection.id));
+      if (!chosen) throw new Error("The selected Final Crafting Check is not eligible for this Recipe.");
+      return { ...chosen, dc: resolution.check.dc };
+    }
+    return { ...choices[0], dc: resolution.check.dc };
+  }
+
+  static #projectFinalCheck(project, recipe) {
+    if (project?.finalCheck?.type && project?.finalCheck?.id) return this.#resolveFinalCheck(recipe, project.finalCheck);
+    // Projects started before v0.4.1 did not freeze a proficiency choice. Preserve their
+    // original configured Final Check rather than changing an in-progress Project midstream.
+    const legacy = project?.recipe?.craftingResolution?.check;
+    if (legacy?.required && legacy?.id) {
+      return { type: String(legacy.type || "skill"), id: String(legacy.id), dc: Math.clamp(Math.floor(Number(legacy.dc) || 10), 1, 40) };
+    }
+    return this.#resolveFinalCheck(recipe, null);
+  }
+
+  static async #chooseFinalCheck(actor, recipe, evaluation) {
+    const choices = this.#finalCheckChoices(recipe);
+    if (choices.length <= 1) return this.#resolveFinalCheck(recipe, choices[0] ?? null);
+
+    const DialogV2 = foundry.applications?.api?.DialogV2;
+    if (!DialogV2?.input) return this.#resolveFinalCheck(recipe, choices[0]);
+    const escape = value => foundry.utils.escapeHTML(String(value ?? ""));
+    const options = choices.map((choice, index) => {
+      const value = `${choice.type}:${choice.id}`;
+      const label = RecipeService.checkLabel(choice, actor);
+      return `<option value="${escape(value)}"${index === 0 ? " selected" : ""}>${escape(label)}${index === 0 ? " — Primary" : ""}</option>`;
+    }).join("");
+    const result = await DialogV2.input({
+      window: { title: `Crafting Core — ${escape(recipe?.name || "Final Check")}` },
+      content: `<section class="cc-final-check-choice"><p>This crafter is not receiving automatic success. Choose which eligible proficiency will be used for this craft.</p><label><span>Final Crafting Check</span><select name="finalCheckChoice">${options}</select></label><p><small>Proficiency 1 is pre-selected because the GM marked it as the primary option for the Recipe.</small></p></section>`,
+      ok: { label: recipe?.craftingMode === "project" ? "Start Project" : "Continue", icon: "fa-solid fa-hammer" },
+      rejectClose: false,
+      modal: true
+    });
+    if (!result) return null;
+    const [type, id] = String(result.finalCheckChoice || `${choices[0].type}:${choices[0].id}`).split(":", 2);
+    return this.#resolveFinalCheck(recipe, { type, id });
+  }
+
   static async requestStartProject(actor, recipeId) {
     this.#assertCharacter(actor);
     const gm = this.#requireActiveGM();
@@ -73,11 +129,16 @@ export class CraftingService {
 
     const evaluation = this.evaluateResolution(actor, recipe);
     if (!evaluation.eligible) throw new Error(evaluation.publicBlockReason || `${actor.name} does not meet this recipe's requirements.`);
+    const finalCheck = evaluation.rollRequired
+      ? await this.#chooseFinalCheck(actor, recipe, evaluation)
+      : this.#resolveFinalCheck(recipe, null);
+    if (evaluation.rollRequired && !finalCheck) throw new Error("The Final Crafting Check selection was cancelled.");
     const projectConfig = RecipeService.normalizeProject(recipe.project);
     const previewProject = { completedWork: 0, midpointPassed: false };
     const checkApplies = this.#progressCheckApplies(previewProject, projectConfig);
 
     const payload = this.#baseRequest(REQUEST_PROJECT_START, actor, recipeId);
+    payload.finalCheck = finalCheck;
     payload.rollMessageId = null;
     if (checkApplies) {
       const roll = await this.#performRoll(actor, recipe, projectConfig.progressCheck, "progress", payload.requestId, {
@@ -156,10 +217,12 @@ export class CraftingService {
 
 
     const resolution = RecipeService.normalizeCraftingResolution(recipe.craftingResolution);
+    const finalCheck = this.#projectFinalCheck(project, recipe);
     const payload = this.#baseRequest(REQUEST_PROJECT_FINAL, actor, recipe.id, project.id);
+    payload.finalCheck = finalCheck;
     payload.rollMessageId = null;
     if (resolution.check.required && !project.finalPolicy?.automaticSuccess) {
-      const roll = await this.#performRoll(actor, recipe, resolution.check, "final", payload.requestId, {
+      const roll = await this.#performRoll(actor, recipe, finalCheck, "final", payload.requestId, {
         projectId: project.id,
         revealCheck: visibility.craftingCheck,
         revealDc: visibility.craftingDC
@@ -256,7 +319,7 @@ export class CraftingService {
         : project.workAvailable ? "Complete normal work first"
           : project.extraEffortUsedThisPeriod ? "Extra Effort Used"
             : "Extra Effort Not Available",
-      finalCheckLabel: RecipeService.checkLabel(resolution.check, actor),
+      finalCheckLabel: RecipeService.checkLabel(this.#projectFinalCheck(project, recipe), actor),
       manualFinalRequired: Boolean(resolution.check.required && !project.finalPolicy?.automaticSuccess),
       finalFailureLabel: this.#failureLabel(resolution.failure, { final: true, revealPercent: visibility.failurePercent }),
       reservedMaterials: reserved
@@ -274,7 +337,9 @@ export class CraftingService {
       && resolution.proficientPolicy === "automaticSuccess";
     const automaticSuccess = eligible && (!resolution.check.required || automaticByProficiency);
     const rollRequired = eligible && resolution.check.required && !automaticByProficiency;
-    const checkLabel = RecipeService.checkLabel(resolution.check, actor);
+    const checkLabel = configured.length > 1
+      ? configured.map(row => RecipeService.proficiencyLabel(row, actor)).join(" or ")
+      : RecipeService.checkLabel(resolution.check, actor);
     let blockReason = "";
     if (!eligible) {
       if (!configured.length) blockReason = "This recipe requires a relevant proficiency, but none is configured.";
@@ -323,10 +388,15 @@ export class CraftingService {
     if (!recipe) throw new Error(`${actor.name} has not learned this recipe.`);
     const evaluation = this.evaluateResolution(actor, recipe);
     if (!evaluation.eligible) throw new Error(evaluation.publicBlockReason || `${actor.name} does not meet this recipe's requirements.`);
+    const finalCheck = evaluation.rollRequired
+      ? await this.#chooseFinalCheck(actor, recipe, evaluation)
+      : this.#resolveFinalCheck(recipe, null);
+    if (evaluation.rollRequired && !finalCheck) throw new Error("The Final Crafting Check selection was cancelled.");
     const payload = this.#baseRequest(REQUEST_TIMED, actor, recipeId);
+    payload.finalCheck = finalCheck;
     payload.rollMessageId = null;
     if (evaluation.rollRequired) {
-      const roll = await this.#performRoll(actor, recipe, evaluation.check, "final", payload.requestId, {
+      const roll = await this.#performRoll(actor, recipe, finalCheck, "final", payload.requestId, {
         revealCheck: evaluation.visibility.craftingCheck,
         revealDc: evaluation.visibility.craftingDC
       });
@@ -424,8 +494,9 @@ export class CraftingService {
       : "Required crafting materials are missing.");
     if (!prepared.resolution.eligible) throw new Error(prepared.resolution.publicBlockReason);
 
+    const finalCheck = this.#resolveFinalCheck(recipe, request.finalCheck ?? null);
     const rollResult = prepared.resolution.rollRequired
-      ? await this.#validateRoll(actor, recipe, requester, request, prepared.resolution.check, "final")
+      ? await this.#validateRoll(actor, recipe, requester, request, finalCheck, "final")
       : { success: true, total: null, message: null };
 
     if (!rollResult.success) {
@@ -451,7 +522,7 @@ export class CraftingService {
       id: foundry.utils.randomID(20), recipeId: recipe.id, recipeName: recipe.name,
       resultUuid: recipe.result.sourceUuid || recipe.result.uuid, resultQuantity: recipe.result.quantity,
       resultData, startedAt, endsAt, status: "active", requesterId: requester.id,
-      resolution: { automaticSuccess: prepared.resolution.automaticSuccess, checkLabel: prepared.resolution.checkLabel, dc: prepared.resolution.check.dc, total: rollResult.total }
+      resolution: { automaticSuccess: prepared.resolution.automaticSuccess, checkLabel: RecipeService.checkLabel(finalCheck, actor), dc: finalCheck.dc, total: rollResult.total }
     };
     await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, job);
     if (endsAt <= this.serverTime()) await this.#finalizeTimed(actor, job);
@@ -471,6 +542,7 @@ export class CraftingService {
       : "Required crafting materials are missing.");
     if (!prepared.resolution.eligible) throw new Error(prepared.resolution.publicBlockReason);
 
+    const finalCheck = this.#resolveFinalCheck(recipe, request.finalCheck ?? null);
     const config = RecipeService.normalizeProject(recipe.project);
     const checkApplies = this.#progressCheckApplies({ completedWork: 0, midpointPassed: false }, config);
     const rollResult = checkApplies
@@ -486,6 +558,7 @@ export class CraftingService {
       midpointPassed: false, workAvailable: false, finalAvailable: false,
       extraEffortAvailable: false, extraEffortUsedThisPeriod: false,
       reservedMaterials, requesterId: requester.id, startedAt: this.serverTime(), updatedAt: this.serverTime(),
+      finalCheck,
       finalPolicy: { automaticSuccess: prepared.resolution.automaticSuccess, rollRequired: prepared.resolution.rollRequired }
     };
     await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
@@ -605,7 +678,8 @@ export class CraftingService {
     const recipe = RecipeService.snapshot(project.recipe);
     const resolution = RecipeService.normalizeCraftingResolution(recipe.craftingResolution);
     if (!resolution.check.required || project.finalPolicy?.automaticSuccess) return this.#completeProject(actor, project, recipe);
-    const rollResult = await this.#validateRoll(actor, recipe, requester, request, resolution.check, "final", project.id);
+    const finalCheck = this.#projectFinalCheck(project, recipe);
+    const rollResult = await this.#validateRoll(actor, recipe, requester, request, finalCheck, "final", project.id);
     project.finalAvailable = false;
     project.updatedAt = this.serverTime();
     if (rollResult.success) return this.#completeProject(actor, project, recipe, rollResult);
@@ -707,17 +781,18 @@ export class CraftingService {
 
   static async #applyFinalFailure(actor, project, recipe, rollResult) {
     const resolution = RecipeService.normalizeCraftingResolution(recipe.craftingResolution);
+    const finalCheck = this.#projectFinalCheck(project, recipe);
     const failure = resolution.failure;
     const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
     const facts = [];
     if (visibility.craftingCheck && Number.isFinite(Number(rollResult.total))) {
       facts.push(visibility.craftingDC
-        ? `Final Crafting Check: ${rollResult.total} vs DC ${resolution.check.dc}`
+        ? `Final Crafting Check: ${rollResult.total} vs DC ${finalCheck.dc}`
         : `Final Crafting Check result: ${rollResult.total}`);
     }
-    project.lastAttempt = { stage: "final", success: false, total: rollResult.total, dc: resolution.check.dc, at: this.serverTime() };
+    project.lastAttempt = { stage: "final", success: false, total: rollResult.total, dc: finalCheck.dc, at: this.serverTime() };
     if (failure.mode === "failProject") {
-      return this.#failProject(actor, project, recipe, failure, { stage: "final", total: rollResult.total, dc: resolution.check.dc });
+      return this.#failProject(actor, project, recipe, failure, { stage: "final", total: rollResult.total, dc: finalCheck.dc });
     }
     if (failure.mode === "regress") {
       project.completedWork = Math.max(0, Number(project.completedWork || 0) - failure.regressBy);
@@ -832,9 +907,9 @@ export class CraftingService {
     const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
     const facts = [...(feedbackFacts ?? [])];
     if (visibility.craftingCheck && Number.isFinite(Number(rollResult?.total)) && completedBy === "final") {
-      const resolution = RecipeService.normalizeCraftingResolution(recipe.craftingResolution);
+      const finalCheck = this.#projectFinalCheck(project, recipe);
       facts.push(visibility.craftingDC
-        ? `Final Crafting Check: ${rollResult.total} vs DC ${resolution.check.dc}`
+        ? `Final Crafting Check: ${rollResult.total} vs DC ${finalCheck.dc}`
         : `Final Crafting Check result: ${rollResult.total}`);
     }
     if (visibility.output) facts.push(`Created: ${result?.name || resultData?.name || "Item"} ×${outputQuantity}`);
