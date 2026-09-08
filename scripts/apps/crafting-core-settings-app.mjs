@@ -1,6 +1,7 @@
 import { MODULE_ID } from "../constants.mjs";
 import { HarvestProfileService } from "../services/harvest-profile-service.mjs";
 import { GearNormalizationService } from "../services/gear-normalization-service.mjs";
+import { RecipeTransferApp } from "./recipe-transfer-app.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -9,7 +10,7 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
     id: "crafting-core-settings",
     classes: ["crafting-core", "crafting-core-settings-app", "standard-form"],
     tag: "form",
-    position: { width: 760, height: 760 },
+    position: { width: 780, height: 760 },
     window: { title: "Crafting Core — Settings", resizable: true }
   };
 
@@ -145,6 +146,15 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
       event.preventDefault();
       this.normalizationSelected = [];
       this.render({ force: true });
+    });
+
+    root.querySelector('[data-action="open-recipe-export"]')?.addEventListener("click", event => {
+      event.preventDefault();
+      new RecipeTransferApp({ mode: "export" }).render({ force: true });
+    });
+    root.querySelector('[data-action="open-recipe-import"]')?.addEventListener("click", event => {
+      event.preventDefault();
+      new RecipeTransferApp({ mode: "import" }).render({ force: true });
     });
 
     root.querySelector('[data-action="save-settings"]')?.addEventListener("click", event => this.#save(event));

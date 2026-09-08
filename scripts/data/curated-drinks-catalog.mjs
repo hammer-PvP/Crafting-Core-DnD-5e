@@ -10,7 +10,7 @@ import { curatedDrinkIconCandidates } from "./bundled-icon-catalog.mjs";
  * Non-alcoholic drinks are intentionally simple native D&D5e healing consumables.
  */
 
-export const CURATED_DRINKS_VERSION = 2;
+export const CURATED_DRINKS_VERSION = 3;
 
 const alcoholIcons = {
   beer: [

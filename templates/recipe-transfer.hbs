@@ -1,0 +1,112 @@
+<section class="cc-transfer-shell">
+  <header class="cc-transfer-header">
+    <div>
+      <span class="cc-kicker">Recipe Portability</span>
+      <h1>{{title}}</h1>
+      <p>{{subtitle}}</p>
+    </div>
+    {{#if isImport}}
+    <div class="cc-transfer-file-actions">
+      <input type="file" accept="application/json,.json" data-transfer-file hidden>
+      <button type="button" class="cc-secondary-action" data-action="choose-import-file"><i class="fa-solid fa-file-arrow-up"></i> Choose JSON</button>
+    </div>
+    {{/if}}
+  </header>
+
+  <div class="cc-transfer-toolbar">
+    <label class="cc-transfer-search"><i class="fa-solid fa-magnifying-glass"></i><input type="search" name="transferSearch" value="{{search}}" placeholder="Search Recipes or Result Items"></label>
+    <button type="button" data-action="select-all-transfer"><i class="fa-solid fa-check-double"></i> Select All</button>
+    <button type="button" data-action="clear-transfer"><i class="fa-solid fa-xmark"></i> Clear</button>
+    <span><strong>{{selectedCount}}</strong> selected / {{totalCount}} available</span>
+  </div>
+
+  <div class="cc-transfer-body">
+    <section class="cc-transfer-list-panel">
+      {{#if hasRows}}
+      <div class="cc-transfer-list">
+        {{#each rows}}
+        <article class="cc-transfer-row {{#if selected}}selected{{/if}} {{#if inspected}}inspected{{/if}} {{#if disabled}}disabled{{/if}}" data-transfer-row="{{key}}">
+          <label class="cc-transfer-check" data-tooltip="Select this Recipe"><input type="checkbox" data-transfer-checkbox="{{key}}" {{#if selected}}checked{{/if}} {{#if disabled}}disabled{{/if}}></label>
+          <img src="{{img}}" alt="">
+          <div class="cc-transfer-row-main">
+            <strong>{{name}}</strong>
+            <small>{{resultName}} ×{{quantity}}{{#if type}} · {{type}}{{/if}}</small>
+          </div>
+          <span class="cc-transfer-status {{statusClass}}">{{status}}</span>
+          <i class="fa-solid fa-chevron-right"></i>
+        </article>
+        {{/each}}
+      </div>
+      {{else}}
+      <div class="cc-transfer-empty">
+        <i class="fa-solid {{#if isImport}}fa-file-circle-question{{else}}fa-scroll{{/if}}"></i>
+        {{#if isImport}}
+          {{#if bundleLoaded}}<strong>No Recipes match this search.</strong><small>Clear the search or load another Recipe export.</small>
+          {{else}}<strong>Choose a Recipe export to begin.</strong><small>The filename is not used for validation; Crafting Core validates the JSON schema and metadata inside the file.</small>{{/if}}
+        {{else}}
+          <strong>No transferable Builder drafts found.</strong><small>Create or save a Recipe draft with a Result Item first.</small>
+        {{/if}}
+      </div>
+      {{/if}}
+    </section>
+
+    <aside class="cc-transfer-inspector">
+      {{#if inspected}}
+      <div class="cc-transfer-inspector-title">
+        <img src="{{inspected.img}}" alt="">
+        <div><span class="cc-kicker">Inspect</span><h2>{{inspected.name}}</h2><small>{{inspected.resultName}} ×{{inspected.quantity}}</small></div>
+      </div>
+
+      <div class="cc-transfer-facts">
+        <span><small>Result Type</small><strong>{{#if inspected.type}}{{inspected.type}}{{else}}Item{{/if}}</strong></span>
+        <span><small>Crafting</small><strong>{{inspected.craftingTime}}</strong></span>
+        <span><small>Status</small><strong class="cc-transfer-text-{{inspected.statusClass}}">{{inspected.status}}</strong></span>
+        <span><small>Icon</small><strong>{{inspected.iconSource}}</strong></span>
+      </div>
+
+      <section class="cc-transfer-inspector-block">
+        <h3>Crafting Rule</h3>
+        <p>{{inspected.proficiencySummary}}</p>
+      </section>
+
+      <section class="cc-transfer-inspector-block">
+        <h3>Ingredients</h3>
+        <div class="cc-transfer-dependencies">
+          {{#each inspected.ingredients}}
+          <div class="{{#if missing}}missing{{/if}}"><span>{{name}}</span><strong>×{{quantity}}</strong>{{#if status}}<i class="fa-solid {{#if missing}}fa-triangle-exclamation{{else}}fa-check{{/if}}" data-tooltip="{{#if missing}}Missing in this World{{else}}Resolved{{/if}}"></i>{{/if}}</div>
+          {{else}}<small>No ingredients recorded.</small>{{/each}}
+        </div>
+      </section>
+
+      {{#if isImport}}
+      <section class="cc-transfer-inspector-block cc-transfer-conflicts">
+        <h3>Import Decisions</h3>
+        <label><span>Recipe</span><select name="recipeConflictAction">
+          <option value="update" {{#if (eq inspected.recipeAction "update")}}selected{{/if}}>Update Existing Recipe ID</option>
+          <option value="preserve" {{#if (eq inspected.recipeAction "preserve")}}selected{{/if}}>Keep Imported Recipe ID</option>
+          <option value="new" {{#if (eq inspected.recipeAction "new")}}selected{{/if}}>Import as New Recipe ID</option>
+          <option value="skip" {{#if (eq inspected.recipeAction "skip")}}selected{{/if}}>Skip Recipe</option>
+        </select></label>
+        <label><span>Result Item</span><select name="resultConflictAction">
+          <option value="use-existing" {{#if (eq inspected.resultAction "use-existing")}}selected{{/if}}>Use Existing Result Item</option>
+          <option value="update" {{#if (eq inspected.resultAction "update")}}selected{{/if}}>Update Existing Result Item</option>
+          <option value="import-new" {{#if (eq inspected.resultAction "import-new")}}selected{{/if}}>Import New Copy</option>
+          <option value="skip" {{#if (eq inspected.resultAction "skip")}}selected{{/if}}>Skip</option>
+        </select></label>
+        {{#if inspected.existingRecipe}}<p class="cc-note"><i class="fa-solid fa-code-branch"></i> Recipe ID already exists in this World.</p>{{/if}}
+        {{#if inspected.existingResult}}<p class="cc-note"><i class="fa-solid fa-box"></i> A matching Result Item already exists in Crafting Core — Products.</p>{{/if}}
+        {{#if inspected.missingDependencies.length}}<p class="cc-note cc-transfer-missing-note"><i class="fa-solid fa-triangle-exclamation"></i> Missing dependencies must be available in the destination World before this Recipe can be imported.</p>{{/if}}
+      </section>
+      {{/if}}
+      {{else}}
+      <div class="cc-transfer-empty"><i class="fa-solid fa-arrow-left"></i><strong>Select a row to inspect.</strong></div>
+      {{/if}}
+    </aside>
+  </div>
+
+  <footer class="cc-transfer-footer">
+    <span class="cc-note"><i class="fa-solid fa-circle-info"></i> Imported Recipes are saved as private Builder drafts. Publishing remains a separate GM action.</span>
+    {{#if isExport}}<button type="button" class="cc-primary-action" data-action="export-selected"><i class="fa-solid fa-file-arrow-down"></i> Export Selected</button>{{/if}}
+    {{#if isImport}}<button type="button" class="cc-primary-action" data-action="import-selected" {{#unless bundleLoaded}}disabled{{/unless}}><i class="fa-solid fa-file-import"></i> Import Selected</button>{{/if}}
+  </footer>
+</section>

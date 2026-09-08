@@ -11,43 +11,21 @@ const ROOT = "modules/dnd5e-crafting-core/icons";
 const p = relative => `${ROOT}/${relative}`;
 
 const MEAL_EXTRAS = Object.freeze({
-  "forge-stew": [
-    p("products/meals/dumpling-stew-bowl-orange.webp"),
-    p("products/meals/noodle-soup-bowl-brown.webp")
-  ],
-  "hot-stone-ribs": [
-    p("products/meals/roasted-meat-platter-red-brown.webp"),
-    p("products/meals/steak-board-red-brown.webp")
-  ],
-  "khaz-marchbread": [p("products/meals/pastry-roll-golden-brown.webp")],
-  "miners-hand-pie": [
-    p("products/meals/pie-slice-golden-yellow.webp"),
-    p("products/meals/pastry-roll-golden-brown.webp")
-  ],
-  "hot-stone-feast": [
-    p("products/meals/meat-vegetable-plate-red-green.webp"),
-    p("products/meals/roasted-meat-platter-red-brown.webp")
-  ],
-  "stillleaf-broth": [p("products/meals/noodle-soup-bowl-brown.webp")],
-  "lightleaf-cakes": [
-    p("products/meals/berry-cake-red-cream.webp"),
-    p("products/meals/pastry-roll-golden-brown.webp")
-  ],
-  "greenway-salad": [p("products/meals/cucumber-salad-bowl-green.webp")],
-  "roadside-stew": [
-    p("products/meals/dumpling-stew-bowl-orange.webp"),
-    p("products/meals/noodle-soup-bowl-brown.webp")
-  ],
-  "farmers-pie": [
-    p("products/meals/pie-slice-golden-yellow.webp"),
-    p("products/meals/pastry-roll-golden-brown.webp")
-  ],
-  "messengers-bread": [p("products/meals/pastry-roll-golden-brown.webp")],
-  "first-bell-eggs": [p("products/meals/fried-egg-plate-yellow-white.webp")],
-  "adventurers-breakfast": [
-    p("products/meals/fried-egg-plate-yellow-white.webp"),
-    p("products/meals/meat-vegetable-plate-red-green.webp")
-  ]
+  "forge-stew": [p("products/meals/dumpling-stew-bowl-orange.webp"), p("products/meals/noodle-soup-bowl-brown.webp"), p("products/meals/grilled-meal-plate-red-green.webp")],
+  "hot-stone-ribs": [p("products/meals/roasted-meat-platter-red-brown.webp"), p("products/meals/steak-board-red-brown.webp"), p("products/meals/grilled-meal-plate-red-green.webp")],
+  "khaz-marchbread": [p("products/meals/pastry-roll-golden-brown.webp"), p("products/meals/pie-slice-golden-yellow.webp")],
+  "miners-hand-pie": [p("products/meals/pie-slice-golden-yellow.webp"), p("products/meals/pastry-roll-golden-brown.webp"), p("products/meals/meat-vegetable-plate-red-green.webp")],
+  "hot-stone-feast": [p("products/meals/meat-vegetable-plate-red-green.webp"), p("products/meals/grilled-meal-plate-red-green.webp"), p("products/meals/roasted-meat-platter-red-brown.webp")],
+  "silverdew-fruits": [p("products/meals/berry-cake-red-cream.webp"), p("products/meals/cucumber-salad-bowl-green.webp")],
+  "stillleaf-broth": [p("products/meals/noodle-soup-bowl-brown.webp"), p("products/meals/egg-soup-bowl-yellow.webp")],
+  "lightleaf-cakes": [p("products/meals/berry-cake-red-cream.webp"), p("products/meals/pastry-roll-golden-brown.webp"), p("products/meals/pie-slice-golden-yellow.webp")],
+  "greenway-salad": [p("products/meals/cucumber-salad-bowl-green.webp"), p("products/meals/meat-vegetable-plate-red-green.webp")],
+  "table-of-the-star-roads": [p("products/meals/grilled-meal-plate-red-green.webp"), p("products/meals/berry-cake-red-cream.webp"), p("products/meals/cucumber-salad-bowl-green.webp")],
+  "roadside-stew": [p("products/meals/egg-soup-bowl-yellow.webp"), p("products/meals/dumpling-stew-bowl-orange.webp"), p("products/meals/noodle-soup-bowl-brown.webp")],
+  "farmers-pie": [p("products/meals/pie-slice-golden-yellow.webp"), p("products/meals/meat-vegetable-plate-red-green.webp"), p("products/meals/pastry-roll-golden-brown.webp")],
+  "messengers-bread": [p("products/meals/pastry-roll-golden-brown.webp"), p("products/meals/pie-slice-golden-yellow.webp")],
+  "first-bell-eggs": [p("products/meals/fried-egg-plate-yellow-white.webp"), p("products/meals/egg-soup-bowl-yellow.webp")],
+  "adventurers-breakfast": [p("products/meals/grilled-meal-plate-red-green.webp"), p("products/meals/fried-egg-plate-yellow-white.webp"), p("products/meals/meat-vegetable-plate-red-green.webp")]
 });
 
 const DRINK_COLORS = Object.freeze({
@@ -78,7 +56,7 @@ const DRINK_COLORS = Object.freeze({
   "starlight-rose": ["red", "purple"],
   "moonpetal-mead": ["purple", "gold"],
   "autumn-stillness-vintage": ["gold", "green"],
-  "song-of-the-summer-court": ["red", "purple"],
+  "song-of-the-summer-court": ["purple", "gold"],
   "quiet-twilight-nectar": ["blue", "purple"],
 
   // Alcohol — cane spirits
@@ -95,7 +73,7 @@ const DRINK_COLORS = Object.freeze({
   "harvesters-tonic": ["green", "orange"],
 
   // Non-alcoholic — dwarven
-  "miners-barley-water": ["black", "gold"],
+  "miners-barley-water": ["orange", "black"],
   "forgecooler": ["gold", "blue"],
   "deepwell-tonic": ["green", "black"],
   "stonebrew-malt": ["gold", "black"],
@@ -111,7 +89,6 @@ const DRINK_COLORS = Object.freeze({
 
 const HOT_DRINK_IDS = new Set([
   "barley-water",
-  "miners-barley-water",
   "silverdew-infusion",
   "moonberry-tea"
 ]);
@@ -127,31 +104,83 @@ function drinkShape(drinkType, alternate=false) {
   return round ? "round" : "flask";
 }
 
+function stableHash(value) {
+  let hash = 2166136261;
+  for (const char of String(value ?? "")) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash >>> 0;
+}
+
+const mealUsage = new Map();
+const drinkUsage = new Map();
+
+function chooseDiverse(key, values, usage, count=3) {
+  const pool = unique(values);
+  const chosen = [];
+  while (chosen.length < count && pool.length) {
+    const ranked = pool
+      .filter(path => !chosen.includes(path))
+      .map((path, index) => ({
+        path,
+        index,
+        uses: usage.get(path) ?? 0,
+        jitter: stableHash(`${key}:${path}`) % 11
+      }))
+      .sort((a, b) => (a.uses - b.uses) || (a.index - b.index) || (a.jitter - b.jitter));
+    const pick = ranked[0];
+    if (!pick) break;
+    chosen.push(pick.path);
+    usage.set(pick.path, (usage.get(pick.path) ?? 0) + 1);
+  }
+  return chosen;
+}
+
 export function curatedMealIconCandidates(id, nativeIcons=[]) {
+  const key = String(id ?? "");
+  const extras = MEAL_EXTRAS[key] ?? [];
   const native = unique(nativeIcons);
-  const extras = MEAL_EXTRAS[String(id)] ?? [];
-  if (!extras.length) return native.slice(0, 3);
-  // Bundled art is preferred for new Products, while the old first native icon remains
-  // in the shortlist so existing worlds keep a familiar/selectable option.
-  return unique([extras[0], native[0], extras[1] ?? native[1], ...native]).slice(0, 3);
+  if (native.length > 1) {
+    const offset = stableHash(key) % native.length;
+    native.push(...native.splice(0, offset));
+  }
+  // Keep at least one bundled semantic choice whenever the curated library has one,
+  // then diversify the remaining slots across bundled/native assets.
+  const first = chooseDiverse(`meal-primary:${key}`, extras, mealUsage, 1);
+  const rest = chooseDiverse(`meal-rest:${key}`, [...extras.filter(path => !first.includes(path)), ...native], mealUsage, 3 - first.length);
+  return unique([...first, ...rest]).slice(0, 3);
 }
 
 export function curatedDrinkIconCandidates({ id, drinkType, nonAlcoholic=false }={}, nativeIcons=[]) {
   const key = String(id ?? "");
-  const colors = DRINK_COLORS[key] ?? ["amber", "green"];
+  const colors = DRINK_COLORS[key] ?? ["gold", "green"];
   const native = unique(nativeIcons);
-  const local = [];
-
-  if (nonAlcoholic && HOT_DRINK_IDS.has(key)) {
-    local.push(p("products/meals/hot-drink-cup-cream-brown.webp"));
+  if (native.length > 1) {
+    const offset = stableHash(key) % native.length;
+    native.push(...native.splice(0, offset));
   }
 
-  const firstShape = drinkShape(drinkType, false);
-  const secondShape = drinkShape(drinkType, true);
-  local.push(p(`products/drinks/drink-bottle-${firstShape}-${colors[0]}.webp`));
-  local.push(p(`products/drinks/drink-bottle-${secondShape}-${colors[1]}.webp`));
+  const primaryShape = drinkShape(drinkType, false);
+  const alternateShape = drinkShape(drinkType, true);
+  const local = [];
+  if (nonAlcoholic && HOT_DRINK_IDS.has(key)) local.push(p("products/meals/hot-drink-cup-cream-brown.webp"));
+  for (const color of colors) {
+    local.push(p(`products/drinks/drink-bottle-${primaryShape}-${color}.webp`));
+    local.push(p(`products/drinks/drink-bottle-${alternateShape}-${color}.webp`));
+  }
 
-  return unique([local[0], native[0], local[1], native[1], local[2], ...native]).slice(0, 3);
+  // Choose the default across the whole semantic pool so native and bundled artwork can
+  // both become the visible default. The third slot guarantees that at least one bundled
+  // color/type candidate remains available without forcing every Product to start from the
+  // same small set of bottle silhouettes.
+  const combined = unique([...local, ...native]);
+  const first = chooseDiverse(`drink-default:${key}`, combined, drinkUsage, 1);
+  const second = chooseDiverse(`drink-second:${key}`, combined.filter(path => !first.includes(path)), drinkUsage, 1);
+  const hasBundled = [...first, ...second].some(path => local.includes(path));
+  const thirdPool = hasBundled ? combined : local;
+  const third = chooseDiverse(`drink-third:${key}`, thirdPool.filter(path => !first.includes(path) && !second.includes(path)), drinkUsage, 1);
+  return unique([...first, ...second, ...third]).slice(0, 3);
 }
 
 const M = Object.freeze({

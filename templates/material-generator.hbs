@@ -134,7 +134,7 @@
 
     <section class="cc-form-card cc-generator-result">
       <div class="cc-card-heading cc-generator-result-heading">
-        <div><span class="cc-kicker">Last Generation</span><h3>Preview</h3></div>
+        <div><h3>Preview</h3></div>
         {{#if lastResult.created}}<button type="button" class="cc-secondary-action cc-inline-action" data-action="open-items"><i class="fa-solid fa-folder-tree"></i> Item Directory</button>{{/if}}
       </div>
 
@@ -142,9 +142,7 @@
         {{#if lastResult.empty}}
         <div class="cc-generator-empty"><i class="fa-solid fa-wind"></i><strong>Nothing was found.</strong><small>No Folder or Item Pile was created. Generate again whenever you want.</small></div>
         {{else}}
-        {{#if lastResult.editable}}
-        <p class="cc-note cc-generated-edit-note"><i class="fa-solid fa-sliders"></i> Adjust quantities or remove a material before creating the Folder / Item Pile. These edits affect only this generated batch.</p>
-        {{/if}}
+        {{#if lastResult.editable}}<span class="cc-generated-edit-hint"><i class="fa-solid fa-sliders"></i> Edit or remove before creating loot.</span>{{/if}}
         <div class="cc-generated-list">
           {{#each lastResult.items}}
           <div class="cc-generated-row" data-generated-material-id="{{materialId}}">

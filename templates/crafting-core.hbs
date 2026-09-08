@@ -107,6 +107,7 @@
             <label><span>Who can attempt</span><select name="attemptPolicy"><option value="anyone" {{#if (eq draft.craftingResolution.attemptPolicy "anyone")}}selected{{/if}}>Anyone</option><option value="requiresProficiency" {{#if (eq draft.craftingResolution.attemptPolicy "requiresProficiency")}}selected{{/if}}>Requires relevant proficiency</option></select></label>
             <label><span>If proficient</span><select name="proficientPolicy"><option value="rollNormally" {{#if (eq draft.craftingResolution.proficientPolicy "rollNormally")}}selected{{/if}}>Roll normally</option><option value="automaticSuccess" {{#if (eq draft.craftingResolution.proficientPolicy "automaticSuccess")}}selected{{/if}}>Automatic final success</option></select></label>
           </div>
+          <div class="cc-proficiency-rule-summary"><i class="fa-solid fa-circle-info"></i><span>{{proficiencyRuleSummary}}</span></div>
         </div>
       </section>
 

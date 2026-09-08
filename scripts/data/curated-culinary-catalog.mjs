@@ -7,7 +7,7 @@ import { curatedMealIconCandidates } from "./bundled-icon-catalog.mjs";
  * materializes them into the private Products and Learn Sources world Compendiums.
  */
 
-export const CURATED_CULINARY_VERSION = 6;
+export const CURATED_CULINARY_VERSION = 7;
 
 const MEAL = Object.freeze({
   HEARTY: "hearty",

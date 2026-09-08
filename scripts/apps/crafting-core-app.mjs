@@ -134,6 +134,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       knowledgeIcons: KNOWLEDGE_ICONS,
       outputRarity: rarityLabel,
       knowledgePrice: Number(KNOWLEDGE_PRICE_BY_RARITY[rarity] ?? 0),
+      proficiencyRuleSummary: RecipeService.proficiencyRuleSummary(this.draft?.craftingResolution),
       craftingResolutionOptions: {
         skillOptions, toolOptions, abilityOptions, saveOptions,
         proficiency1: proficiencyValues[0] ?? "",
@@ -193,6 +194,13 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     root.querySelector('[data-action="edit-published-source"]')?.addEventListener("click", event => this.#editPublished(event));
     root.querySelector('[data-action="open-published-item"]')?.addEventListener("click", event => this.#openPublishedItem(event));
     root.querySelector('[data-action="unpublish-source"]')?.addEventListener("click", event => this.#unpublish(event));
+    for (const name of ["proficiency1", "proficiency2", "proficiencyMatch", "attemptPolicy", "proficientPolicy", "requireCraftingCheck", "craftingCheck", "craftingDC"]) {
+      root.querySelector(`[name="${name}"]`)?.addEventListener("change", () => {
+        this.#syncDraftFromForm();
+        this.#rerenderPreservingScroll();
+      });
+    }
+
     root.querySelector('[data-action="save-recipe"]')?.addEventListener("click", event => this.#save(event));
     root.querySelector('[data-action="delete-recipe"]')?.addEventListener("click", event => this.#delete(event));
     root.querySelector('[data-action="publish-recipe"]')?.addEventListener("click", event => this.#publish(event));

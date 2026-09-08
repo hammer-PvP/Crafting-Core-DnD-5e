@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0 — Recipe Portability & Interface Polish
+
+- Added a GM-only **Recipe Transfer** section to Crafting Core Settings with dedicated Import and Export managers, keeping administrative transfer tools out of day-to-day crafting UI.
+- Added checkbox-based Recipe selection with click-to-inspect rows, Select All/Clear controls, search, dependency review, conflict review, Result Item inspection, and proficiency-rule summary.
+- Recipe exports now bundle the Recipe definition with a portable Result Item snapshot, preserving D&D5e Item data, Activities, Active Effects, flags, Item Creator metadata, output quantity, and ingredient identity metadata.
+- Canonical Crafting Core Materials are resolved in the destination World by stable Material ID rather than source-World UUID. Missing custom/external ingredient dependencies are reported before import and block only the affected entry.
+- Imported Result Items are created under **Crafting Core — Products → Custom Items**. Official Curated Products are never overwrite targets for imported custom content. Imported Recipes are saved as private Builder Drafts and are never published automatically.
+- Added explicit Recipe/Result conflict decisions: update existing, preserve imported Recipe ID, import as a new Recipe ID, use/update an existing custom Result, import a new Result copy, or skip.
+- Added portable icon fallback: original resolvable asset → compatible bundled Crafting Core asset when applicable → Base Item icon → generic Item-type icon. Recipe JSON does not embed image binaries.
+- Export uses the browser's native **Save As** picker when available. A confirmed browser download fallback is used otherwise; the suggested filename is never used to validate imports.
+- Clarified Tool Proficiency semantics in the Recipe Builder and player-facing Recipe display. `Anyone` + `Automatic final success` means qualified crafters skip the final Crafting Check while non-qualified crafters may still roll normally. Runtime behavior was retained because the existing crafting evaluator already implements that rule correctly.
+- Compacted the entire Crafting Core Settings window, reduced row/card chrome, moved to one primary vertical settings scroll, and added a compact Recipe Transfer administration card.
+- Simplified **Generate Materials → Preview** by removing `Last Generation`, shortening edit guidance, increasing result-list space, and aligning the `×`, quantity input, and remove button on one baseline.
+- Reworked Curated Product icon candidate distribution to use global usage pressure plus semantic type/color pools. This reduces repeated defaults/triples while preserving three choices per Product and never forcing replacement of an existing GM-selected icon.
+- No crafting economy, Curated Product mechanics, gathering balance, Knowledge lifecycle, harvesting math, or Supplier semantics were changed.
+
 ## 0.3.2 — Environment Gathering Balance & Editable Generated Batches
 
 - Retuned **Environment Gathering abundance** so it no longer multiplies the quantity rolled for one Material occurrence. Individual stack size now always comes from the Material's own quantity formula.

@@ -512,6 +512,12 @@ export class KnowledgeItemService {
     if (visibility.attemptPolicy) {
       const access = resolution.attemptPolicy === "requiresProficiency" ? "Requires relevant proficiency" : "Anyone";
       lines.push(`<p><strong>Who Can Attempt:</strong> ${escape(access)}</p>`);
+      if (resolution.proficiencies.length) {
+        const proficient = resolution.proficientPolicy === "automaticSuccess"
+          ? "Qualified crafters automatically succeed on the final Crafting Check."
+          : "Qualified crafters roll the final Crafting Check normally.";
+        lines.push(`<p><strong>If Proficient:</strong> ${escape(proficient)}</p>`);
+      }
     }
 
     if (visibility.craftingCheck && resolution.check.required) {

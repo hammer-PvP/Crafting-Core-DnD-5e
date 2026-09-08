@@ -301,6 +301,23 @@ export class RecipeService {
     return Number(data.value ?? data.proficient ?? 0) > 0;
   }
 
+  static proficiencyRuleSummary(craftingResolution, actor=null) {
+    const resolution = this.normalizeCraftingResolution(craftingResolution);
+    const labels = resolution.proficiencies.map(entry => this.proficiencyLabel(entry, actor));
+    const qualification = !labels.length
+      ? "No relevant proficiency is configured."
+      : labels.length === 1
+        ? `${labels[0]} qualifies.`
+        : `${resolution.proficiencyMatch === "all" ? "Both are required" : "Any one qualifies"}: ${labels.join(resolution.proficiencyMatch === "all" ? " + " : " or ")}.`;
+    const access = resolution.attemptPolicy === "requiresProficiency"
+      ? "Only qualified crafters may attempt."
+      : "Anyone may attempt.";
+    const proficient = resolution.proficientPolicy === "automaticSuccess"
+      ? (resolution.check.required ? "Qualified crafters automatically succeed; non-qualified crafters roll normally." : "Qualified crafters automatically succeed.")
+      : (resolution.check.required ? "Qualified and non-qualified crafters roll normally." : "No final Crafting Check is required.");
+    return `${qualification} ${access} ${proficient}`;
+  }
+
   static proficiencyEvaluation(actor, craftingResolution) {
     const resolution = this.normalizeCraftingResolution(craftingResolution);
     const rows = resolution.proficiencies.map(entry => ({
