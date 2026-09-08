@@ -26,7 +26,8 @@ export class HarvestProfileEditorApp extends HandlebarsApplicationMixin(Applicat
   async _prepareContext() {
     if (!this.draft) throw new Error("Harvest Profile could not be resolved.");
     const hydrated = await HarvestProfileService.hydrateProfile(this.draft);
-    const autoOptions = await HarvestProfileService.materialOptions({ nature: hydrated.creatureType });
+    const selectedAutomaticIds = [...new Set((hydrated.slots ?? []).flatMap(slot => slot.materialIds ?? []).map(String).filter(Boolean))];
+    const autoOptions = await HarvestProfileService.materialOptions({ nature: hydrated.creatureType, includeMaterialIds: selectedAutomaticIds });
     const allOptions = await HarvestProfileService.materialOptions({ includeAll: true });
     const decoratePinpoint = (options, selected) => [
       { value: "", label: "— Empty —", selected: !selected, chance: 0, quantity: "1", rarity: "common" },

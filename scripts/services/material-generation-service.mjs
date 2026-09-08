@@ -22,7 +22,7 @@ export class MaterialGenerationService {
   ]);
 
   static ESSENCE_AFFINITIES = Object.freeze([
-    "acid", "cold", "fire", "force", "lightning", "necrotic", "poison", "psychic", "radiant", "thunder"
+    "air", "acid", "cold", "fire", "force", "lightning", "necrotic", "poison", "psychic", "radiant", "thunder"
   ]);
 
   static essenceAffinityOptions(selected=[]) {
@@ -56,6 +56,11 @@ export class MaterialGenerationService {
    * so better materials become more likely without turning one rare discovery into
    * a giant stack.
    */
+  // Ordered Material biomes are player-facing priority, not just membership.
+  // The priority is applied only inside the already-selected rarity tier, preserving
+  // the v0.3.2 rarity distribution while making primary biomes meaningfully better.
+  static BIOME_PRIORITY_WEIGHTS = Object.freeze([1.00, 0.70, 0.45, 0.30]);
+
   static ABUNDANCE = Object.freeze({
     scarce: {
       label: "Scarce", findChance: 55, discoveries: 1, maxTypes: 1,
@@ -343,10 +348,7 @@ export class MaterialGenerationService {
         const chosenResource = viableResources[Math.floor(Math.random() * viableResources.length)];
         const candidates = eligible.filter(entry => !used.has(entry.id)
           && (entry.biomes ?? []).includes(chosenBiome) && String(entry.category) === chosenResource);
-        const material = this.#weightedPick(candidates.map(entry => ({
-          entry,
-          weight: this.#environmentGatherWeight(entry, abundanceData)
-        })))?.entry ?? null;
+        const material = this.#environmentPickMaterial(candidates, abundanceData, chosenBiome);
         if (!material) continue;
         used.add(material.id);
         // Abundance must never multiply one harvested node. The Material's own
@@ -606,11 +608,37 @@ export class MaterialGenerationService {
     return rows.at(-1) ?? null;
   }
 
+  static #environmentPickMaterial(candidates, abundanceData, chosenBiome) {
+    if (!candidates?.length) return null;
+
+    // Step 1: select rarity using exactly the pre-v0.4.2 aggregate weight.
+    // Biome priority does not change how often Common/Uncommon/Rare tiers appear.
+    const rarityRows = MaterialCatalogService.RARITIES.map(rarity => {
+      const entries = candidates.filter(entry => String(entry.rarity) === rarity);
+      return { rarity, entries, weight: entries.reduce((sum, entry) => sum + this.#environmentGatherWeight(entry, abundanceData), 0) };
+    }).filter(row => row.entries.length && row.weight > 0);
+    const chosenRarity = this.#weightedPick(rarityRows);
+    if (!chosenRarity) return null;
+
+    // Step 2: redistribute only within that rarity according to ordered biome priority.
+    return this.#weightedPick(chosenRarity.entries.map(entry => ({
+      entry,
+      weight: this.#environmentGatherWeight(entry, abundanceData) * this.#biomePriorityWeight(entry, chosenBiome)
+    })))?.entry ?? null;
+  }
+
   static #environmentGatherWeight(material, abundanceData) {
     const base = Math.max(1, Number(material?.chance) || 1);
     const rarity = String(material?.rarity ?? "common");
     const rarityFactor = Math.max(0.05, Number(abundanceData?.rarityWeights?.[rarity]) || 1);
     return base * rarityFactor;
+  }
+
+  static #biomePriorityWeight(material, chosenBiome) {
+    const biomes = (material?.biomes ?? []).map(value => String(value));
+    const index = biomes.indexOf(String(chosenBiome));
+    if (index < 0) return 0;
+    return this.BIOME_PRIORITY_WEIGHTS[index] ?? this.BIOME_PRIORITY_WEIGHTS.at(-1) ?? 0.30;
   }
 
   static #matchesProfile(entry, profile) {

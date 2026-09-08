@@ -14,6 +14,7 @@ import { ItemPilesBridge } from "./services/item-piles-bridge.mjs";
 import { GearNormalizationService } from "./services/gear-normalization-service.mjs";
 import { MaterialStackService } from "./services/material-stack-service.mjs";
 import { CuratedContentService } from "./services/curated-content-service.mjs";
+import { MaterialSourceService } from "./services/material-source-service.mjs";
 
 let app = null;
 let generatorApp = null;
@@ -59,7 +60,8 @@ const API = {
   get itemPiles() { return game.user?.isGM ? ItemPilesBridge : undefined; },
   get gearNormalization() { return game.user?.isGM ? GearNormalizationService : undefined; },
   materialStacking: MaterialStackService,
-  get curated() { return game.user?.isGM ? CuratedContentService : undefined; }
+  get curated() { return game.user?.isGM ? CuratedContentService : undefined; },
+  get materialSources() { return game.user?.isGM ? MaterialSourceService : undefined; }
 };
 
 function exposeApi() {
@@ -89,7 +91,7 @@ Hooks.once("init", () => {
   runInitStep("Crafting Core settings menu", () => game.settings.registerMenu(MODULE_ID, "craftingCoreSettings", {
     name: "Crafting Core",
     label: "Configure Crafting Core",
-    hint: "Configure Creature Scanner sources and Token Harvest loot handling.",
+    hint: "Configure Creature Scanner sources, Material Source resync, Token Harvest loot handling, and Recipe transfer.",
     icon: "fa-solid fa-hammer",
     type: CraftingCoreSettingsApp,
     restricted: true
@@ -101,6 +103,7 @@ Hooks.once("init", () => {
   runInitStep("Generated loot drag/drop", () => ItemPilesBridge.installGeneratedLootDropHook());
   runInitStep("Crafting material auto-stacking", () => MaterialStackService.installHooks());
   runInitStep("Curated content hooks", () => CuratedContentService.installHooks());
+  runInitStep("Material Source hooks", () => MaterialSourceService.installHooks());
 
   console.info(`${MODULE_TITLE} | Initialized.`);
 });
@@ -147,6 +150,12 @@ Hooks.once("ready", async () => {
     } catch (error) {
       console.error(`${MODULE_TITLE} | Curated Product synchronization failed.`, error);
       ui.notifications?.error?.("Crafting Core could not synchronize the Curated Product library. Check the console for details.");
+    }
+    try {
+      const materialSources = await MaterialSourceService.rebuild();
+      console.info(`${MODULE_TITLE} | Material Sources resynchronized:`, materialSources);
+    } catch (error) {
+      console.error(`${MODULE_TITLE} | Material Source resync failed.`, error);
     }
   }
 });

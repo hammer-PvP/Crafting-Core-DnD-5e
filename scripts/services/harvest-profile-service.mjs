@@ -12,8 +12,10 @@ export class HarvestProfileService {
     "flesh", "blood", "bone", "hide", "claw", "fang", "beak", "feather",
     "scale", "horn", "venom", "wing", "shell", "eye", "tentacle"
   ]);
+  // Specific Essence affinities. Most map directly to D&D5e damage types;
+  // semantic affinities such as Air are inferred from sourceRules.
   static ESSENCE_DAMAGE_TYPES = Object.freeze([
-    "acid", "cold", "fire", "force", "lightning", "necrotic", "poison", "psychic", "radiant", "thunder"
+    "air", "acid", "cold", "fire", "force", "lightning", "necrotic", "poison", "psychic", "radiant", "thunder"
   ]);
   static HARVEST_POOL_SPECS = Object.freeze([
     Object.freeze({ id: "common", position: 1, label: "Common", rarities: Object.freeze(["common"]) }),
@@ -390,13 +392,28 @@ export class HarvestProfileService {
   static async analyzeActor(actor, { materials=null, previous=null }={}) {
     const entries = materials ?? await MaterialCatalogService.allEntries();
     const nature = String(actor.system?.details?.type?.value ?? "").toLowerCase();
-    const available = entries.filter(entry => entry.family === "creature" && entry.nature === nature);
-    if (!available.length) throw new Error(`No curated Creature Harvest materials exist for type "${nature || "unknown"}".`);
-
     const analysis = this.#inferAnatomy(actor, nature);
-    const essenceAnalysis = this.#inferEssenceAffinities(actor);
+    const essenceAnalysis = this.#inferEssenceAffinities(actor, entries.filter(entry => entry.family === "essence"), analysis);
     analysis.essenceAffinities = essenceAnalysis.affinities;
     analysis.essenceReasons = essenceAnalysis.reasons;
+    analysis.harvestSignals = this.#inferHarvestSignals(actor, essenceAnalysis.affinities);
+
+    // Eligibility v2: ordinary materials retain their creature-type family behavior, while
+    // materials with sourceRules can qualify from scored Actor signals such as Strength,
+    // size, physiology, movement, and structural feature text.
+    const sourceRuleScores = {};
+    const sourceRuleReasons = {};
+    const available = entries.filter(entry => entry.family === "creature").filter(entry => {
+      const result = this.#materialEligibility(entry, actor, analysis);
+      if (!result.eligible) return false;
+      if (result.score > 0) sourceRuleScores[entry.id] = result.score;
+      if (result.reasons?.length) sourceRuleReasons[entry.id] = result.reasons;
+      return true;
+    });
+    analysis.sourceRuleScores = sourceRuleScores;
+    analysis.sourceRuleReasons = sourceRuleReasons;
+    if (!available.length) throw new Error(`No eligible curated Creature Harvest materials exist for type "${nature || "unknown"}".`);
+
     const cr = Number(actor.system?.details?.cr ?? 0) || 0;
     const legendarySource = cr >= 17
       || Number(actor.system?.resources?.legact?.max ?? 0) > 0
@@ -404,7 +421,6 @@ export class HarvestProfileService {
       || Boolean(actor.system?.resources?.lair?.value);
     if (legendarySource) analysis.reasons.push("High-tier source detected from CR, Legendary Actions/Resistance, or Lair data; Legendary materials may enter the Very Rare / Legendary pool.");
     analysis.legendarySource = legendarySource;
-    analysis.harvestSignals = this.#inferHarvestSignals(actor, essenceAnalysis.affinities);
     const slots = this.#buildAutomaticPools(available, analysis, legendarySource);
     const essenceSlot = this.#buildEssenceSlot(analysis.essenceAffinities);
     const oldPinpoint = Array.isArray(previous?.pinpointOverrides) ? previous.pinpointOverrides : [];
@@ -449,10 +465,11 @@ export class HarvestProfileService {
     return game.i18n?.localize?.(label) ?? label;
   }
 
-  static async materialOptions({ nature=null, includeAll=false }={}) {
+  static async materialOptions({ nature=null, includeAll=false, includeMaterialIds=[] }={}) {
     const entries = await MaterialCatalogService.allEntries();
+    const forced = new Set((includeMaterialIds ?? []).map(String).filter(Boolean));
     return entries
-      .filter(entry => includeAll || (entry.family === "creature" && (!nature || entry.nature === nature)))
+      .filter(entry => includeAll || (entry.family === "creature" && ((!nature || entry.nature === nature) || forced.has(entry.id))))
       .sort((a, b) => {
         const ar = MaterialCatalogService.RARITIES.indexOf(a.rarity);
         const br = MaterialCatalogService.RARITIES.indexOf(b.rarity);
@@ -518,6 +535,64 @@ export class HarvestProfileService {
     };
   }
 
+  static #materialEligibility(material, actor, analysis={}) {
+    const rules = material?.sourceRules;
+    if (!rules || typeof rules !== "object" || !Array.isArray(rules.signals)) {
+      const actorNature = String(actor?.system?.details?.type?.value ?? "").toLowerCase();
+      return { eligible: String(material?.nature ?? "").toLowerCase() === actorNature, score: 0, reasons: [] };
+    }
+    return this.#evaluateSourceRules(rules, actor, analysis);
+  }
+
+  static #evaluateSourceRules(rules, actor, analysis={}) {
+    const nature = String(actor?.system?.details?.type?.value ?? "").toLowerCase();
+    const anatomy = new Set((analysis?.anatomy ?? []).map(value => String(value).toLowerCase()));
+    const excludeNatures = new Set((rules?.excludeNatures ?? []).map(value => String(value).toLowerCase()));
+    if (excludeNatures.has(nature)) return { eligible: false, score: 0, reasons: ["Excluded creature type."] };
+    const requiredAnatomy = (rules?.requireAnatomy ?? []).map(value => String(value).toLowerCase()).filter(Boolean);
+    if (requiredAnatomy.some(tag => !anatomy.has(tag))) return { eligible: false, score: 0, reasons: ["Required anatomy not present."] };
+
+    const corpus = this.#actorCorpus(actor);
+    const sizeRaw = String(actor?.system?.traits?.size ?? "").toLowerCase();
+    const size = ({ grg:"gargantuan", lg:"large", med:"medium", sm:"small" })[sizeRaw] ?? sizeRaw;
+    let score = 0;
+    const reasons = [];
+    const matchedTerms = (text, terms=[]) => (terms ?? []).some(term => text.includes(this.#normalizeText(term)));
+
+    for (const signal of rules?.signals ?? []) {
+      const kind = String(signal?.kind ?? "");
+      let matched = false;
+      if (kind === "nature") {
+        matched = (signal.values ?? []).map(value => String(value).toLowerCase()).includes(nature);
+      } else if (kind === "size") {
+        const values = (signal.values ?? []).map(value => ({ grg:"gargantuan", lg:"large", med:"medium", sm:"small" })[String(value).toLowerCase()] ?? String(value).toLowerCase());
+        matched = values.includes(size);
+      } else if (kind === "ability") {
+        const ability = String(signal.ability ?? "").toLowerCase();
+        const value = Number(foundry.utils.getProperty(actor, `system.abilities.${ability}.value`) ?? 0) || 0;
+        const gte = signal.gte == null ? -Infinity : Number(signal.gte);
+        const lte = signal.lte == null ? Infinity : Number(signal.lte);
+        matched = value >= gte && value <= lte;
+      } else if (kind === "movement") {
+        const movement = String(signal.movement ?? "").toLowerCase();
+        const value = Number(foundry.utils.getProperty(actor, `system.attributes.movement.${movement}`) ?? 0) || 0;
+        const gte = signal.gte == null ? 1 : Number(signal.gte);
+        matched = value >= gte;
+      } else if (kind === "identityTerms") matched = matchedTerms(corpus.identity, signal.terms);
+      else if (kind === "structuralTerms") matched = matchedTerms(corpus.structural, signal.terms);
+      else if (kind === "attackTerms") matched = matchedTerms(corpus.attacks, signal.terms);
+      else if (kind === "allTerms") matched = matchedTerms(corpus.all, signal.terms);
+      else if (kind === "harvestSignal") matched = new Set((analysis?.harvestSignals ?? []).map(String)).has(String(signal.value ?? ""));
+
+      if (!matched) continue;
+      score += Math.max(0, Number(signal?.weight ?? 0) || 0);
+      const reason = String(signal?.reason ?? "").trim();
+      if (reason && !reasons.includes(reason)) reasons.push(reason);
+    }
+    const threshold = Math.max(0, Number(rules?.threshold ?? 1) || 1);
+    return { eligible: score >= threshold, score, reasons };
+  }
+
   static #buildAutomaticPools(materials, analysis, legendarySource=false) {
     const anatomySet = new Set(analysis?.anatomy ?? []);
     const signalSet = new Set(analysis?.harvestSignals ?? []);
@@ -528,7 +603,7 @@ export class HarvestProfileService {
         .filter(material => allowedRarities.includes(material.rarity))
         .filter(material => this.#requirementsSatisfied(material.requires, anatomySet))
         .filter(material => this.#specialtySatisfied(material, signalSet))
-        .sort((a, b) => this.#materialScore(b, anatomySet, signalSet, allowedRarities) - this.#materialScore(a, anatomySet, signalSet, allowedRarities)
+        .sort((a, b) => this.#materialScore(b, anatomySet, signalSet, allowedRarities, analysis?.sourceRuleScores) - this.#materialScore(a, anatomySet, signalSet, allowedRarities, analysis?.sourceRuleScores)
           || a.id.localeCompare(b.id))
         .slice(0, this.MAX_AUTO_POOL_CANDIDATES);
       const chance = candidates.length ? Math.max(...candidates.map(material => Number(material.chance ?? 0) || 0)) : 0;
@@ -559,13 +634,14 @@ export class HarvestProfileService {
     return !list.length || list.every(requirement => anatomySet.has(requirement));
   }
 
-  static #materialScore(material, anatomySet, signalSet, rarityOrder) {
+  static #materialScore(material, anatomySet, signalSet, rarityOrder, sourceRuleScores={}) {
     const requires = material.requires ?? [];
     const tags = material.tags ?? [];
     const rarityPriority = Math.max(0, rarityOrder.length - rarityOrder.indexOf(material.rarity));
     const requirementScore = requires.reduce((score, requirement) => score + (anatomySet.has(requirement) ? 30 : 0), 0);
     const signalScore = tags.reduce((score, tag) => score + (signalSet.has(String(tag).toLowerCase()) ? 12 : 0), 0);
-    return requirementScore + requires.length * 12 + signalScore + rarityPriority;
+    const sourceRuleScore = Math.max(0, Number(sourceRuleScores?.[material.id] ?? 0) || 0);
+    return requirementScore + requires.length * 12 + signalScore + rarityPriority + sourceRuleScore;
   }
 
   static #buildEssenceSlot(affinities=[]) {
@@ -593,7 +669,7 @@ export class HarvestProfileService {
    * Non-spell attacks/features are strong evidence; resistance and immunity are also
    * valid affinity signals. Physical damage types are deliberately ignored.
    */
-  static #inferEssenceAffinities(actor) {
+  static #inferEssenceAffinities(actor, essenceMaterials=[], anatomyAnalysis={}) {
     const allowed = new Set(this.ESSENCE_DAMAGE_TYPES);
     const scores = new Map();
     const reasons = new Map();
@@ -644,6 +720,17 @@ export class HarvestProfileService {
       }
     }
 
+    // Semantic Essence affinities are data-driven through the same scored sourceRules
+    // used by cross-type Creature Harvest materials. This lets Air Essence coexist with
+    // the established Arcane-vs-Specific slot without pretending "air" is a damage type.
+    for (const material of essenceMaterials ?? []) {
+      const affinity = String(material?.sourceRules?.affinity ?? "").toLowerCase();
+      if (!affinity || !allowed.has(affinity)) continue;
+      const result = this.#evaluateSourceRules(material.sourceRules, actor, anatomyAnalysis);
+      if (!result.eligible) continue;
+      add(affinity, Math.max(1, result.score), result.reasons.join(" ") || `${this.title(affinity)} affinity detected from semantic Actor signals.`);
+    }
+
     const affinities = [...scores.entries()]
       .filter(([, score]) => score > 0)
       .map(([type, score]) => ({ type, score, weight: score, reasons: reasons.get(type) ?? [] }))
@@ -651,7 +738,7 @@ export class HarvestProfileService {
 
     const summary = affinities.length
       ? affinities.map(row => `${this.damageTypeLabel(row.type)} (${row.score})`).join(", ")
-      : "No non-physical damage affinity was found in non-spell attacks, resistances, or immunities; Arcane Essence fallback will be used.";
+      : "No specific magical or semantic Essence affinity was found; Arcane Essence fallback will be used.";
     return { affinities, reasons: [summary] };
   }
 
@@ -717,7 +804,7 @@ export class HarvestProfileService {
     for (const row of essenceAffinities ?? []) {
       const type = String(row?.type ?? "").toLowerCase();
       if (type === "psychic") signals.add("psionic");
-      if (["acid","cold","fire","lightning","thunder"].includes(type)) signals.add("elemental");
+      if (["air","acid","cold","fire","lightning","thunder"].includes(type)) signals.add("elemental");
     }
     // Native spell activities are strong enough evidence that a creature is magically active,
     // but do not by themselves invent a physical organ. They only unlock specialty candidates
@@ -1003,6 +1090,12 @@ export class HarvestProfileService {
         anatomy: [...new Set((profile?.analysis?.anatomy ?? []).map(String).filter(Boolean))].sort(),
         reasons: [...new Set((profile?.analysis?.reasons ?? []).map(String).filter(Boolean))],
         harvestSignals: [...new Set((profile?.analysis?.harvestSignals ?? []).map(String).filter(Boolean))].sort(),
+        sourceRuleScores: profile?.analysis?.sourceRuleScores && typeof profile.analysis.sourceRuleScores === "object"
+          ? foundry.utils.deepClone(profile.analysis.sourceRuleScores)
+          : {},
+        sourceRuleReasons: profile?.analysis?.sourceRuleReasons && typeof profile.analysis.sourceRuleReasons === "object"
+          ? foundry.utils.deepClone(profile.analysis.sourceRuleReasons)
+          : {},
         legendarySource: Boolean(profile?.analysis?.legendarySource),
         essenceAffinities: (profile?.analysis?.essenceAffinities ?? []).map(row => ({
           type: String(row?.type ?? "").toLowerCase(),

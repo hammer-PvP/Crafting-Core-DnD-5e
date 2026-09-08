@@ -7,6 +7,7 @@ import {
 import { DEFAULT_MATERIALS, MATERIAL_CATALOG_VERSION } from "../data/material-catalog.mjs";
 import { materialDefaultIcon, materialIconCandidates, materialLegacyCuratedDefault } from "../data/material-icon-catalog.mjs";
 import { CompendiumService } from "./compendium-service.mjs";
+import { MaterialOriginService } from "./material-origin-service.mjs";
 
 export class MaterialCatalogService {
   static PACK_NAME = "crafting-core-materials";
@@ -155,7 +156,13 @@ export class MaterialCatalogService {
       if (!item) return material;
       const itemImg = String(item.img || "");
       const img = itemImg && itemImg !== DEFAULT_MATERIAL_ICON ? itemImg : material.img;
-      return { ...material, name: item.name, img, packUuid: item.uuid };
+      return {
+        ...material,
+        name: item.name,
+        img,
+        packUuid: item.uuid,
+        creatureSources: MaterialOriginService.normalizeCreatureSources(item.getFlag(MODULE_ID, FLAGS.MATERIAL_CREATURE_SOURCES) ?? [])
+      };
     });
 
     for (const item of docs) {
@@ -355,6 +362,10 @@ export class MaterialCatalogService {
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_TAGS}`]: material.tags ?? [],
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_REQUIRES}`]: material.requires ?? [],
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_BIOMES}`]: material.biomes ?? [],
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_SOURCE_TYPES}`]: material.sourceTypes ?? [],
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_SOURCE_RULES}`]: material.sourceRules ?? {},
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_PROCESSED_FROM}`]: material.processedFrom ?? [],
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_VENDOR_AVAILABILITY}`]: material.vendorAvailability ?? "",
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_MANAGED}`]: true,
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_CATALOG_VERSION}`]: MATERIAL_CATALOG_VERSION
         };
@@ -442,6 +453,11 @@ export class MaterialCatalogService {
         [FLAGS.MATERIAL_TAGS]: [],
         [FLAGS.MATERIAL_REQUIRES]: [],
         [FLAGS.MATERIAL_BIOMES]: [],
+        [FLAGS.MATERIAL_SOURCE_TYPES]: normalized.sourceTypes ?? [],
+        [FLAGS.MATERIAL_SOURCE_RULES]: normalized.sourceRules ?? {},
+        [FLAGS.MATERIAL_PROCESSED_FROM]: normalized.processedFrom ?? [],
+        [FLAGS.MATERIAL_VENDOR_AVAILABILITY]: normalized.vendorAvailability ?? "",
+        [FLAGS.MATERIAL_CREATURE_SOURCES]: [],
         [FLAGS.MATERIAL_MANAGED]: false,
         [FLAGS.MATERIAL_CATALOG_VERSION]: MATERIAL_CATALOG_VERSION
       };
@@ -521,6 +537,10 @@ export class MaterialCatalogService {
         tags: normalized.tags,
         requires: normalized.requires,
         biomes: normalized.biomes,
+        sourceTypes: normalized.sourceTypes,
+        sourceRules: normalized.sourceRules,
+        processedFrom: normalized.processedFrom,
+        vendorAvailability: normalized.vendorAvailability,
         price: normalized.price,
         denomination: normalized.denomination
       };
@@ -562,7 +582,11 @@ export class MaterialCatalogService {
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_QUANTITY}`]: normalized.quantity,
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_TAGS}`]: normalized.tags,
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_REQUIRES}`]: normalized.requires,
-          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_BIOMES}`]: normalized.biomes
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_BIOMES}`]: normalized.biomes,
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_SOURCE_TYPES}`]: normalized.sourceTypes,
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_SOURCE_RULES}`]: normalized.sourceRules,
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_PROCESSED_FROM}`]: normalized.processedFrom,
+          [`flags.${MODULE_ID}.${FLAGS.MATERIAL_VENDOR_AVAILABILITY}`]: normalized.vendorAvailability
         });
       } finally {
         if (wasLocked) await pack.configure({ locked: true });
@@ -593,6 +617,16 @@ export class MaterialCatalogService {
         .map(item => [String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? ""), item])
         .filter(([id]) => id));
 
+      const materialLookup = new Map();
+      for (const material of this.definitions()) {
+        const item = byMaterialId.get(material.id);
+        materialLookup.set(material.id, {
+          id: material.id,
+          name: material.name,
+          uuid: item?.uuid ?? ""
+        });
+      }
+
       const updates = [];
       const creates = [];
       for (const material of this.definitions()) {
@@ -603,6 +637,20 @@ export class MaterialCatalogService {
           creates.push(data);
           continue;
         }
+
+        // Creature Sources are World-derived data, not a curated/default preference. A
+        // catalog reset restores the shipped definition and presentation while preserving
+        // the current reverse-index links until the next explicit/automatic Resync.
+        const creatureSources = MaterialOriginService.normalizeCreatureSources(
+          item.getFlag(MODULE_ID, FLAGS.MATERIAL_CREATURE_SOURCES) ?? []
+        );
+        data.flags[MODULE_ID][FLAGS.MATERIAL_CREATURE_SOURCES] = creatureSources;
+        data.system.description.value = MaterialOriginService.initialDescription(
+          material,
+          creatureSources,
+          { materialLookup }
+        );
+
         updates.push({
           _id: item.id,
           name: data.name,
@@ -690,6 +738,11 @@ export class MaterialCatalogService {
       tags: item.getFlag(MODULE_ID, FLAGS.MATERIAL_TAGS) ?? [],
       requires: item.getFlag(MODULE_ID, FLAGS.MATERIAL_REQUIRES) ?? [],
       biomes: item.getFlag(MODULE_ID, FLAGS.MATERIAL_BIOMES) ?? [],
+      sourceTypes: item.getFlag(MODULE_ID, FLAGS.MATERIAL_SOURCE_TYPES) ?? [],
+      sourceRules: item.getFlag(MODULE_ID, FLAGS.MATERIAL_SOURCE_RULES) ?? {},
+      processedFrom: item.getFlag(MODULE_ID, FLAGS.MATERIAL_PROCESSED_FROM) ?? [],
+      vendorAvailability: item.getFlag(MODULE_ID, FLAGS.MATERIAL_VENDOR_AVAILABILITY) ?? "",
+      creatureSources: MaterialOriginService.normalizeCreatureSources(item.getFlag(MODULE_ID, FLAGS.MATERIAL_CREATURE_SOURCES) ?? []),
       price: Number(item.system?.price?.value ?? 0),
       denomination: String(item.system?.price?.denomination ?? "gp"),
       managed: false,
@@ -708,7 +761,7 @@ export class MaterialCatalogService {
       folder: folderId,
       system: {
         description: {
-          value: `<p>A crafting material from the <strong>Crafting Core Built-in Curated Catalog</strong>.</p>`,
+          value: MaterialOriginService.initialDescription(material),
           chat: ""
         },
         quantity: 1,
@@ -736,6 +789,11 @@ export class MaterialCatalogService {
           [FLAGS.MATERIAL_TAGS]: material.tags ?? [],
           [FLAGS.MATERIAL_REQUIRES]: material.requires ?? [],
           [FLAGS.MATERIAL_BIOMES]: material.biomes ?? [],
+          [FLAGS.MATERIAL_SOURCE_TYPES]: material.sourceTypes ?? [],
+          [FLAGS.MATERIAL_SOURCE_RULES]: material.sourceRules ?? {},
+          [FLAGS.MATERIAL_PROCESSED_FROM]: material.processedFrom ?? [],
+          [FLAGS.MATERIAL_VENDOR_AVAILABILITY]: material.vendorAvailability ?? "",
+          [FLAGS.MATERIAL_CREATURE_SOURCES]: [],
           [FLAGS.MATERIAL_MANAGED]: true,
           [FLAGS.MATERIAL_CATALOG_VERSION]: MATERIAL_CATALOG_VERSION
         }
@@ -761,6 +819,14 @@ export class MaterialCatalogService {
       tags: this.#array(material.tags),
       requires: this.#array(material.requires),
       biomes: this.#array(material.biomes),
+      sourceTypes: MaterialOriginService.inferSourceTypes(material),
+      sourceRules: material.sourceRules && typeof material.sourceRules === "object" && !Array.isArray(material.sourceRules)
+        ? foundry.utils.deepClone(material.sourceRules)
+        : {},
+      processedFrom: MaterialOriginService.normalizeProcessedFrom(material.processedFrom ?? []),
+      vendorAvailability: String(material.vendorAvailability ?? "").trim().toLowerCase(),
+      creatureSources: MaterialOriginService.normalizeCreatureSources(material.creatureSources ?? []),
+      flavor: String(material.flavor ?? "").trim(),
       price: Math.max(0, Number(material.price) || 0),
       denomination: String(material.denomination || "gp")
     };

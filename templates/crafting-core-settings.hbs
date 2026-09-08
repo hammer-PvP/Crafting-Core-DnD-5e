@@ -93,6 +93,19 @@
       </div>
     </section>
 
+    <section class="cc-form-card cc-settings-admin-card cc-material-sources-admin">
+      <div class="cc-card-heading cc-settings-compact-heading">
+        <div><span class="cc-kicker">Materials</span><h3>Material Sources</h3></div>
+        <small><strong>{{materialSources.linkedMaterials}}</strong> linked Materials · <strong>{{materialSources.creatureLinks}}</strong> Actor links</small>
+      </div>
+      <div class="cc-settings-admin-row">
+        <p>Rebuild the World-specific <strong>Material → Creature</strong> index from the current Harvest Profiles. This is a full rebuild: stale links are removed and current Compendium Actor UUIDs are written back to Materials.</p>
+        <div class="cc-settings-admin-actions">
+          <button type="button" data-action="resync-material-sources"><i class="fa-solid fa-arrows-rotate"></i> Resync Material Sources</button>
+        </div>
+      </div>
+    </section>
+
     <section class="cc-form-card cc-settings-admin-card">
       <div class="cc-card-heading cc-settings-compact-heading">
         <div><span class="cc-kicker">Administration</span><h3>Recipe Transfer</h3></div>
@@ -109,7 +122,7 @@
   </div>
 
   <footer class="cc-settings-footer">
-    <span class="cc-note"><i class="fa-solid fa-circle-info"></i> Normalization uses safe base identity matching only. Recipe transfer is reviewed before import and never publishes automatically.</span>
+    <span class="cc-note"><i class="fa-solid fa-circle-info"></i> Material Sources are derived from Harvest Profiles and can always be rebuilt. Recipe transfer is reviewed before import and never publishes automatically.</span>
     <button type="button" class="cc-primary-action" data-action="save-settings"><i class="fa-solid fa-floppy-disk"></i> Save</button>
   </footer>
 </section>

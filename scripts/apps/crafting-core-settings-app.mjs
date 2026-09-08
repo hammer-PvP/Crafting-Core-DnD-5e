@@ -2,6 +2,7 @@ import { MODULE_ID } from "../constants.mjs";
 import { HarvestProfileService } from "../services/harvest-profile-service.mjs";
 import { GearNormalizationService } from "../services/gear-normalization-service.mjs";
 import { RecipeTransferApp } from "./recipe-transfer-app.mjs";
+import { MaterialSourceService } from "../services/material-source-service.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -54,6 +55,7 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
       ...itemPacks.filter(pack => !normalizationSet.has(pack.collection))
     ];
     const atNormalizationLimit = this.normalizationSelected.length >= GearNormalizationService.MAX_SOURCES;
+    const materialSources = await MaterialSourceService.summary();
 
     return {
       sources: ordered.map(source => ({
@@ -81,7 +83,8 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
       })),
       normalizationSelectedCount: this.normalizationSelected.length,
       normalizationMaxSources: GearNormalizationService.MAX_SOURCES,
-      firearmsToCrossbows: this.firearmsToCrossbows
+      firearmsToCrossbows: this.firearmsToCrossbows,
+      materialSources
     };
   }
 
@@ -148,6 +151,8 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
       this.render({ force: true });
     });
 
+    root.querySelector('[data-action="resync-material-sources"]')?.addEventListener("click", event => this.#resyncMaterialSources(event));
+
     root.querySelector('[data-action="open-recipe-export"]')?.addEventListener("click", event => {
       event.preventDefault();
       new RecipeTransferApp({ mode: "export" }).render({ force: true });
@@ -158,6 +163,24 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
     });
 
     root.querySelector('[data-action="save-settings"]')?.addEventListener("click", event => this.#save(event));
+  }
+
+  async #resyncMaterialSources(event) {
+    event.preventDefault();
+    const button = event.currentTarget;
+    button.disabled = true;
+    const old = button.innerHTML;
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Resyncing…';
+    try {
+      const result = await MaterialSourceService.rebuild();
+      ui.notifications.info(`Material Sources resynced: ${result.linkedMaterials} linked Materials · ${result.creatureLinks} Actor links.`);
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Material Source resync failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not resync Material Sources.");
+      button.disabled = false;
+      button.innerHTML = old;
+    }
   }
 
   #moveScanner(id, delta) {

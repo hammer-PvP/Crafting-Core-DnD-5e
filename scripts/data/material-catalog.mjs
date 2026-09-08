@@ -6,21 +6,36 @@
  * materializing them as native D&D5e Loot / Trade Good Items.
  */
 
-const creature = (id, name, nature, rarity, {tags=[], requires=[], quantity="1", chance=null}={}) => ({
-  id, name, family: "creature", nature, rarity, tags, requires, quantity, chance
+const creature = (id, name, nature, rarity, {
+  tags=[], requires=[], quantity="1", chance=null, sourceTypes=["creature"], sourceRules=null,
+  processedFrom=[], vendorAvailability="", flavor=""
+}={}) => ({
+  id, name, family: "creature", nature, rarity, tags, requires, quantity, chance, sourceTypes,
+  ...(sourceRules ? {sourceRules} : {}), processedFrom, vendorAvailability, flavor
 });
-const gathering = (id, name, nature, rarity, {biomes=[], tags=[], quantity="1", chance=null, category=null}={}) => ({
-  id, name, family: "gathering", nature, rarity, biomes, tags, quantity, chance, ...(category ? {category} : {})
+const gathering = (id, name, nature, rarity, {
+  biomes=[], tags=[], quantity="1", chance=null, category=null, sourceTypes=null, sourceRules=null,
+  processedFrom=[], vendorAvailability="", flavor=""
+}={}) => ({
+  id, name, family: "gathering", nature, rarity, biomes, tags, quantity, chance,
+  sourceTypes: sourceTypes ?? (nature === "mineral" ? ["mining"] : ["gathering"]),
+  ...(sourceRules ? {sourceRules} : {}), processedFrom, vendorAvailability, flavor, ...(category ? {category} : {})
 });
-const profession = (id, name, nature, rarity, {tags=[], quantity="1", chance=null}={}) => ({
-  id, name, family: "profession", nature, rarity, tags, quantity, chance
+const profession = (id, name, nature, rarity, {
+  tags=[], quantity="1", chance=null, sourceTypes=null, sourceRules=null, processedFrom=[],
+  vendorAvailability="general", flavor=""
+}={}) => ({
+  id, name, family: "profession", nature, rarity, tags, quantity, chance,
+  sourceTypes: sourceTypes ?? (nature === "cultivated" || tags.includes("cultivated") ? ["cultivated", "vendor"] : ["vendor"]),
+  ...(sourceRules ? {sourceRules} : {}), processedFrom, vendorAvailability, flavor
 });
-const essence = (id, name, nature, {tags=[], quantity="1"}={}) => ({
+const essence = (id, name, nature, {tags=[], quantity="1", sourceRules=null, flavor=""}={}) => ({
   id, name, family: "essence", nature, category: "essence", rarity: "uncommon",
-  tags: ["essence", ...tags], requires: [], biomes: [], quantity, chance: 100
+  tags: ["essence", ...tags], requires: [], biomes: [], quantity, chance: 100, sourceTypes: ["creature"],
+  ...(sourceRules ? {sourceRules} : {}), processedFrom: [], vendorAvailability: "", flavor
 });
 
-export const MATERIAL_CATALOG_VERSION = 9;
+export const MATERIAL_CATALOG_VERSION = 10;
 
 export const DEFAULT_MATERIALS = Object.freeze([
   // Aberration
@@ -90,7 +105,18 @@ export const DEFAULT_MATERIALS = Object.freeze([
   // Giant
   creature("giant-hide", "Giant Hide", "giant", "common", {requires:["hide"]}),
   creature("giant-bone", "Giant Bone", "giant", "common", {requires:["bone"]}),
-  creature("giant-blood", "Giant Blood", "giant", "uncommon", {requires:["blood"]}),
+  creature("giant-blood", "Giant Blood", "giant", "uncommon", {
+    requires:["blood"],
+    flavor:"Thick blood carrying the extraordinary vitality and raw physical power found in immensely strong creatures.",
+    sourceRules:{
+      threshold:70, requireAnatomy:["blood"], excludeNatures:["construct","elemental","ooze","plant","undead"],
+      signals:[
+        {kind:"nature", values:["giant"], weight:100, reason:"Giant creature type."},
+        {kind:"ability", ability:"str", gte:21, weight:70, reason:"Extraordinary Strength (21+)."},
+        {kind:"size", values:["huge","gargantuan"], weight:20, reason:"Huge or Gargantuan body size."}
+      ]
+    }
+  }),
   creature("giant-tendon", "Giant Tendon", "giant", "rare", {requires:["flesh"]}),
   creature("giant-marrow", "Giant Marrow", "giant", "veryRare", {requires:["bone"]}),
   creature("giant-titan-essence", "Titan Essence", "giant", "legendary", {tags:["giant","primal"]}),
@@ -116,6 +142,34 @@ export const DEFAULT_MATERIALS = Object.freeze([
   creature("monstrosity-arcane-organ", "Arcane Organ", "monstrosity", "rare", {requires:["flesh"], tags:["arcane","organ"]}),
   creature("monstrosity-venom-gland", "Monstrous Venom Gland", "monstrosity", "veryRare", {requires:["venom"], tags:["venom","gland"]}),
   creature("monstrosity-essence", "Monstrous Essence", "monstrosity", "legendary", {tags:["monstrous","arcane"]}),
+
+  // Cross-type Creature Harvest materials. These use scored sourceRules instead of being
+  // hard-bound to one D&D5e creature type; the Harvest Profile remains the World authority.
+  creature("creature-amphibious-membrane", "Amphibious Membrane", "special", "uncommon", {
+    requires:["flesh"], tags:["aquatic","amphibious","membrane"],
+    flavor:"A thin biological membrane capable of exchanging air and water, harvested from creatures with truly amphibious physiology.",
+    sourceRules:{
+      threshold:75, requireAnatomy:["flesh"], excludeNatures:["construct","elemental","ooze","plant","undead"],
+      signals:[
+        {kind:"structuralTerms", terms:["amphibious","breathe air and water","water breathing","water-breathing","amphibiousness"], weight:100, reason:"Explicit amphibious or water-breathing physiology."},
+        {kind:"identityTerms", terms:["amphibious","aquatic","frog","toad","sahuagin","merrow","triton","kuo-toa","fish","shark","octopus"], weight:80, reason:"Aquatic/amphibious creature identity."},
+        {kind:"movement", movement:"swim", gte:20, weight:30, reason:"Meaningful swim speed."}
+      ]
+    }
+  }),
+  creature("creature-spider-silk", "Spider Silk", "special", "common", {
+    tags:["arachnid","spider","silk","web","fiber"],
+    flavor:"Strong, flexible silk gathered from web-producing arachnids and other creatures that spin supernatural or exceptionally durable webbing.",
+    sourceRules:{
+      threshold:80, excludeNatures:["construct","elemental","ooze","plant"],
+      signals:[
+        {kind:"identityTerms", terms:["spider","arachnid","ettercap"], weight:100, reason:"Spider/arachnid identity."},
+        {kind:"structuralTerms", terms:["web sense","web walker","webbing","web spinner","web"], weight:90, reason:"Web-producing structural feature."},
+        {kind:"attackTerms", terms:["web","webbing"], weight:85, reason:"Web-producing attack or activity."},
+        {kind:"structuralTerms", terms:["spider climb"], weight:30, reason:"Spider-like climbing adaptation."}
+      ]
+    }
+  }),
 
   // Ooze
   creature("ooze-gel", "Alchemical Gel", "ooze", "common", {requires:["amorphous"]}),
@@ -147,6 +201,20 @@ export const DEFAULT_MATERIALS = Object.freeze([
   // Physical damage types are intentionally excluded. The Actor Analyzer chooses
   // between Arcane Essence and one mechanically-supported specific essence at harvest time.
   essence("essence-arcane", "Arcane Essence", "arcane", {tags:["arcane","universal"]}),
+  essence("essence-air", "Air Essence", "air", {
+    tags:["air","wind","elemental"],
+    flavor:"A weightless elemental essence condensed from creatures whose supernatural nature is bound to air, wind, or living storms.",
+    sourceRules:{
+      affinity:"air", threshold:80,
+      signals:[
+        {kind:"identityTerms", terms:["air elemental","wind elemental","air spirit","wind spirit","living whirlwind"], weight:100, reason:"Explicit air/wind elemental identity."},
+        {kind:"structuralTerms", terms:["whirlwind","air form","wind form","living wind","living whirlwind"], weight:90, reason:"Air/wind structural feature."},
+        {kind:"attackTerms", terms:["whirlwind","gust","wind blast","wind"], weight:75, reason:"Wind-based non-spell attack or activity."},
+        {kind:"nature", values:["elemental"], weight:15, reason:"Elemental creature type supports the air affinity."},
+        {kind:"allTerms", terms:["air","wind"], weight:35, reason:"Air/wind semantic signal."}
+      ]
+    }
+  }),
   essence("essence-acid", "Acid Essence", "acid", {tags:["acid"]}),
   essence("essence-cold", "Cold Essence", "cold", {tags:["cold"]}),
   essence("essence-fire", "Flame Essence", "fire", {tags:["fire","flame"]}),
@@ -163,7 +231,7 @@ export const DEFAULT_MATERIALS = Object.freeze([
   // stronger identity through its available material mix and optional per-biome chance overrides.
   // Flora
   gathering("gathering-elfleaf", "Elvenleaf Herb", "flora", "common", {biomes:["forest","ravine"], tags:["herb"], quantity:"1d4"}),
-  gathering("gathering-wild-sage", "Wild Sage", "flora", "common", {biomes:["forest","grassland","ravine"], tags:["herb","aromatic"], quantity:"1d4"}),
+  gathering("gathering-wild-sage", "Wild Sage", "flora", "common", {biomes:["grassland","forest","ravine"], tags:["herb","aromatic"], quantity:"1d4"}),
   gathering("gathering-bitterleaf", "Bitterleaf", "flora", "common", {biomes:["forest","swamp","grassland"], tags:["herb","bitter"], quantity:"1d4"}),
   gathering("gathering-silverleaf", "Silverleaf", "flora", "uncommon", {biomes:["forest","mountain","arctic"], tags:["herb","alchemy"], quantity:"1d3"}),
   gathering("gathering-thornvine", "Thornvine", "flora", "uncommon", {biomes:["forest","swamp","ravine"], tags:["plant","thorn"], quantity:"1d3"}),
@@ -228,6 +296,11 @@ export const DEFAULT_MATERIALS = Object.freeze([
   gathering("gathering-volcanic-glass", "Volcanic Glass", "mineral", "rare", {biomes:["mountain","desert","cave"], tags:["glass","stone"]}),
   gathering("gathering-gem-geode", "Gem-Bearing Geode", "mineral", "rare", {biomes:["cave","mountain","ravine"], tags:["gem","stone"]}),
   gathering("gathering-adamantine-ore", "Adamantine Ore", "mineral", "veryRare", {biomes:["underdark","mountain","cave"], tags:["metal","fantastic"]}),
+  gathering("gathering-adamantine-powder", "Adamantine Powder", "mineral", "veryRare", {
+    biomes:["underdark","mountain","cave"], tags:["metal","fantastic","powder","alchemy"], quantity:"1",
+    sourceTypes:["mining","processed","vendor"], processedFrom:["gathering-adamantine-ore"], vendorAvailability:"specialized",
+    flavor:"Finely divided adamantine collected from rare mineral deposits or produced by refining and grinding adamantine-bearing ore."
+  }),
   gathering("gathering-starstone", "Starstone Shard", "mineral", "legendary", {biomes:["mountain","desert"], tags:["stone","arcane"]}),
 
   // Game Hunt — abstract environmental hunting, never a targeted Actor harvest.
@@ -263,7 +336,10 @@ export const DEFAULT_MATERIALS = Object.freeze([
   profession("trade-barley", "Barley", "cultivated", "common", {tags:["cultivated","crop","grain","food"]}),
   profession("trade-rice", "Rice", "cultivated", "common", {tags:["cultivated","crop","grain","food"]}),
   profession("trade-oats", "Oats", "cultivated", "common", {tags:["cultivated","crop","grain","food"]}),
-  profession("trade-sugar-cane", "Sugar Cane", "cultivated", "common", {tags:["cultivated","crop","food","brewing","cane"]}),
+  profession("trade-sugar-cane", "Sugar Cane", "cultivated", "common", {
+    tags:["cultivated","crop","food","brewing","cane"], sourceTypes:["cultivated","vendor"], vendorAvailability:"general",
+    flavor:"A sweet cultivated cane used for fresh juice, syrups, fermentation, distillation, preserves, and other culinary crafts."
+  }),
   profession("trade-potato", "Potato", "cultivated", "common", {tags:["cultivated","crop","vegetable","food"]}),
   profession("trade-onion", "Onion", "cultivated", "common", {tags:["cultivated","crop","vegetable","food"]}),
   profession("trade-garlic", "Garlic", "cultivated", "common", {tags:["cultivated","crop","vegetable","food"]}),
