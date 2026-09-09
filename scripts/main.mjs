@@ -15,6 +15,7 @@ import { GearNormalizationService } from "./services/gear-normalization-service.
 import { MaterialStackService } from "./services/material-stack-service.mjs";
 import { CuratedContentService } from "./services/curated-content-service.mjs";
 import { MaterialSourceService } from "./services/material-source-service.mjs";
+import { CuratedAlchemyService } from "./services/curated-alchemy-service.mjs";
 
 let app = null;
 let generatorApp = null;
@@ -61,6 +62,7 @@ const API = {
   get gearNormalization() { return game.user?.isGM ? GearNormalizationService : undefined; },
   materialStacking: MaterialStackService,
   get curated() { return game.user?.isGM ? CuratedContentService : undefined; },
+  get curatedAlchemy() { return game.user?.isGM ? CuratedAlchemyService : undefined; },
   get materialSources() { return game.user?.isGM ? MaterialSourceService : undefined; }
 };
 
@@ -88,6 +90,7 @@ Hooks.once("init", () => {
   runInitStep("harvest profile settings", () => HarvestProfileService.registerSettings());
   runInitStep("gear normalization settings", () => GearNormalizationService.registerSettings());
   runInitStep("curated content settings", () => CuratedContentService.registerSettings());
+  runInitStep("curated alchemy settings", () => CuratedAlchemyService.registerSettings());
   runInitStep("Crafting Core settings menu", () => game.settings.registerMenu(MODULE_ID, "craftingCoreSettings", {
     name: "Crafting Core",
     label: "Configure Crafting Core",
@@ -103,6 +106,7 @@ Hooks.once("init", () => {
   runInitStep("Generated loot drag/drop", () => ItemPilesBridge.installGeneratedLootDropHook());
   runInitStep("Crafting material auto-stacking", () => MaterialStackService.installHooks());
   runInitStep("Curated content hooks", () => CuratedContentService.installHooks());
+  runInitStep("Curated alchemy hooks", () => CuratedAlchemyService.installHooks());
   runInitStep("Material Source hooks", () => MaterialSourceService.installHooks());
 
   console.info(`${MODULE_TITLE} | Initialized.`);
@@ -150,6 +154,13 @@ Hooks.once("ready", async () => {
     } catch (error) {
       console.error(`${MODULE_TITLE} | Curated Product synchronization failed.`, error);
       ui.notifications?.error?.("Crafting Core could not synchronize the Curated Product library. Check the console for details.");
+    }
+    try {
+      const alchemy = await CuratedAlchemyService.syncIfNeeded();
+      if (!alchemy?.skipped) console.info(`${MODULE_TITLE} | Curated Alchemy & Inscription library synchronized:`, alchemy);
+    } catch (error) {
+      console.error(`${MODULE_TITLE} | Curated Alchemy & Inscription synchronization failed.`, error);
+      ui.notifications?.error?.("Crafting Core could not synchronize the optional Alchemy & Inscription library. Check the console for details.");
     }
     try {
       const materialSources = await MaterialSourceService.rebuild();

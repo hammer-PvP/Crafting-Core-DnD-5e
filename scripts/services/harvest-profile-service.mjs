@@ -23,7 +23,7 @@ export class HarvestProfileService {
     Object.freeze({ id: "rare", position: 3, label: "Rare", rarities: Object.freeze(["rare"]) }),
     Object.freeze({ id: "high", position: 4, label: "Very Rare / Legendary", rarities: Object.freeze(["veryRare", "legendary"]) })
   ]);
-  static MAX_AUTO_POOL_CANDIDATES = 5;
+  static MAX_AUTO_POOL_CANDIDATES = 7;
 
   static BASE_ANATOMY = Object.freeze({
     aberration: ["flesh", "blood", "bone", "eye"],

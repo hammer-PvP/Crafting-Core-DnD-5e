@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.0 - Curated Alchemy & Inscription
+
+- Added an **optional Curated Alchemy & Inscription library** that is not installed automatically in existing Worlds. GM opt-in/restore is available from the Materials catalog.
+- Added **23 normalized optional Materials**, raising the active curated catalog from 234 to **257 Materials** only after the library is enabled. New Creature Harvest entries use Scanner v2 source rules; new Gathering entries use ordered biome metadata and the existing Material Sources pipeline.
+- Added **73 Products**: 34 canonical SRD consumables, 34 Inscription presentation variants, and 5 Inscription Inks.
+- Added **97 Recipes** covering cultural Healing preparations, basic alchemy, utility potions, Resistance, Giant Strength, advanced potions, Ink production, and Inscription projects.
+- Added **Inscription** as a curated crafting family without creating a parallel mechanics engine. Each Inscription clones the matching SRD Item at runtime and changes presentation only; native D&D5e Activities, Active Effects, formulas, targets, uses/consumption, and rules data remain authoritative.
+- Inscription presentation uses Foundry-provided document/book icon paths: simple parchment for Basic, bound document for Elaborate, and book/tome for Elite. Inscription Inks reuse the module's existing bottle icon library.
+- Added five Ink tiers - Common, Uncommon, Rare, Very Rare, and Legendary - with **two alternative pigment Recipes per tier**, each producing 2 Ink.
+- Curated Alchemy/Inscription Recipes use alternative relevant proficiencies, `Anyone` attempt policy, automatic final success when qualified, **DC 8** for non-qualified attempts, and approximately **50% material loss** on failed final checks.
+- Inscription Projects use Basic 1 / Elaborate 2 / Elite 3 required Work Periods on Short Rest cadence. Extra Effort uses **INT DC 12** and adds one bonus progress step on success without removing the normal progress on failure.
+- Canonical Product resolution is restricted to installed D&D5e **SRD 5.2 / SRD 5.1** packs with `CC-BY-4.0` source metadata. No Player's Handbook premium Item is required or redistributed by the curated library.
+- `Potion of Comprehension` and `Potion of Fire Breath` are intentionally excluded because they are absent from the supplied SRD 5.1/5.2 baseline used for this release.
+- **Adamantine Powder remains Very Rare** and retains Mining / Processing / Specialized Vendor origins plus the Adamantine Ore relationship; no automatic Ore -> Powder Recipe is created.
+- Increased Scanner automatic pool candidate retention from **5 to 7** per rarity pool to accommodate the larger catalog without increasing the number of automatic final Harvest drops.
+- Preserved Curated Recipe folder placement when republishing Alchemy/Inscription Knowledge Sources.
+- Bumped the Material Catalog schema to version **11** and module version to **0.5.0**.
+
 ## 0.4.1 — Unified Final Checks & Ingredient Identity
 
 - Unified **Relevant Proficiency** and **Final Crafting Check** authoring. Recipes now use their configured Proficiency 1 / Proficiency 2 as the eligible final checks instead of a second independent `Check` dropdown.

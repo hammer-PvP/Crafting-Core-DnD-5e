@@ -13,7 +13,7 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.4.1
+- **Crafting Core:** v0.5.0
 - **Foundry VTT:** minimum 14, verified 14.365
 - **D&D 5e:** 5.3.3
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
@@ -27,7 +27,7 @@ Crafting Core is intentionally version-bound to the D&D 5e system version it was
 
 The private **Crafting Core - Materials** Compendium contains the built-in material catalog used by harvesting, gathering, generation, and Recipe building.
 
-The catalog currently contains **230 curated materials** covering:
+The core catalog contains **234 curated materials**. Installing the optional **Curated Alchemy & Inscription** library adds **23 more Materials** for a total of **257 active Materials** in that World. The catalog covers:
 
 - Creature Harvest materials;
 - magical Essences;
@@ -221,6 +221,48 @@ This lets crafted meals and drinks be produced in sensible quantities while tave
 
 All official Curated Product Recipes use **10 seconds** of crafting time. Each Product offers three curated icon candidates through the Materials & Products interface, mixing bundled Crafting Core artwork with compatible Foundry/D&D5e-native assets while preserving GM-selected icons. **Restore Curated Product Defaults** repairs missing official Products and matching Recipe Sources while preserving unrelated GM content and supported presentation customizations.
 
+## Optional Curated Alchemy & Inscription
+
+Crafting Core v0.5.0 adds an **optional** Curated Alchemy & Inscription library. Existing Worlds are not silently expanded: the GM installs or restores it from **Crafting Core - Materials**.
+
+When enabled, the library adds:
+
+- **23 normalized Materials** integrated with Gathering, Creature Harvest, Material Sources, and Scanner v2 where appropriate;
+- **73 Products**: 34 canonical SRD consumables, 34 Inscription presentation variants, and 5 Inscription Inks;
+- **97 Recipes**, including cultural Healing preparations, utility/alchemical consumables, Resistance, Giant Strength, advanced potions, Ink recipes, and Inscription recipes.
+
+### SRD-only Product policy
+
+Canonical Alchemy Products are resolved at runtime only from the installed D&D5e **SRD 5.2 / SRD 5.1** Compendium packs and must carry the expected **CC-BY-4.0** source license. Crafting Core does not require or redistribute Player's Handbook premium Items for this curated library. If an SRD source cannot be resolved, that Product/Recipe is not fabricated from a premium fallback.
+
+`Potion of Comprehension` and `Potion of Fire Breath` are intentionally not distributed by this library because they are absent from the supplied SRD 5.1/5.2 packs used for the v0.5.0 implementation baseline.
+
+### Inscription
+
+An **Inscription** is not a Spell Scroll and does not reimplement a consumable's mechanics. It is a presentation variant of the same canonical SRD Item. Crafting Core clones the SRD source and changes only the curated presentation such as name, icon, flavor, and Crafting Core metadata; the original D&D5e **Activities, Active Effects, formulas, targets, uses/consumption, and rules data remain authoritative**.
+
+Inscription recipes use **Parchment + Inscription Ink + a thematic ingredient** and persistent Crafting Projects:
+
+| Tier | Work Periods | Visual family |
+| --- | ---: | --- |
+| Basic | 1 | simple document / parchment |
+| Elaborate | 2 | bound or multi-page document |
+| Elite | 3 | book / tome |
+
+Project cadence is based on Short Rest work periods. Extra Effort uses **INT DC 12**; success adds one extra progress step on top of the normal work period, while failure keeps the normal progress. Inscription qualification is **Calligrapher's Supplies OR Arcana**.
+
+### Inscription Inks
+
+Five Ink Products are included: Common, Uncommon, Rare, Very Rare, and Legendary Inscription Ink. Each tier has two alternative pigment Recipes that produce the same Ink Product. Ink crafting uses **Calligrapher's Supplies OR Alchemist's Supplies**.
+
+### Curated final-check rule
+
+Alchemy/Inscription Recipes use two proficiencies as alternatives (`Any one qualifies`). A crafter proficient in either configured option receives automatic final success. A non-proficient crafter may still attempt the Recipe and makes a **DC 8 Final Crafting Check**; on failure the Product is not created and approximately **50% of the attempt's Materials are lost**. Rarity pressure comes primarily from ingredient access, rarity gates, workload, and cost rather than increasing the default DC.
+
+### Larger Harvest pools without larger automatic loot
+
+Scanner v2 automatic rarity pools may retain up to **7 eligible candidates per pool** instead of 5. This gives the expanded Material catalog more room to remain discoverable without increasing the number of final automatic Harvest drops per creature.
+
 ## Creature Scanner and Harvest Profiles
 
 The **Creature Scanner** analyzes configured D&D 5e Actor Compendiums without modifying source Actors or source packs.
@@ -284,7 +326,7 @@ Crafting Core uses private world Compendiums as durable content stores and inter
 
 ### Crafting Core - Materials
 
-230 curated crafting materials plus GM-registered material content, including Sugar Cane as a Common cultivated brewing/culinary ingredient.
+234 core curated crafting materials plus GM-registered material content. The optional Alchemy & Inscription library adds 23 more normalized Materials only after explicit GM installation, for 257 active curated Materials in that World.
 
 ### Crafting Core - Learn Sources
 

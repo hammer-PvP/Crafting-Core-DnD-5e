@@ -227,10 +227,10 @@ export function bundledMaterialIconCandidates(materialId) {
   if (id === "dragon-marrow") return [...M.dragonBone];
 
   if (/(eye)/.test(id)) return [...M.eye];
-  if (/(ichor|reagent|solvent|enzyme|concentrate|condensate|gel)/.test(id)) return [...M.alchemy];
+  if (/(ichor|reagent|solvent|enzyme|concentrate|condensate|gel|tissue|membrane|heart|core|nectar)/.test(id)) return [...M.alchemy];
   if (/(ooze|slime|secretion|matrix)/.test(id)) return [...M.slime];
   if (/(dust|ash|powder|residue)/.test(id)) return [...M.powder];
-  if (/(orchid|flower|bloom|petal)/.test(id)) return [...M.flower];
+  if (/(orchid|flower|bloom|petal|lotus|rose|blossom)/.test(id)) return [...M.flower];
   if (/(berry|berries)/.test(id)) return [...M.berries];
   if (/(fungus|mushroom|spore)/.test(id)) return [...M.fungus];
   if (/(root|wort|lichen|moss|herb|leaf|sage|grass|vine)/.test(id)) return [...M.root, ...M.herb];

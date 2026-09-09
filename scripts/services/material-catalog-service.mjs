@@ -5,6 +5,7 @@ import {
   SETTINGS
 } from "../constants.mjs";
 import { DEFAULT_MATERIALS, MATERIAL_CATALOG_VERSION } from "../data/material-catalog.mjs";
+import { CURATED_ALCHEMY_MATERIAL_IDS } from "../data/curated-alchemy-catalog.mjs";
 import { materialDefaultIcon, materialIconCandidates, materialLegacyCuratedDefault } from "../data/material-icon-catalog.mjs";
 import { CompendiumService } from "./compendium-service.mjs";
 import { MaterialOriginService } from "./material-origin-service.mjs";
@@ -122,7 +123,15 @@ export class MaterialCatalogService {
   static definitions() {
     const economy = this.economy();
     const overrides = this.overrides();
-    return DEFAULT_MATERIALS.map(base => {
+    let alchemyEnabled = false;
+    try {
+      const state = game.settings.get(MODULE_ID, SETTINGS.CURATED_ALCHEMY_STATE);
+      alchemyEnabled = Boolean(state?.enabled);
+    } catch (_) { /* setting is registered during init; core catalog remains safe before then */ }
+    const activeDefaults = alchemyEnabled
+      ? DEFAULT_MATERIALS
+      : DEFAULT_MATERIALS.filter(base => !CURATED_ALCHEMY_MATERIAL_IDS.has(base.id));
+    return activeDefaults.map(base => {
       const override = overrides[base.id] ?? {};
       const rarity = String(override.rarity ?? base.rarity ?? "common");
       const material = {

@@ -35,7 +35,7 @@ const essence = (id, name, nature, {tags=[], quantity="1", sourceRules=null, fla
   ...(sourceRules ? {sourceRules} : {}), processedFrom: [], vendorAvailability: "", flavor
 });
 
-export const MATERIAL_CATALOG_VERSION = 10;
+export const MATERIAL_CATALOG_VERSION = 11;
 
 export const DEFAULT_MATERIALS = Object.freeze([
   // Aberration
@@ -170,6 +170,148 @@ export const DEFAULT_MATERIALS = Object.freeze([
       ]
     }
   }),
+  creature("creature-regenerative-ichor", "Regenerative Ichor", "special", "uncommon", {
+    requires:["flesh"], tags:["regeneration","restoration","ichor","organ"],
+    flavor:"A living restorative fluid harvested from creatures whose physiology visibly repairs injury on its own.",
+    sourceRules:{
+      threshold:85, requireAnatomy:["flesh"], excludeNatures:["construct","elemental","ooze","plant","undead"],
+      signals:[
+        {kind:"structuralTerms", terms:["regeneration","regenerative","regains hit points","regain hit points","regains hp","regain hp"], weight:110, reason:"Explicit regenerative physiology."},
+        {kind:"identityTerms", terms:["regenerating","regenerative"], weight:90, reason:"Regenerative creature identity."}
+      ]
+    }
+  }),
+  creature("creature-venomous-ichor", "Venomous Ichor", "special", "uncommon", {
+    requires:["venom"], tags:["venom","poison","ichor","toxin"],
+    flavor:"Toxic biological fluid drawn from creatures whose natural attacks or glands produce true venom or poison.",
+    sourceRules:{
+      threshold:70, requireAnatomy:["venom"], excludeNatures:["construct","elemental","plant","undead"],
+      signals:[
+        {kind:"attackTerms", terms:["venom","poison","poisoned","toxin","toxic"], weight:100, reason:"Natural venomous or poisonous attack."},
+        {kind:"structuralTerms", terms:["venom","poison glands","poisonous","toxic"], weight:95, reason:"Explicit venomous physiology."}
+      ]
+    }
+  }),
+  creature("creature-corrosive-ichor", "Corrosive Ichor", "special", "uncommon", {
+    tags:["acid","corrosive","ichor","alchemy"],
+    flavor:"Caustic biological fluid from creatures that generate acid or other naturally corrosive secretions.",
+    sourceRules:{
+      threshold:85, excludeNatures:["construct","plant","undead"],
+      signals:[
+        {kind:"attackTerms", terms:["acid","acidic","corrosive","corrosion"], weight:105, reason:"Natural acid or corrosive attack."},
+        {kind:"structuralTerms", terms:["acid absorption","acidic","corrosive","corrosion","acid secretion"], weight:100, reason:"Explicit corrosive physiology."}
+      ]
+    }
+  }),
+  creature("creature-ooze-mucus", "Ooze Mucus", "special", "uncommon", {
+    requires:["amorphous"], tags:["ooze","mucus","slime","alchemy"],
+    flavor:"A stable sample of the slick, elastic matrix that gives a true ooze its fluid body.",
+    sourceRules:{
+      threshold:80, requireAnatomy:["amorphous"],
+      signals:[{kind:"nature", values:["ooze"], weight:110, reason:"Ooze creature type."}]
+    }
+  }),
+  creature("creature-feyheart-nectar", "Feyheart Nectar", "special", "uncommon", {
+    tags:["fey","nectar","enchantment","alchemy"],
+    flavor:"A luminous fey distillate gathered from the supernatural humors, dew, or living magic of Fey creatures.",
+    sourceRules:{
+      threshold:95, excludeNatures:["construct","elemental","ooze","undead"],
+      signals:[{kind:"nature", values:["fey"], weight:110, reason:"Fey creature type."}]
+    }
+  }),
+  creature("creature-regenerative-tissue", "Regenerative Tissue", "special", "rare", {
+    requires:["flesh"], tags:["regeneration","restoration","tissue","organ"],
+    flavor:"Dense tissue that continues knitting itself together after harvest, taken only from powerful regenerators.",
+    sourceRules:{
+      threshold:105, requireAnatomy:["flesh"], excludeNatures:["construct","elemental","ooze","plant","undead"],
+      signals:[
+        {kind:"structuralTerms", terms:["regeneration","regenerative","regains hit points","regain hit points","regains hp","regain hp"], weight:115, reason:"Explicit regenerative physiology."},
+        {kind:"ability", ability:"con", gte:18, weight:25, reason:"Exceptional Constitution supports durable regenerative tissue."}
+      ]
+    }
+  }),
+  creature("creature-giant-heart", "Giant Heart", "special", "rare", {
+    requires:["flesh","blood"], tags:["giant","heart","organ","strength"],
+    flavor:"A massive heart whose muscle retains the supernatural vigor of an exceptionally powerful giant or giant-scale creature.",
+    sourceRules:{
+      threshold:100, requireAnatomy:["flesh","blood"], excludeNatures:["construct","elemental","ooze","plant","undead"],
+      signals:[
+        {kind:"nature", values:["giant"], weight:105, reason:"Giant creature type."},
+        {kind:"ability", ability:"str", gte:21, weight:60, reason:"Extraordinary Strength (21+)."},
+        {kind:"size", values:["huge","gargantuan"], weight:35, reason:"Huge or Gargantuan physiology."}
+      ]
+    }
+  }),
+  creature("creature-vaporous-membrane", "Vaporous Membrane", "special", "rare", {
+    tags:["vapor","gaseous","membrane","transmutation"],
+    flavor:"An unstable membrane that partially diffuses into mist, harvested from creatures with genuinely vaporous, mist-like, or incorporeal physiology.",
+    sourceRules:{
+      threshold:90, excludeNatures:["construct","plant"],
+      signals:[
+        {kind:"structuralTerms", terms:["gaseous form","misty form","vaporous","incorporeal movement","incorporeal","amorphous"], weight:105, reason:"Explicit vaporous or incorporeal physiology."},
+        {kind:"identityTerms", terms:["mist","vapor","smoke","cloud"], weight:90, reason:"Vaporous creature identity."}
+      ]
+    }
+  }),
+  creature("creature-regenerative-core", "Regenerative Core", "special", "veryRare", {
+    requires:["flesh"], tags:["regeneration","restoration","core","organ"],
+    flavor:"The concentrated biological engine behind extraordinary regeneration, found only in apex regenerative creatures.",
+    sourceRules:{
+      threshold:125, requireAnatomy:["flesh"], excludeNatures:["construct","elemental","ooze","plant","undead"],
+      signals:[
+        {kind:"structuralTerms", terms:["regeneration","regenerative","regains hit points","regain hit points","regains hp","regain hp"], weight:120, reason:"Explicit regenerative physiology."},
+        {kind:"ability", ability:"con", gte:20, weight:35, reason:"Exceptional Constitution (20+)."},
+        {kind:"size", values:["large","huge","gargantuan"], weight:15, reason:"Substantial body mass."}
+      ]
+    }
+  }),
+  creature("creature-titanic-core", "Titanic Core", "special", "veryRare", {
+    requires:["flesh"], tags:["titanic","giant","core","strength"],
+    flavor:"A dense organ-core carrying the impossible physical power of a truly titanic creature.",
+    sourceRules:{
+      threshold:115, requireAnatomy:["flesh"], excludeNatures:["construct","elemental","ooze","plant","undead"],
+      signals:[
+        {kind:"nature", values:["giant"], weight:100, reason:"Giant creature type."},
+        {kind:"size", values:["huge","gargantuan"], weight:65, reason:"Titanic body size."},
+        {kind:"ability", ability:"str", gte:23, weight:70, reason:"Titanic Strength (23+)."}
+      ]
+    }
+  }),
+  creature("creature-accelerated-heart", "Accelerated Heart", "special", "veryRare", {
+    requires:["flesh","blood"], tags:["speed","heart","organ","lightning"],
+    flavor:"A preternaturally rapid heart whose residual pulse carries a supernatural acceleration rather than mere mundane quickness.",
+    sourceRules:{
+      threshold:90, requireAnatomy:["flesh","blood"], excludeNatures:["construct","elemental","ooze","plant","undead"],
+      signals:[
+        {kind:"structuralTerms", terms:["haste","supernatural speed","accelerated","quickened","blurred movement"], weight:105, reason:"Explicit supernatural acceleration."},
+        {kind:"movement", movement:"walk", gte:60, weight:45, reason:"Exceptional ground speed."},
+        {kind:"ability", ability:"dex", gte:20, weight:30, reason:"Exceptional Dexterity supports, but does not alone prove, supernatural speed."}
+      ]
+    }
+  }),
+  creature("creature-aerial-heart", "Aerial Heart", "special", "veryRare", {
+    requires:["flesh","blood"], tags:["flight","air","heart","organ"],
+    flavor:"A magically adapted heart that sustains extraordinary flight, harvested only from exceptional living fliers rather than ordinary birds.",
+    sourceRules:{
+      threshold:90, requireAnatomy:["flesh","blood"], excludeNatures:["construct","elemental","ooze","plant","undead"],
+      signals:[
+        {kind:"structuralTerms", terms:["hover","supernatural flight","magical flight","flyby"], weight:100, reason:"Exceptional aerial adaptation."},
+        {kind:"movement", movement:"fly", gte:60, weight:60, reason:"Exceptional flying speed."}
+      ]
+    }
+  }),
+  creature("creature-primordial-giant-heart", "Primordial Giant Heart", "special", "legendary", {
+    requires:["flesh","blood"], tags:["giant","primordial","heart","legendary","strength"],
+    flavor:"A legendary giant heart saturated with primordial physical power, suitable only for the highest tier of giant-strength crafting.",
+    sourceRules:{
+      threshold:165, requireAnatomy:["flesh","blood"], excludeNatures:["construct","elemental","ooze","plant","undead"],
+      signals:[
+        {kind:"nature", values:["giant"], weight:105, reason:"Giant creature type."},
+        {kind:"ability", ability:"str", gte:25, weight:80, reason:"Primordial Strength (25+)."},
+        {kind:"size", values:["huge","gargantuan"], weight:45, reason:"Huge or Gargantuan physiology."}
+      ]
+    }
+  }),
 
   // Ooze
   creature("ooze-gel", "Alchemical Gel", "ooze", "common", {requires:["amorphous"]}),
@@ -240,6 +382,16 @@ export const DEFAULT_MATERIALS = Object.freeze([
   gathering("gathering-ghost-orchid", "Ghost Orchid", "flora", "veryRare", {biomes:["swamp","underdark"], tags:["flower","arcane"]}),
   gathering("gathering-cliff-moss", "Cliff Moss", "flora", "common", {biomes:["ravine","mountain","forest"], tags:["moss"], quantity:"1d3"}),
   gathering("gathering-ashen-lichen", "Ashen Lichen", "flora", "uncommon", {biomes:["ravine","mountain","cave"], tags:["lichen"]}),
+  gathering("gathering-moonmoss", "Moonmoss", "flora", "uncommon", {biomes:["forest","swamp","mountain"], tags:["moss","restoration","moon"], flavor:"Pale moss that stores cool nocturnal moisture and is prized by restorative herbalists."}),
+  gathering("gathering-deepcap-fungus", "Deepcap Fungus", "fungus", "uncommon", {biomes:["cave","underdark","mountain"], tags:["fungus","restoration","cave"], flavor:"A sturdy cave fungus traditionally used in subterranean restorative tinctures."}),
+  gathering("gathering-blood-orchid", "Blood Orchid", "flora", "rare", {biomes:["swamp","forest"], tags:["flower","orchid","restoration","ink"], flavor:"A crimson orchid whose pigment and sap bind unusually well to restorative magic."}),
+  gathering("gathering-starpetal", "Starpetal", "flora", "rare", {biomes:["mountain","grassland","forest"], tags:["flower","petal","radiant","arcane","ink"], flavor:"A star-shaped flower with luminous pigment used in heroic and arcane preparations."}),
+  gathering("gathering-deepheart-fungus", "Deepheart Fungus", "fungus", "rare", {biomes:["underdark","cave"], tags:["fungus","restoration","deep"], flavor:"A rare subterranean fungus whose dense inner flesh retains potent restorative compounds."}),
+  gathering("gathering-moon-orchid", "Moon Orchid", "flora", "veryRare", {biomes:["forest","swamp","underdark"], tags:["flower","orchid","moon","restoration","ink"], flavor:"An exceptionally rare orchid that blooms under strange moonlight and carries powerful life-preserving properties."}),
+  gathering("gathering-ghost-lotus", "Ghost Lotus", "flora", "veryRare", {biomes:["swamp","underdark"], tags:["flower","lotus","shadow","ethereal","ink"], flavor:"A translucent lotus whose petals seem to fade at the edges of vision, prized in invisibility and inscription work."}),
+  gathering("gathering-stoneheart-morel", "Stoneheart Morel", "fungus", "veryRare", {biomes:["underdark","cave","mountain"], tags:["fungus","stone","restoration","deep"], flavor:"A nearly mineralized morel found in extreme subterranean environments, used in the strongest dwarven restorative preparations."}),
+  gathering("gathering-worldroot-blossom", "Worldroot Blossom", "flora", "legendary", {biomes:["forest","underdark"], tags:["flower","root","primal","life","ink"], flavor:"A legendary blossom associated with ancient root systems and concentrated natural life, used in master inscriptions."}),
+  gathering("gathering-astral-rose", "Astral Rose", "flora", "legendary", {biomes:["mountain","desert"], tags:["flower","rose","astral","planar","arcane","ink"], flavor:"A planar rose said to bloom where the mortal world brushes the Astral, producing pigment fit for legendary inscription."}),
   gathering("gathering-frostbloom", "Frostbloom", "flora", "rare", {biomes:["arctic","mountain"], tags:["flower"]}),
   gathering("gathering-sungrass", "Sungrass", "flora", "common", {biomes:["grassland","forest"], tags:["herb","grass"], quantity:"1d4"}),
   gathering("gathering-sea-herb", "Tide Herb", "flora", "common", {biomes:["coast","swamp"], tags:["herb"]}),

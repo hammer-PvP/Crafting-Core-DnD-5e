@@ -297,7 +297,7 @@ export class CuratedContentService {
       if (this.#managedDeletes.has(token)) return;
       if (item.pack === this.PRODUCTS_PACK_ID && item.getFlag(MODULE_ID, FLAGS.PRODUCT_MANAGED)) {
         const productId = String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? "");
-        if (productId) void this.#suppress("product", productId);
+        if (productId && CURATED_BY_PRODUCT_ID.has(productId)) void this.#suppress("product", productId);
       }
     });
 

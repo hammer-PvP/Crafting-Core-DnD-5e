@@ -1,6 +1,7 @@
 import { MODULE_ID } from "../constants.mjs";
 import { MaterialCatalogService } from "../services/material-catalog-service.mjs";
 import { CuratedContentService } from "../services/curated-content-service.mjs";
+import { CuratedAlchemyService } from "../services/curated-alchemy-service.mjs";
 import { MaterialEditorApp } from "./material-editor-app.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -32,6 +33,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     });
     const natures = [...new Set(entries.map(entry => entry.nature).filter(Boolean))].sort((a,b) => a.localeCompare(b, game.i18n.lang));
     const culinary = await CuratedContentService.culinaryCatalogContext();
+    const alchemy = await CuratedAlchemyService.catalogContext();
     return {
       summary,
       groups: MaterialCatalogService.groupedEntries(filtered),
@@ -43,6 +45,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       isMaterials: this.catalogView === "materials",
       isProducts: this.catalogView === "products",
       culinary,
+      alchemy,
       natureOptions: natures.map(value => ({ value, label: value.replace(/[-_]+/g," ").replace(/\b\w/g,c=>c.toUpperCase()), selected: this.filters.nature === value })),
       familyOptions: [
         { value: "all", label: "All Families", selected: this.filters.family === "all" },
@@ -63,6 +66,11 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       this.render({ force: true });
     }));
     root.querySelector('[data-action="restore-curated-culinary"]')?.addEventListener("click", event => this.#restoreCuratedCulinary(event));
+    root.querySelector('[data-action="restore-curated-alchemy"]')?.addEventListener("click", event => this.#restoreCuratedAlchemy(event));
+    root.querySelector('[data-action="open-alchemy-products"]')?.addEventListener("click", event => {
+      event.preventDefault();
+      if (!CuratedAlchemyService.openProductsPack()) ui.notifications.warn("Install the optional Alchemy & Inscription library first.");
+    });
     root.querySelector('[data-action="open-products"]')?.addEventListener("click", event => {
       event.preventDefault();
       if (!CuratedContentService.openProductsPack()) ui.notifications.warn("Restore the Curated Product library first.");
@@ -255,6 +263,33 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     } catch (error) {
       console.error(`${MODULE_ID} | Curated Product restore failed.`, error);
       ui.notifications.error(error.message ?? "Crafting Core could not restore the Curated Product library.");
+      if (button) button.disabled = false;
+    }
+  }
+
+  async #restoreCuratedAlchemy(event) {
+    event.preventDefault();
+    const button = event.currentTarget;
+    const confirmed = await foundry.applications.api.DialogV2.confirm({
+      window: { title: "Install / Restore Alchemy & Inscription" },
+      content: "<p>Install or repair the optional <strong>Curated Alchemy & Inscription</strong> library?</p><p>Canonical Products are cloned at runtime only from the installed D&D5e <strong>SRD 5.2 / SRD 5.1 CC-BY-4.0</strong> packs. Inscription variants preserve the original SRD Activities and effects while changing presentation and crafting.</p><p>New Creature Harvest materials use the Scanner v2 eligibility rules. Re-run Creature Scanner after installation to populate their World-specific creature sources.</p>",
+      yes: { label: "Install / Restore", icon: "fa-solid fa-flask-vial" },
+      no: { label: "Cancel" }
+    });
+    if (!confirmed) return;
+    if (button) button.disabled = true;
+    try {
+      const audit = await CuratedAlchemyService.auditSrdSources();
+      if (!audit.ok) throw new Error(`Missing SRD sources: ${audit.missing.map(row => row.key).join(", ")}`);
+      const result = await CuratedAlchemyService.restoreAll();
+      const products = result.products ?? {};
+      const recipes = result.recipes ?? {};
+      const skipped = Number(recipes.skipped?.length ?? 0);
+      ui.notifications.info(`Alchemy & Inscription restored: ${products.created ?? 0} Products created, ${products.updated ?? 0} updated; ${recipes.created ?? 0} Recipes created, ${recipes.updated ?? 0} updated${skipped ? `; ${skipped} skipped` : ""}. Re-run Creature Scanner for the new harvest-source links.`);
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Curated Alchemy & Inscription restore failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not restore Alchemy & Inscription.");
       if (button) button.disabled = false;
     }
   }

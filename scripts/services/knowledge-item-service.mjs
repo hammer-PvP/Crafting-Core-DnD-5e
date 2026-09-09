@@ -214,7 +214,7 @@ export class KnowledgeItemService {
       // the same authoritative Item in place without pulling it out of that curated hierarchy.
       if (item?.getFlag(MODULE_ID, FLAGS.CURATED)) {
         const curatedKind = String(item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) ?? "");
-        if (curatedKind === "culinary-recipe") data.folder = item.folder?.id ?? item.folder ?? data.folder ?? null;
+        if (["culinary-recipe", "alchemy-recipe"].includes(curatedKind)) data.folder = item.folder?.id ?? item.folder ?? data.folder ?? null;
       }
 
       const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;

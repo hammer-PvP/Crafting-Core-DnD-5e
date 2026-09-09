@@ -127,6 +127,17 @@
       </section>
 
       <section class="cc-form-card">
+        <span class="cc-kicker">Optional Curated Homebrew</span>
+        <h3>Alchemy &amp; Inscription</h3>
+        <p class="cc-note"><strong>{{alchemy.statusLabel}}</strong> · {{alchemy.productCount}} / {{alchemy.productTotal}} Products · {{alchemy.recipeCount}} / {{alchemy.recipeTotal}} Recipes.</p>
+        <p class="cc-note">Includes {{alchemy.materialCount}} optional Materials, {{alchemy.canonicalCount}} canonical SRD consumable Products, {{alchemy.inscriptionCount}} Inscription presentation variants, and {{alchemy.inkCount}} Inscription Inks. Inscriptions clone the same SRD Item mechanics and keep its native Activities/effects intact.</p>
+        <p class="cc-note"><strong>Source policy:</strong> {{alchemy.sourcePolicy}}. Premium-module Items are never used as distributed dependencies.</p>
+        <button type="button" class="cc-primary-action cc-wide" data-action="restore-curated-alchemy"><i class="fa-solid fa-flask-vial"></i> Install / Restore Alchemy &amp; Inscription</button>
+        <button type="button" class="cc-secondary-action cc-wide" data-action="open-alchemy-products" {{#unless alchemy.packExists}}disabled{{/unless}}><i class="fa-solid fa-book-open"></i> Open Products Compendium</button>
+        <p class="cc-note"><i class="fa-solid fa-circle-info"></i> <em>Potion of Comprehension</em> and <em>Potion of Fire Breath</em> are intentionally not shipped because they are absent from the supplied SRD 5.1/5.2 packs.</p>
+      </section>
+
+      <section class="cc-form-card">
         <span class="cc-kicker">Runtime Integration</span>
         <h3>DnD 5e Item Creator</h3>
         {{#if culinary.compatible}}
