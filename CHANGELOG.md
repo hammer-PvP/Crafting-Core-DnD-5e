@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.1 - Alchemy & Inscription Live-Test Repair
+
+- Fixed SRD ActiveEffect cloning on Foundry VTT 14 when an indefinite effect duration is exposed at runtime as a non-finite prepared value. The clone pipeline now normalizes that value to the canonical persisted `null`, preserving indefinite-duration semantics while satisfying document validation.
+- Added a guarded embedded-effect replacement path with count verification and rollback, so a failed effect copy can no longer silently report a successful Product repair.
+- Bumped the optional Alchemy & Inscription content schema to version 2 so Worlds that installed v0.5.0 automatically resynchronize and repair affected Products.
+- Curated Products now reports the active combined catalog: 58 Culinary Products plus 73 Alchemy & Inscription Products when the optional library is installed (131 total).
+- Added the Alchemy and Inscription Product groups directly to the Curated Products catalog view, including canonical source, rarity, tier, and publication status.
+- Clarified first-time setup ordering: install Alchemy & Inscription before Creature Scanner, or rerun Scanner once after installation so the 23 optional harvest Materials receive World-specific source links.
+- Clarified the Runtime Integration card to display the detected DnD 5e Item Creator version as a module version.
+
 ## 0.5.0 - Curated Alchemy & Inscription
 
 - Added an **optional Curated Alchemy & Inscription library** that is not installed automatically in existing Worlds. GM opt-in/restore is available from the Materials catalog.

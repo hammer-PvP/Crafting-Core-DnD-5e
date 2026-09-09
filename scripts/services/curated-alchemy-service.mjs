@@ -41,6 +41,26 @@ function titleCase(value) {
   return String(value ?? "").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[-_]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
+/**
+ * D&D5e SRD packs can expose an indefinite ActiveEffect duration as the prepared
+ * value `Infinity` even though Foundry v14 persists the same duration as `null`.
+ * Passing the prepared value back through createEmbeddedDocuments trips the v14
+ * integer validator. Normalize only the persisted duration scalar and otherwise
+ * leave the SRD ActiveEffect source untouched.
+ */
+function normalizeActiveEffectSource(source) {
+  const data = clone(source ?? {});
+  if (!data.duration || typeof data.duration !== "object") return data;
+  const value = data.duration.value;
+  if (value === null || value === undefined || Number.isInteger(value)) return data;
+  const numeric = Number(value);
+  data.duration.value = Number.isFinite(numeric) ? Math.trunc(numeric) : null;
+  return data;
+}
+function normalizeActiveEffectSources(effects) {
+  return (effects ?? []).map(effect => normalizeActiveEffectSource(effect));
+}
+
 export class CuratedAlchemyService {
   static PRODUCTS_PACK_NAME = "crafting-core-products";
   static PRODUCTS_PACK_LABEL = "Crafting Core — Products";
@@ -269,6 +289,7 @@ export class CuratedAlchemyService {
       data.system.description.value = `<section class="crafting-core-inscription-flavor"><p><em>This written Inscription is a Crafting Core presentation variant of <strong>${base.name}</strong>. It intentionally preserves the canonical SRD Item's native Activities, effects, uses, and rules.</em></p></section>${original}`;
       if (data.system.identifier) data.system.identifier = `cc-${entry.id}`;
     }
+    data.effects = normalizeActiveEffectSources(data.effects);
     return data;
   }
 
@@ -303,30 +324,55 @@ export class CuratedAlchemyService {
     if (activities && Object.keys(activities).length) await item.update({ "system.activities": clone(activities) }, { render: false });
   }
 
+  static async #createEffects(item, effects) {
+    const normalized = normalizeActiveEffectSources(effects);
+    if (!normalized.length) return [];
+    const created = await item.createEmbeddedDocuments("ActiveEffect", normalized, { keepId: true, render: false });
+    if ((created?.length ?? 0) !== normalized.length) {
+      throw new Error(`D&D5e created ${created?.length ?? 0}/${normalized.length} Active Effects for ${item.name}.`);
+    }
+    return created;
+  }
+
   static async #createProductDocument(pack, source) {
     const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
     const core = clone(source);
-    const effects = clone(core.effects ?? []);
+    const effects = normalizeActiveEffectSources(core.effects ?? []);
     delete core.effects;
     const [created] = await ItemClass.createDocuments([core], { pack: pack.collection });
     if (!created) throw new Error(`D&D5e did not create Curated Product ${source.name}.`);
-    if (effects.length) await created.createEmbeddedDocuments("ActiveEffect", effects, { keepId: true, render: false });
+    if (effects.length) await this.#createEffects(created, effects);
     return created;
   }
 
   static async #updateProductDocument(item, source) {
     const data = clone(source);
-    const desiredEffects = clone(data.effects ?? []);
+    const desiredEffects = normalizeActiveEffectSources(data.effects ?? []);
     const desiredActivities = clone(data.system?.activities ?? {});
     delete data.effects;
     if (data.system) delete data.system.activities;
     delete data._id;
     delete data.ownership;
+
+    // Keep a rollback copy so a failed embedded-effect replacement never leaves
+    // an otherwise valid Product silently stripped of its SRD effects.
+    const previousEffects = normalizeActiveEffectSources([...(item.effects ?? [])].map(effect => effect.toObject(false)));
     const existingEffectIds = [...(item.effects ?? [])].map(effect => effect.id).filter(Boolean);
     if (existingEffectIds.length) await item.deleteEmbeddedDocuments("ActiveEffect", existingEffectIds, { render: false });
     await item.update(data, { render: false });
     await this.#replaceActivities(item, desiredActivities);
-    if (desiredEffects.length) await item.createEmbeddedDocuments("ActiveEffect", desiredEffects, { keepId: true, render: false });
+    try {
+      if (desiredEffects.length) await this.#createEffects(item, desiredEffects);
+    } catch (error) {
+      console.error(`${MODULE_ID} | Could not replace SRD Active Effects for ${item.name}; attempting rollback.`, error);
+      const partialIds = [...(item.effects ?? [])].map(effect => effect.id).filter(Boolean);
+      if (partialIds.length) await item.deleteEmbeddedDocuments("ActiveEffect", partialIds, { render: false });
+      if (previousEffects.length) {
+        try { await this.#createEffects(item, previousEffects); }
+        catch (rollbackError) { console.error(`${MODULE_ID} | Active Effect rollback also failed for ${item.name}.`, rollbackError); }
+      }
+      throw error;
+    }
     return item;
   }
 
@@ -566,13 +612,46 @@ export class CuratedAlchemyService {
     const learn = KnowledgeItemService.pack();
     const products = pack ? await pack.getDocuments() : [];
     const recipes = learn ? await learn.getDocuments() : [];
-    const productIds = new Set(products.map(item => String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? "")).filter(Boolean));
+    const productDocs = new Map(products.map(item => [String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? ""), item]).filter(([id]) => id));
+    const productIds = new Set(productDocs.keys());
     const recipeIds = new Set(recipes.map(item => String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "")).filter(Boolean));
     const expectedProducts = CURATED_ALCHEMY_PRODUCTS.filter(row => !state.suppressedProducts.includes(row.productId));
     const expectedRecipes = CURATED_ALCHEMY_RECIPES.filter(row => !state.suppressedRecipes.includes(row.recipeId));
     const inscriptionCount = CURATED_ALCHEMY_PRODUCTS.filter(row => row.kind === "inscription").length;
     const inkCount = CURATED_ALCHEMY_PRODUCTS.filter(row => row.kind === "ink").length;
     const canonicalCount = CURATED_ALCHEMY_PRODUCTS.filter(row => row.kind === "canonical").length;
+
+    const groups = [
+      ["alchemy:healing", "Healing"], ["alchemy:basic", "Basic Consumables"], ["alchemy:utility", "Utility"],
+      ["alchemy:resistance", "Resistance"], ["alchemy:giant", "Giant Strength"], ["alchemy:advanced", "Advanced Alchemy"],
+      ["inscription:inks", "Inscription Inks"], ["inscription:basic", "Basic"],
+      ["inscription:elaborate", "Elaborate"], ["inscription:elite", "Elite"]
+    ];
+    const rows = expectedProducts.map(entry => {
+      const item = productDocs.get(entry.productId) ?? null;
+      const sourceName = entry.sourceKey ? (SRD_ITEM_SOURCES[entry.sourceKey]?.names?.[0] ?? titleCase(entry.sourceKey)) : "Crafting Core";
+      return {
+        productId: entry.productId,
+        folderKey: entry.folderKey,
+        exists: Boolean(item),
+        name: item?.name ?? entry.name ?? sourceName,
+        img: item?.img ?? entry.icon ?? "icons/svg/item-bag.svg",
+        typeLabel: entry.kind === "canonical" ? "SRD Product" : entry.kind === "inscription" ? "Inscription" : "Inscription Ink",
+        rarityLabel: titleCase(item?.system?.rarity ?? entry.rarity ?? "—"),
+        tierLabel: entry.tier ? titleCase(entry.tier) : "—",
+        sourceLabel: entry.kind === "inscription" ? sourceName : (entry.kind === "canonical" ? "SRD 5.2 / 5.1" : "Crafting Core")
+      };
+    });
+    const buildGroups = keys => groups.filter(([key]) => keys.includes(key)).map(([key, label]) => {
+      const products = rows.filter(row => row.folderKey === key);
+      return { key, label, count: products.length, products };
+    }).filter(group => group.count);
+    const sections = [
+      { key: "alchemy", label: "Alchemy", groups: buildGroups(["alchemy:healing", "alchemy:basic", "alchemy:utility", "alchemy:resistance", "alchemy:giant", "alchemy:advanced"]) },
+      { key: "inscription", label: "Inscription", groups: buildGroups(["inscription:inks", "inscription:basic", "inscription:elaborate", "inscription:elite"]) }
+    ];
+    for (const section of sections) section.count = section.groups.reduce((sum, group) => sum + group.count, 0);
+
     return {
       enabled: state.enabled,
       version: state.version,
@@ -586,6 +665,7 @@ export class CuratedAlchemyService {
       inscriptionCount,
       inkCount,
       materialCount: CURATED_ALCHEMY_MATERIAL_IDS.size,
+      sections,
       sourcePolicy: "D&D5e SRD 5.2 → SRD 5.1 · CC-BY-4.0 only",
       excluded: ["Potion of Comprehension", "Potion of Fire Breath"],
       statusLabel: !state.enabled ? "Optional library not installed" : (state.version >= CURATED_ALCHEMY_VERSION ? "Installed" : "Update available")

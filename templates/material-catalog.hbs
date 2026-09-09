@@ -3,7 +3,7 @@
     <div>
       <span class="cc-kicker">GM Tool · Private Libraries</span>
       <h1>Crafting Core Catalog</h1>
-      <p>Manage the 234 canonical Materials and 58 official Curated Products that can also be used as ingredients in any Recipe.</p>
+      <p>Manage {{catalogCount}} active Materials and {{productCatalogTotal}} active Curated Products that can also be used as ingredients in any Recipe.</p>
     </div>
     {{#if isMaterials}}
     <div class="cc-material-status {{#if summary.exists}}ready{{/if}}">
@@ -18,7 +18,7 @@
       <i class="fa-solid {{#if culinary.packExists}}fa-utensils{{else}}fa-circle-exclamation{{/if}}"></i>
       <div>
         <strong>{{#if culinary.packExists}}Curated Products Compendium ready{{else}}Curated Products not installed{{/if}}</strong>
-        <small>{{culinary.count}} / {{culinary.total}} Curated Products</small>
+        <small>{{productCatalogCount}} / {{productCatalogTotal}} Curated Products</small>
       </div>
     </div>
     {{/if}}
@@ -29,7 +29,7 @@
       <i class="fa-solid fa-boxes-stacked"></i><span>Materials</span><small>{{catalogCount}}</small>
     </button>
     <button type="button" class="{{#if isProducts}}active{{/if}}" data-action="catalog-tab" data-catalog-view="products">
-      <i class="fa-solid fa-utensils"></i><span>Curated Products</span><small>{{culinary.total}}</small>
+      <i class="fa-solid fa-utensils"></i><span>Curated Products</span><small>{{productCatalogTotal}}</small>
     </button>
   </nav>
 
@@ -130,6 +130,7 @@
         <span class="cc-kicker">Optional Curated Homebrew</span>
         <h3>Alchemy &amp; Inscription</h3>
         <p class="cc-note"><strong>{{alchemy.statusLabel}}</strong> · {{alchemy.productCount}} / {{alchemy.productTotal}} Products · {{alchemy.recipeCount}} / {{alchemy.recipeTotal}} Recipes.</p>
+        {{#unless alchemy.enabled}}<p class="cc-note"><i class="fa-solid fa-triangle-exclamation"></i> <strong>First-time setup:</strong> install this library before running Creature Scanner. If you install it after a scan, run Creature Scanner once more so the 23 optional Materials can receive World-specific harvest sources.</p>{{/unless}}
         <p class="cc-note">Includes {{alchemy.materialCount}} optional Materials, {{alchemy.canonicalCount}} canonical SRD consumable Products, {{alchemy.inscriptionCount}} Inscription presentation variants, and {{alchemy.inkCount}} Inscription Inks. Inscriptions clone the same SRD Item mechanics and keep its native Activities/effects intact.</p>
         <p class="cc-note"><strong>Source policy:</strong> {{alchemy.sourcePolicy}}. Premium-module Items are never used as distributed dependencies.</p>
         <button type="button" class="cc-primary-action cc-wide" data-action="restore-curated-alchemy"><i class="fa-solid fa-flask-vial"></i> Install / Restore Alchemy &amp; Inscription</button>
@@ -141,7 +142,7 @@
         <span class="cc-kicker">Runtime Integration</span>
         <h3>DnD 5e Item Creator</h3>
         {{#if culinary.compatible}}
-        <p class="cc-note"><i class="fa-solid fa-circle-check"></i> Active and compatible ({{culinary.itemCreatorVersion}}). Food and Alcohol persistent effects use Item Creator. They last up to 6 hours and Crafting Core also clears them on Short or Long Rest.</p>
+        <p class="cc-note"><i class="fa-solid fa-circle-check"></i> DnD 5e Item Creator detected: <strong>v{{culinary.itemCreatorVersion}}</strong>. Food and Alcohol persistent effects use Item Creator. They last up to 6 hours and Crafting Core also clears them on Short or Long Rest.</p>
         {{else}}
         <p class="cc-note"><i class="fa-solid fa-triangle-exclamation"></i> Persistent Curated Food and Alcohol content requires active DnD 5e Item Creator {{culinary.requiredVersion}} or newer. Core Crafting Core features remain independent.</p>
         {{/if}}
@@ -157,8 +158,8 @@
 
     <main class="cc-material-catalog cc-product-catalog">
       <div class="cc-catalog-summary">
-        <div><span class="cc-kicker">Official Curated Content</span><h2>{{culinary.count}} / {{culinary.total}} Curated Products</h2></div>
-        <p>Each Product has three Foundry Core icon candidates. Choosing one updates the Product and re-synchronizes the official Recipe output while preserving unrelated GM customizations. Products remain unit-priced even when their Recipe crafts multiple servings.</p>
+        <div><span class="cc-kicker">Active Curated Content</span><h2>{{productCatalogCount}} / {{productCatalogTotal}} Curated Products</h2></div>
+        <p>The catalog combines the 58 official Culinary Products with the optional SRD-only Alchemy &amp; Inscription library when installed. Culinary Products keep their icon curation controls; Alchemy and Inscription Products preserve their SRD mechanics and managed presentation.</p>
       </div>
 
       {{#unless culinary.compatible}}
@@ -196,6 +197,35 @@
       </section>
       {{/each}}
       {{/unless}}
+
+      {{#if alchemy.enabled}}
+      <section class="cc-curated-product-section">
+        <div class="cc-curated-product-section-title"><strong>Alchemy &amp; Inscription</strong><small>{{alchemy.productCount}} / {{alchemy.productTotal}} products</small></div>
+        {{#each alchemy.sections}}
+        <div class="cc-curated-product-section-title"><strong>{{label}}</strong><small>{{count}} products</small></div>
+        {{#each groups}}
+        <details class="cc-material-group" open>
+          <summary><span>{{label}}</span><small>{{count}} products</small></summary>
+          <div class="cc-product-table">
+            <div class="cc-product-table-head"><span>Product</span><span>Type</span><span>Rarity</span><span>Tier</span><span>Canonical Base</span><span>Status</span></div>
+            {{#each products}}
+            <div class="cc-product-table-row" data-product-id="{{productId}}">
+              <span class="cc-material-name"><img src="{{img}}" alt=""><span><strong>{{name}}</strong><small>{{#if exists}}Published Product{{else}}Missing — Install / Restore{{/if}}</small></span></span>
+              <span>{{typeLabel}}</span>
+              <span>{{rarityLabel}}</span>
+              <span>{{tierLabel}}</span>
+              <span>{{sourceLabel}}</span>
+              <span>{{#if exists}}Ready{{else}}Missing{{/if}}</span>
+            </div>
+            {{/each}}
+          </div>
+        </details>
+        {{/each}}
+        {{/each}}
+      </section>
+      {{else}}
+      <div class="cc-curated-unavailable"><i class="fa-solid fa-flask-vial"></i><strong>Alchemy &amp; Inscription is optional</strong><p>Use <strong>Install / Restore Alchemy &amp; Inscription</strong> to add its 23 Materials, 73 Products, and 97 Recipes to this World. Install it before the first Creature Scanner pass if you want the new harvest materials included immediately.</p></div>
+      {{/if}}
     </main>
   </div>
   {{/if}}

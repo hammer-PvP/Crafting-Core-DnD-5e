@@ -34,11 +34,15 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     const natures = [...new Set(entries.map(entry => entry.nature).filter(Boolean))].sort((a,b) => a.localeCompare(b, game.i18n.lang));
     const culinary = await CuratedContentService.culinaryCatalogContext();
     const alchemy = await CuratedAlchemyService.catalogContext();
+    const productCatalogTotal = Number(culinary.total ?? 0) + (alchemy.enabled ? Number(alchemy.productTotal ?? 0) : 0);
+    const productCatalogCount = Number(culinary.count ?? 0) + (alchemy.enabled ? Number(alchemy.productCount ?? 0) : 0);
     return {
       summary,
       groups: MaterialCatalogService.groupedEntries(filtered),
       economy: MaterialCatalogService.economy(),
       catalogCount: entries.length,
+      productCatalogTotal,
+      productCatalogCount,
       shownCount: filtered.filter(entry => !this.filters.search || entry.searchText.includes(String(this.filters.search).trim().toLowerCase())).length,
       filters: this.filters,
       catalogView: this.catalogView,

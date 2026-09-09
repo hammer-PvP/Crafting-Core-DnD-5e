@@ -6,7 +6,7 @@
  * of the same canonical SRD Item source, preserving native Activities, effects and consumption data.
  */
 
-export const CURATED_ALCHEMY_VERSION = 1;
+export const CURATED_ALCHEMY_VERSION = 2;
 
 export const CURATED_ALCHEMY_MATERIAL_IDS = Object.freeze(new Set([
   "creature-regenerative-ichor", "creature-venomous-ichor", "creature-corrosive-ichor", "creature-ooze-mucus",
