@@ -1,11 +1,13 @@
 # Crafting Core (DnD 5e)
 
-## v0.5.2 Live-Test Repair
+## v0.5.3 Live-Test Repair - Native D&D5e Activity Mapping
 
-- Repairs SRD Product/Inscription cloning by copying the Item's persistent source data, restoring native D&D5e Activities instead of producing placeholder-like consumables.
-- Verifies Activity persistence after every managed Product write; a clone with missing Activities is no longer accepted as a successful sync.
-- Materializes the SRD `Potion of Resistance` template as ten ready-to-use damage-type potions and ten matching Inscription variants, each retaining only its canonical resistance Active Effect.
-- Automatically repairs v0.5.0/v0.5.1 optional libraries through Curated Alchemy schema v3.
+- Fixes the remaining SRD clone failure revealed by live testing: D&D5e 5.3.3 stores `system.activities` in an `ActivitiesField`/mapping of pseudo-documents, so replacing the whole object can persist an empty Activity collection even when the SRD source snapshot is correct.
+- Curated Alchemy Products, Potion variants, and every Inscription now restore Activities through the same per-Activity dotted update path used by native `Item5e#createActivity`, preserving SRD Activity IDs and types.
+- Applies the same repair path to Alchemy & Inscription Recipe Learn Sources so their `Learn Recipe` Activity is also verified after persistence.
+- Curated Alchemy schema v4 forces one automatic repair of v0.5.0-v0.5.2 installations. A successful repair should leave the catalog at **140 / 140 Curated Products**.
+- Makes **Reset to Curated Defaults** for Materials idempotent: it now queues only curated-owned fields that actually differ, preserves World-derived Creature Sources, and should report `0 restored` when immediately repeated with no further changes.
+- Content counts are unchanged: 234 core Materials + 23 optional Materials, 58 Culinary Products + 82 Alchemy/Inscription Products, and 97 optional Recipes.
 
 
 Crafting Core is a GM-authoritative crafting, harvesting, and material framework for Foundry Virtual Tabletop, built specifically for D&D 5e.
@@ -21,7 +23,7 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.5.2
+- **Crafting Core:** v0.5.3
 - **Foundry VTT:** minimum 14, verified 14.365
 - **D&D 5e:** 5.3.3
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest

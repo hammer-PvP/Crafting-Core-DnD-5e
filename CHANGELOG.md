@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.3 - Native SRD Activity Mapping Repair
+- Fixed the v0.5.2 live-test failure `Curated Product ... persisted 0/1 SRD Activities`. The SRD source snapshot already contained the Activity, but the repair path attempted to replace the entire D&D5e `system.activities` MappingField at once; on D&D5e 5.3.3 / Foundry v14 that can clean to an empty prepared `ActivityCollection`.
+- Curated Alchemy/Inscription Products now create an Activity-free Item shell first and then persist each SRD Activity through the same `system.activities.<activityId>` path used by native `Item5e#createActivity`. Existing Activities are removed through native `Item5e#deleteActivity` before the canonical mapping is re-applied.
+- Activity verification now checks count, persistent Activity IDs, and Activity types after every Product/Inscription write. A partial mechanical clone is rejected rather than reported as restored.
+- Applied the same native Activity persistence path to Curated Alchemy/Inscription Recipe Learn Sources and verify their `Learn Recipe` Activity after create/update.
+- Bumped Curated Alchemy schema to v4 so Worlds that enabled v0.5.0-v0.5.2 automatically retry the repair once after upgrade.
+- Reworked **Reset to Curated Defaults** for Materials to be idempotent. It now updates only Crafting Core-owned curated fields that actually differ, preserves World-derived Creature Sources and unrelated flags, and reports the number of records actually queued for restoration. Repeating the reset without further changes should report `0 restored`.
+- No catalog/content expansion in this patch: 257 Materials when Alchemy & Inscription is enabled, 140 total Curated Products, and 97 Alchemy/Inscription Recipes remain the expected totals.
+
 ## 0.5.2 - SRD Activity Fidelity & Resistance Variants
 
 - Fixed the Curated Alchemy clone pipeline to serialize D&D5e Items from their **persistent source data** (`toObject(true)`) rather than transformed/prepared values. This restores the native SRD `system.activities` mapping on canonical Products and every Inscription counterpart.

@@ -363,9 +363,49 @@ export class CuratedAlchemyService {
     return data;
   }
 
+  static #activitySourceMap(activities) {
+    const mapped = {};
+    if (!activities) return mapped;
+
+    // Persistent D&D5e activity data is stored as an id-keyed MappingField.  At runtime
+    // the prepared value becomes an ActivityCollection, so normalize either shape back
+    // into the persistent mapping before writing it to another Item.
+    if (activities instanceof Map || activities?.values instanceof Function) {
+      for (const activity of valuesOf(activities)) {
+        const data = activity?.toObject instanceof Function ? activity.toObject(true) : clone(activity);
+        const id = String(data?._id ?? activity?.id ?? activity?._id ?? "").trim();
+        if (!id || !data || typeof data !== "object") continue;
+        data._id = id;
+        mapped[id] = data;
+      }
+      return mapped;
+    }
+
+    if (Array.isArray(activities)) {
+      for (const activity of activities) {
+        const data = activity?.toObject instanceof Function ? activity.toObject(true) : clone(activity);
+        const id = String(data?._id ?? activity?.id ?? activity?._id ?? "").trim();
+        if (!id || !data || typeof data !== "object") continue;
+        data._id = id;
+        mapped[id] = data;
+      }
+      return mapped;
+    }
+
+    if (typeof activities === "object") {
+      for (const [key, activity] of Object.entries(activities)) {
+        const data = activity?.toObject instanceof Function ? activity.toObject(true) : clone(activity);
+        const id = String(data?._id ?? key ?? "").trim();
+        if (!id || !data || typeof data !== "object") continue;
+        data._id = id;
+        mapped[id] = data;
+      }
+    }
+    return mapped;
+  }
+
   static #sourceActivityCount(source) {
-    const activities = source?.system?.activities ?? {};
-    return activities && typeof activities === "object" ? Object.keys(activities).length : 0;
+    return Object.keys(this.#activitySourceMap(source?.system?.activities)).length;
   }
 
   static #documentActivityCount(item) {
@@ -373,21 +413,47 @@ export class CuratedAlchemyService {
   }
 
   static #assertActivities(item, source) {
-    const expected = this.#sourceActivityCount(source);
-    const actual = this.#documentActivityCount(item);
-    if (expected > 0 && actual !== expected) {
-      throw new Error(`Curated Product ${item?.name ?? source?.name ?? "Item"} persisted ${actual}/${expected} SRD Activities.`);
+    const expectedMap = this.#activitySourceMap(source?.system?.activities);
+    const expectedIds = Object.keys(expectedMap);
+    const actualActivities = valuesOf(item?.system?.activities);
+    const actualIds = new Set(actualActivities.map(activity => String(activity?.id ?? activity?._id ?? "")).filter(Boolean));
+    const missingIds = expectedIds.filter(id => !actualIds.has(id));
+    const wrongTypes = expectedIds.filter(id => {
+      const expectedType = String(expectedMap[id]?.type ?? "");
+      const actual = item?.system?.activities?.get instanceof Function
+        ? item.system.activities.get(id)
+        : actualActivities.find(activity => String(activity?.id ?? activity?._id ?? "") === id);
+      return expectedType && String(actual?.type ?? "") !== expectedType;
+    });
+
+    if (expectedIds.length > 0 && (actualActivities.length !== expectedIds.length || missingIds.length || wrongTypes.length)) {
+      const details = [
+        `${actualActivities.length}/${expectedIds.length} SRD Activities`,
+        missingIds.length ? `missing IDs: ${missingIds.join(", ")}` : "",
+        wrongTypes.length ? `type mismatch: ${wrongTypes.join(", ")}` : ""
+      ].filter(Boolean).join("; ");
+      throw new Error(`Curated Item ${item?.name ?? source?.name ?? "Item"} persisted ${details}.`);
     }
   }
 
   static async #replaceActivities(item, activities) {
-    const currentIds = valuesOf(item.system?.activities).map(activity => activity?.id ?? activity?._id).filter(Boolean);
-    if (currentIds.length) {
-      const deletions = {};
-      for (const id of currentIds) deletions[`system.activities.-=${id}`] = null;
-      await item.update(deletions, { render: false });
+    const desired = this.#activitySourceMap(activities);
+
+    // D&D5e 5.3.x ActivitiesField is a MappingField backed by pseudo-documents.  Replacing
+    // `system.activities` wholesale is cleaned as a normal object update by Foundry v14 and
+    // can result in an empty ActivityCollection.  Use the system's own per-activity write
+    // path instead (the same dotted path used by Item5e#createActivity/updateActivity).
+    const currentIds = valuesOf(item.system?.activities)
+      .map(activity => String(activity?.id ?? activity?._id ?? ""))
+      .filter(Boolean);
+    for (const id of currentIds) {
+      if (item.deleteActivity instanceof Function) await item.deleteActivity(id);
+      else await item.update({ [`system.activities.-=${id}`]: null }, { render: false });
     }
-    if (activities && Object.keys(activities).length) await item.update({ "system.activities": clone(activities) }, { render: false });
+
+    for (const [id, activity] of Object.entries(desired)) {
+      await item.update({ [`system.activities.${id}`]: clone(activity) }, { render: false });
+    }
   }
 
   static async #createEffects(item, effects) {
@@ -404,9 +470,15 @@ export class CuratedAlchemyService {
     const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
     const core = clone(source);
     const effects = normalizeActiveEffectSources(core.effects ?? []);
+    const activities = this.#activitySourceMap(core.system?.activities);
     delete core.effects;
+    if (core.system) delete core.system.activities;
+
+    // Create the shell first, then persist Activities through D&D5e's native MappingField
+    // update path.  This mirrors how Item5e#createActivity writes an Activity in v5.3.x.
     const [created] = await ItemClass.createDocuments([core], { pack: pack.collection });
     if (!created) throw new Error(`D&D5e did not create Curated Product ${source.name}.`);
+    await this.#replaceActivities(created, activities);
     if (effects.length) await this.#createEffects(created, effects);
     this.#assertActivities(created, source);
     return created;
@@ -553,19 +625,26 @@ export class CuratedAlchemyService {
 
   static async #updateKnowledgeDocument(item, source) {
     const data = clone(source);
-    const desiredActivities = clone(data.system?.activities ?? {});
+    const desiredActivities = this.#activitySourceMap(data.system?.activities);
     if (data.system) delete data.system.activities;
     delete data._id;
     delete data.ownership;
     await item.update(data, { render: false });
-    const currentIds = valuesOf(item.system?.activities).map(activity => activity?.id ?? activity?._id).filter(Boolean);
-    if (currentIds.length) {
-      const deletions = {};
-      for (const id of currentIds) deletions[`system.activities.-=${id}`] = null;
-      await item.update(deletions, { render: false });
-    }
-    if (Object.keys(desiredActivities).length) await item.update({ "system.activities": desiredActivities }, { render: false });
+    await this.#replaceActivities(item, desiredActivities);
+    this.#assertActivities(item, source);
     return item;
+  }
+
+  static async #createKnowledgeDocument(pack, source) {
+    const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+    const data = clone(source);
+    const desiredActivities = this.#activitySourceMap(data.system?.activities);
+    if (data.system) delete data.system.activities;
+    const [created] = await ItemClass.createDocuments([data], { pack: pack.collection });
+    if (!created) throw new Error(`D&D5e did not create Curated Alchemy Learn Source ${source?.name ?? "Recipe"}.`);
+    await this.#replaceActivities(created, desiredActivities);
+    this.#assertActivities(created, source);
+    return created;
   }
 
   static async #syncRecipes(state, materialDocs, productDocs) {
@@ -618,10 +697,8 @@ export class CuratedAlchemyService {
           [FLAGS.PRODUCT_YIELD]: Math.max(1, Number(entry.resultQuantity) || 1)
         };
         if (existing) preserveExternalFlags(existing.toObject(true), data);
-        const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
         if (!existing) {
-          const [createdItem] = await ItemClass.createDocuments([data], { pack: pack.collection });
-          if (!createdItem) throw new Error(`D&D5e did not create Curated Alchemy Learn Source ${entry.name}.`);
+          const createdItem = await this.#createKnowledgeDocument(pack, data);
           byRecipeId.set(entry.recipeId, createdItem);
           created += 1;
         } else {

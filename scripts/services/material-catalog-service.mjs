@@ -608,10 +608,11 @@ export class MaterialCatalogService {
   static async resetCuratedDefaults() {
     if (!game.user.isGM) throw new Error("Only a GM can reset Crafting Core materials.");
 
-    // A catalog-wide reset is intentionally stronger than Sync Catalog. It removes every
-    // built-in catalog override and restores the shipped rarity economy. Custom registered
-    // materials remain untouched. Direct presentation edits on managed Compendium Items are
-    // also replaced so the private pack truly returns to the Crafting Core curated baseline.
+    // A catalog-wide reset is stronger than Sync Catalog, but it should also be
+    // idempotent: after the curated values are restored, pressing the button again
+    // must report 0 restored instead of rewriting a small normalization subset on
+    // every click.  Reset only the fields Crafting Core owns as curated defaults.
+    // World-derived Creature Sources and unrelated module/system flags are preserved.
     await game.settings.set(MODULE_ID, SETTINGS.MATERIAL_OVERRIDES, {});
     await game.settings.set(MODULE_ID, SETTINGS.MATERIAL_ECONOMY, foundry.utils.deepClone(this.DEFAULT_ECONOMY));
 
@@ -626,56 +627,76 @@ export class MaterialCatalogService {
         .map(item => [String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? ""), item])
         .filter(([id]) => id));
 
-      const materialLookup = new Map();
-      for (const material of this.definitions()) {
-        const item = byMaterialId.get(material.id);
-        materialLookup.set(material.id, {
-          id: material.id,
-          name: material.name,
-          uuid: item?.uuid ?? ""
-        });
-      }
+      const same = (left, right) => {
+        const normalize = value => {
+          if (Array.isArray(value)) return value.map(normalize);
+          if (value && typeof value === "object") {
+            const out = {};
+            for (const key of Object.keys(value).sort()) out[key] = normalize(value[key]);
+            return out;
+          }
+          return value;
+        };
+        return JSON.stringify(normalize(left)) === JSON.stringify(normalize(right));
+      };
 
       const updates = [];
       const creates = [];
       for (const material of this.definitions()) {
         const folder = folders.get(`${material.family}:${material.category}`) ?? folders.get(material.family) ?? null;
-        const data = this.#itemData(material, folder?.id ?? null);
         const item = byMaterialId.get(material.id);
         if (!item) {
-          creates.push(data);
+          creates.push(this.#itemData(material, folder?.id ?? null));
           continue;
         }
 
-        // Creature Sources are World-derived data, not a curated/default preference. A
-        // catalog reset restores the shipped definition and presentation while preserving
-        // the current reverse-index links until the next explicit/automatic Resync.
-        const creatureSources = MaterialOriginService.normalizeCreatureSources(
-          item.getFlag(MODULE_ID, FLAGS.MATERIAL_CREATURE_SOURCES) ?? []
-        );
-        data.flags[MODULE_ID][FLAGS.MATERIAL_CREATURE_SOURCES] = creatureSources;
-        data.system.description.value = MaterialOriginService.initialDescription(
-          material,
-          creatureSources,
-          { materialLookup }
-        );
+        const update = { _id: item.id };
+        let changed = false;
+        const setIfDifferent = (path, current, desired) => {
+          if (same(current, desired)) return;
+          update[path] = foundry.utils.deepClone(desired);
+          changed = true;
+        };
 
-        updates.push({
-          _id: item.id,
-          name: data.name,
-          img: data.img,
-          folder: data.folder,
-          system: data.system,
-          flags: data.flags
-        });
+        setIfDifferent("name", String(item.name ?? ""), material.name);
+        setIfDifferent("img", String(item.img ?? ""), material.img || DEFAULT_MATERIAL_ICON);
+        setIfDifferent("folder", String(item.folder?.id ?? item.folder ?? ""), String(folder?.id ?? ""));
+        setIfDifferent("system.rarity", String(item.system?.rarity ?? ""), material.rarity);
+        setIfDifferent("system.price.value", Number(item.system?.price?.value ?? 0), Number(material.price ?? 0));
+        setIfDifferent("system.price.denomination", String(item.system?.price?.denomination ?? "gp"), String(material.denomination ?? "gp"));
+
+        const desiredFlags = {
+          [FLAGS.MATERIAL]: true,
+          [FLAGS.MATERIAL_ID]: material.id,
+          [FLAGS.MATERIAL_FAMILY]: material.family,
+          [FLAGS.MATERIAL_NATURE]: material.nature,
+          [FLAGS.MATERIAL_CATEGORY]: material.category,
+          [FLAGS.MATERIAL_RARITY]: material.rarity,
+          [FLAGS.MATERIAL_CHANCE]: material.chance,
+          [FLAGS.MATERIAL_QUANTITY]: material.quantity,
+          [FLAGS.MATERIAL_TAGS]: material.tags ?? [],
+          [FLAGS.MATERIAL_REQUIRES]: material.requires ?? [],
+          [FLAGS.MATERIAL_BIOMES]: material.biomes ?? [],
+          [FLAGS.MATERIAL_SOURCE_TYPES]: material.sourceTypes ?? [],
+          [FLAGS.MATERIAL_SOURCE_RULES]: material.sourceRules ?? {},
+          [FLAGS.MATERIAL_PROCESSED_FROM]: material.processedFrom ?? [],
+          [FLAGS.MATERIAL_VENDOR_AVAILABILITY]: material.vendorAvailability ?? "",
+          [FLAGS.MATERIAL_MANAGED]: true,
+          [FLAGS.MATERIAL_CATALOG_VERSION]: MATERIAL_CATALOG_VERSION
+        };
+        for (const [flag, desired] of Object.entries(desiredFlags)) {
+          setIfDifferent(`flags.${MODULE_ID}.${flag}`, item.getFlag(MODULE_ID, flag), desired);
+        }
+
+        if (changed) updates.push(update);
       }
 
       const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
       const created = creates.length ? await ItemClass.createDocuments(creates, { pack: pack.collection }) : [];
-      const updated = updates.length ? await ItemClass.updateDocuments(updates, { pack: pack.collection }) : [];
+      if (updates.length) await ItemClass.updateDocuments(updates, { pack: pack.collection });
       await pack.getIndex({ fields: ["name", "img", "type", "folder", "system.rarity", `flags.${MODULE_ID}.${FLAGS.MATERIAL_ID}`] });
       Hooks.callAll(`${MODULE_ID}.materialsChanged`);
-      return { pack, created: created.length, updated: updated.length, total: this.definitions().length };
+      return { pack, created: created.length, updated: updates.length, total: this.definitions().length };
     } finally {
       if (wasLocked) await pack.configure({ locked: true });
     }
