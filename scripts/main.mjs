@@ -157,7 +157,12 @@ Hooks.once("ready", async () => {
     }
     try {
       const alchemy = await CuratedAlchemyService.syncIfNeeded();
-      if (!alchemy?.skipped) console.info(`${MODULE_TITLE} | Curated Alchemy & Inscription library synchronized:`, alchemy);
+      if (!alchemy?.skipped) {
+        if (alchemy.complete === false) {
+          console.warn(`${MODULE_TITLE} | Curated Alchemy & Inscription synchronized with partial failures:`, alchemy);
+          ui.notifications?.warn?.("Crafting Core repaired the optional Alchemy & Inscription library as far as possible. Check the console if the catalog is not complete.");
+        } else console.info(`${MODULE_TITLE} | Curated Alchemy & Inscription library synchronized:`, alchemy);
+      }
     } catch (error) {
       console.error(`${MODULE_TITLE} | Curated Alchemy & Inscription synchronization failed.`, error);
       ui.notifications?.error?.("Crafting Core could not synchronize the optional Alchemy & Inscription library. Check the console for details.");

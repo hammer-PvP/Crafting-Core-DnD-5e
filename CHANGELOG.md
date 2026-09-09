@@ -1,51 +1,24 @@
 # Changelog
 
-## 0.5.3 - Native SRD Activity Mapping Repair
-- Fixed the v0.5.2 live-test failure `Curated Product ... persisted 0/1 SRD Activities`. The SRD source snapshot already contained the Activity, but the repair path attempted to replace the entire D&D5e `system.activities` MappingField at once; on D&D5e 5.3.3 / Foundry v14 that can clean to an empty prepared `ActivityCollection`.
-- Curated Alchemy/Inscription Products now create an Activity-free Item shell first and then persist each SRD Activity through the same `system.activities.<activityId>` path used by native `Item5e#createActivity`. Existing Activities are removed through native `Item5e#deleteActivity` before the canonical mapping is re-applied.
-- Activity verification now checks count, persistent Activity IDs, and Activity types after every Product/Inscription write. A partial mechanical clone is rejected rather than reported as restored.
-- Applied the same native Activity persistence path to Curated Alchemy/Inscription Recipe Learn Sources and verify their `Learn Recipe` Activity after create/update.
-- Bumped Curated Alchemy schema to v4 so Worlds that enabled v0.5.0-v0.5.2 automatically retry the repair once after upgrade.
-- Reworked **Reset to Curated Defaults** for Materials to be idempotent. It now updates only Crafting Core-owned curated fields that actually differ, preserves World-derived Creature Sources and unrelated flags, and reports the number of records actually queued for restoration. Repeating the reset without further changes should report `0 restored`.
-- No catalog/content expansion in this patch: 257 Materials when Alchemy & Inscription is enabled, 140 total Curated Products, and 97 Alchemy/Inscription Recipes remain the expected totals.
+## 0.5.5 - Curated Alchemy & Inscription
 
-## 0.5.2 - SRD Activity Fidelity & Resistance Variants
-
-- Fixed the Curated Alchemy clone pipeline to serialize D&D5e Items from their **persistent source data** (`toObject(true)`) rather than transformed/prepared values. This restores the native SRD `system.activities` mapping on canonical Products and every Inscription counterpart.
-- Added post-write Activity verification: when an SRD source contains Activities, a Curated Product repair now fails loudly unless the same Activity count is actually persisted. Silent placeholder-like Products are no longer accepted as a successful sync.
-- Rebuilt all existing v0.5.0/v0.5.1 Alchemy & Inscription Products automatically by advancing the optional content schema to version 3.
-- Replaced the single generic `Potion of Resistance` Product with **10 ready-to-use variants**: Acid, Cold, Fire, Force, Lightning, Necrotic, Poison, Psychic, Radiant, and Thunder Resistance.
-- Each Resistance Product is still derived from the canonical SRD `Potion of Resistance` template, but retains only the matching native resistance Active Effect and the Activity link to that effect. The ten Resistance Inscriptions use the same filtered mechanics.
-- Removed the retired generic managed Potion of Resistance during sync and repointed the 10 Resistance Recipes to their specific Products.
-- Optional Alchemy & Inscription now contains **82 Products**: 43 canonical/SRD-based Products, 34 Inscription variants, and 5 Inks. Combined with the 58 Culinary Products, an installed World exposes **140 Curated Products**. Recipe count remains 97 and active Material count remains 257.
-
-## 0.5.1 - Alchemy & Inscription Live-Test Repair
-
-- Fixed SRD ActiveEffect cloning on Foundry VTT 14 when an indefinite effect duration is exposed at runtime as a non-finite prepared value. The clone pipeline now normalizes that value to the canonical persisted `null`, preserving indefinite-duration semantics while satisfying document validation.
-- Added a guarded embedded-effect replacement path with count verification and rollback, so a failed effect copy can no longer silently report a successful Product repair.
-- Bumped the optional Alchemy & Inscription content schema to version 2 so Worlds that installed v0.5.0 automatically resynchronize and repair affected Products.
-- Curated Products now reports the active combined catalog: 58 Culinary Products plus 73 Alchemy & Inscription Products when the optional library is installed (131 total).
-- Added the Alchemy and Inscription Product groups directly to the Curated Products catalog view, including canonical source, rarity, tier, and publication status.
-- Clarified first-time setup ordering: install Alchemy & Inscription before Creature Scanner, or rerun Scanner once after installation so the 23 optional harvest Materials receive World-specific source links.
-- Clarified the Runtime Integration card to display the detected DnD 5e Item Creator version as a module version.
-
-## 0.5.0 - Curated Alchemy & Inscription
-
-- Added an **optional Curated Alchemy & Inscription library** that is not installed automatically in existing Worlds. GM opt-in/restore is available from the Materials catalog.
-- Added **23 normalized optional Materials**, raising the active curated catalog from 234 to **257 Materials** only after the library is enabled. New Creature Harvest entries use Scanner v2 source rules; new Gathering entries use ordered biome metadata and the existing Material Sources pipeline.
-- Added **73 Products**: 34 canonical SRD consumables, 34 Inscription presentation variants, and 5 Inscription Inks.
-- Added **97 Recipes** covering cultural Healing preparations, basic alchemy, utility potions, Resistance, Giant Strength, advanced potions, Ink production, and Inscription projects.
-- Added **Inscription** as a curated crafting family without creating a parallel mechanics engine. Each Inscription clones the matching SRD Item at runtime and changes presentation only; native D&D5e Activities, Active Effects, formulas, targets, uses/consumption, and rules data remain authoritative.
-- Inscription presentation uses Foundry-provided document/book icon paths: simple parchment for Basic, bound document for Elaborate, and book/tome for Elite. Inscription Inks reuse the module's existing bottle icon library.
-- Added five Ink tiers - Common, Uncommon, Rare, Very Rare, and Legendary - with **two alternative pigment Recipes per tier**, each producing 2 Ink.
-- Curated Alchemy/Inscription Recipes use alternative relevant proficiencies, `Anyone` attempt policy, automatic final success when qualified, **DC 8** for non-qualified attempts, and approximately **50% material loss** on failed final checks.
-- Inscription Projects use Basic 1 / Elaborate 2 / Elite 3 required Work Periods on Short Rest cadence. Extra Effort uses **INT DC 12** and adds one bonus progress step on success without removing the normal progress on failure.
-- Canonical Product resolution is restricted to installed D&D5e **SRD 5.2 / SRD 5.1** packs with `CC-BY-4.0` source metadata. No Player's Handbook premium Item is required or redistributed by the curated library.
-- `Potion of Comprehension` and `Potion of Fire Breath` are intentionally excluded because they are absent from the supplied SRD 5.1/5.2 baseline used for this release.
-- **Adamantine Powder remains Very Rare** and retains Mining / Processing / Specialized Vendor origins plus the Adamantine Ore relationship; no automatic Ore -> Powder Recipe is created.
-- Increased Scanner automatic pool candidate retention from **5 to 7** per rarity pool to accommodate the larger catalog without increasing the number of automatic final Harvest drops.
-- Preserved Curated Recipe folder placement when republishing Alchemy/Inscription Knowledge Sources.
-- Bumped the Material Catalog schema to version **11** and module version to **0.5.0**.
+- Added an optional GM-installed **Curated Alchemy & Inscription** library while preserving the core v0.4.2 workflow for Worlds that do not enable it. The optional library activates 23 additional Materials, 82 Products, and 97 Recipe Learn Sources.
+- Canonical alchemical consumables are resolved only from the installed D&D5e **SRD 5.2 / SRD 5.1 CC-BY-4.0** Compendiums. Crafting Core does not bundle premium Player's Handbook Item snapshots or depend on premium content.
+- Rebuilt SRD Product materialization around D&D5e's native Compendium import pipeline. Complete canonical Items are imported first so native Activities, Active Effects, uses, consumption, formulas, targeting, and compatibility data remain owned by D&D5e rather than being reconstructed by Crafting Core.
+- Added **34 Inscription variants** as presentation variants of their corresponding SRD consumables. The native SRD Item is persisted first; only name, icon, flavor, folder, and Crafting Core metadata are changed afterward. Activities are never transplanted or rebuilt for ordinary Inscriptions.
+- Added **5 Inscription Inks** (Common, Uncommon, Rare, Very Rare, Legendary), each with two alternative pigment Recipes and a yield of two Ink units.
+- Added Basic / Elaborate / Elite Inscription Projects with 1 / 2 / 3 required Work Periods, Short Rest cadence, Calligrapher's Supplies or Arcana qualification, and INT DC 12 Extra Effort that can add one extra progress beyond the normal Work Period.
+- Added multiple thematic Healing Potion methods (Traditional, Elven, Dwarven) that converge on the same canonical SRD Potion output for Healing, Greater, Superior, and Supreme tiers.
+- Added utility, poison/antitoxin, acid, holy-water, giant-strength, resistance, and advanced alchemical Recipe families using the existing generic Recipe framework rather than Item-name-specific crafting code.
+- Materialized the SRD `Potion of Resistance` template into **10 fixed Potion variants** plus 10 matching Inscriptions: Acid, Cold, Fire, Force, Lightning, Necrotic, Poison, Psychic, Radiant, and Thunder. Each keeps the native Utility Activity, links one canonical resistance ActiveEffect through D&D5e's Item Activity API, removes the random resistance-table roll, uses a specific description, and applies the fixed effect for 1 hour.
+- Added 23 source-normalized Materials to the optional catalog. Creature materials use Scanner v2 data-driven eligibility signals; Gathering materials define ordered biomes/source metadata. Existing Materials such as Spider Silk, Giant Blood, Amphibious Membrane, Air Essence, and Sugar Cane continue to be reused where appropriate.
+- **Adamantine Powder remains Very Rare**, with Mining / Processed / Vendor sources and Adamantine Ore recorded as a related processed origin without creating an automatic Ore-to-Powder Recipe.
+- Expanded Scanner automatic rarity-pool candidate storage to **7 candidates per pool** to accommodate the larger catalog without increasing the number of final drops produced by a successful pool.
+- Improved Curated Material reset idempotence. `Reset to Curated Defaults` updates only Crafting Core-managed curated fields and preserves World-derived Creature Source links and external-module flags; repeating a reset on an unchanged catalog should report zero restored entries.
+- Improved the shared Products catalog UI so installed optional Alchemy & Inscription Products are counted and displayed alongside the 58 Culinary Products. A complete installation contains **140 Curated Products** and **257 built-in Materials**.
+- Optional library synchronization now continues across Product failures and reports a complete failure summary instead of aborting on the first Product. Incomplete installations remain eligible for repair on the next synchronization.
+- Preserved Recipe/Knowledge lifecycle, active Project snapshots, generation math, final-drop counts, Item Piles behavior, Recipe Transfer semantics, and existing Culinary Product mechanics from the v0.4.2 baseline.
+- `Potion of Comprehension` and `Potion of Fire Breath` are intentionally not distributed because the supplied D&D5e 5.3.3 SRD 5.2/5.1 packs do not provide redistributable canonical Products for them.
 
 ## 0.4.1 — Unified Final Checks & Ingredient Identity
 

@@ -24,11 +24,6 @@ function valuesOf(value) {
   if (value?.values instanceof Function) { try { return [...value.values()]; } catch (_) { /* noop */ } }
   return value && typeof value === "object" ? Object.values(value) : [];
 }
-function cleanDocumentSource(source) {
-  const data = clone(source ?? {});
-  for (const key of ["_id", "folder", "sort", "ownership", "_stats", "pack"]) delete data[key];
-  return data;
-}
 function preserveExternalFlags(current, next) {
   const currentFlags = clone(current?.flags ?? {});
   next.flags ??= {};
@@ -42,25 +37,6 @@ function titleCase(value) {
   return String(value ?? "").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[-_]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
-/**
- * D&D5e SRD packs can expose an indefinite ActiveEffect duration as the prepared
- * value `Infinity` even though Foundry v14 persists the same duration as `null`.
- * Passing the prepared value back through createEmbeddedDocuments trips the v14
- * integer validator. Normalize only the persisted duration scalar and otherwise
- * leave the SRD ActiveEffect source untouched.
- */
-function normalizeActiveEffectSource(source) {
-  const data = clone(source ?? {});
-  if (!data.duration || typeof data.duration !== "object") return data;
-  const value = data.duration.value;
-  if (value === null || value === undefined || Number.isInteger(value)) return data;
-  const numeric = Number(value);
-  data.duration.value = Number.isFinite(numeric) ? Math.trunc(numeric) : null;
-  return data;
-}
-function normalizeActiveEffectSources(effects) {
-  return (effects ?? []).map(effect => normalizeActiveEffectSource(effect));
-}
 
 export class CuratedAlchemyService {
   static PRODUCTS_PACK_NAME = "crafting-core-products";
@@ -119,6 +95,43 @@ export class CuratedAlchemyService {
         if (!game.user?.isGM || !this.state().enabled) return;
         void this.sync({ restore: false }).catch(error => console.warn(`${MODULE_ID} | Could not post-repair Curated Alchemy Recipe ${id}.`, error));
       }, 0);
+    });
+
+    // Potion of Resistance is the one SRD template that must be materialized into a
+    // fixed final product.  The native SRD Utility Activity is preserved and linked to
+    // one canonical ActiveEffect.  D&D5e 5.3.3 does not auto-apply that Item effect on
+    // use, so Crafting Core applies the already-linked canonical effect to the user.
+    Hooks.on("dnd5e.postUseActivity", async activity => {
+      try {
+        const item = activity?.item;
+        if (!item?.getFlag?.(MODULE_ID, "autoApplyFixedResistance")) return;
+        const damageType = String(item.getFlag(MODULE_ID, "fixedResistance") ?? "").trim().toLowerCase();
+        if (!damageType) return;
+        const actor = activity.actor ?? item.actor;
+        if (!actor) return;
+
+        const candidates = Array.isArray(activity.applicableEffects) && activity.applicableEffects.length
+          ? activity.applicableEffects
+          : [...(item.effects ?? [])];
+        if (!candidates.length) throw new Error(`${item.name} has no linked resistance ActiveEffect at use time.`);
+
+        const selected = candidates.length === 1 ? candidates[0] : this.#findDamageTypeEffect({ effects: candidates }, damageType);
+        const existing = actor.effects?.find?.(effect => String(effect.getFlag?.(MODULE_ID, "appliedFixedResistance") ?? "") === damageType);
+        if (existing) await existing.delete();
+
+        const data = selected.toObject?.(true) ?? selected.toObject?.() ?? clone(selected);
+        delete data._id;
+        data.disabled = false;
+        data.transfer = false;
+        data.origin = item.uuid;
+        data.flags ??= {};
+        data.flags[MODULE_ID] ??= {};
+        data.flags[MODULE_ID].appliedFixedResistance = damageType;
+        await actor.createEmbeddedDocuments("ActiveEffect", [data]);
+      } catch (error) {
+        console.error(`${MODULE_ID} | Could not apply fixed Curated Resistance effect.`, error);
+        ui.notifications?.error?.("Crafting Core could not apply the Resistance effect. Check the console for details.");
+      }
     });
   }
 
@@ -276,72 +289,6 @@ export class CuratedAlchemyService {
     };
   }
 
-  static #applyVariant(data, entry) {
-    const variant = entry?.variant ?? null;
-    if (!variant) return data;
-
-    if (variant.type === "resistance") {
-      const key = String(variant.key ?? "").trim().toLocaleLowerCase();
-      const label = String(variant.label ?? key).trim();
-      if (!key || !label) throw new Error(`Invalid resistance variant definition for ${entry?.id ?? "unknown Product"}.`);
-
-      const effects = Array.isArray(data.effects) ? data.effects : [];
-      const matching = effects.filter(effect => {
-        const name = String(effect?.name ?? "").trim().toLocaleLowerCase();
-        const changes = effect?.system?.changes ?? effect?.changes ?? [];
-        const byName = name === `${label.toLocaleLowerCase()} resistance`;
-        const byChange = Array.isArray(changes) && changes.some(change =>
-          String(change?.key ?? "") === "system.traits.dr.value"
-          && String(change?.value ?? "").trim().toLocaleLowerCase() === key
-        );
-        return byName || byChange;
-      });
-      if (matching.length !== 1) {
-        throw new Error(`SRD Potion of Resistance did not expose exactly one ${label} Resistance Active Effect (found ${matching.length}).`);
-      }
-
-      const chosen = matching[0];
-      const chosenId = String(chosen?._id ?? chosen?.id ?? "");
-      if (!chosenId) throw new Error(`SRD ${label} Resistance Active Effect has no persistent ID.`);
-      data.effects = [chosen];
-
-      const activities = data.system?.activities ?? {};
-      for (const activity of Object.values(activities)) {
-        if (!activity || typeof activity !== "object" || !Array.isArray(activity.effects)) continue;
-        activity.effects = activity.effects.filter(ref => String(ref?._id ?? ref?.id ?? "") === chosenId);
-      }
-
-      data.name = entry.name ?? `Potion of ${label} Resistance`;
-      data.system ??= {};
-      data.system.identifier = `cc-${entry.id}`;
-      data.system.description ??= { value: "", chat: "" };
-      const rarity = titleCase(data.system.rarity ?? "Uncommon");
-      data.system.description.value = `<p><em>Potion, ${rarity}</em></p><p>When you use this consumable, you gain resistance to <strong>${label.toLowerCase()} damage</strong> for 1 hour.</p>`;
-    }
-
-    return data;
-  }
-
-  static #canonicalSource(entry, base, folderId) {
-    const data = cleanDocumentSource(base.toObject(true));
-    this.#applyVariant(data, entry);
-    data.folder = folderId;
-    data.flags ??= {};
-    data.flags[MODULE_ID] ??= {};
-    if (entry.kind === "inscription") {
-      data.name = entry.name;
-      data.img = entry.icon;
-      data.system ??= {};
-      data.system.description ??= { value: "", chat: "" };
-      const original = String(data.system.description.value ?? "");
-      const canonicalLabel = entry.variant?.type === "resistance" ? `Potion of ${entry.variant.label} Resistance` : base.name;
-      data.system.description.value = `<section class="crafting-core-inscription-flavor"><p><em>This written Inscription is a Crafting Core presentation variant of <strong>${canonicalLabel}</strong>. It intentionally preserves the canonical SRD Item's native Activities, effects, uses, and rules.</em></p></section>${original}`;
-      if (data.system.identifier) data.system.identifier = `cc-${entry.id}`;
-    }
-    data.effects = normalizeActiveEffectSources(data.effects);
-    return data;
-  }
-
   static #applyManagedFlags(data, entry, base=null) {
     data.flags ??= {};
     data.flags[MODULE_ID] = {
@@ -363,157 +310,107 @@ export class CuratedAlchemyService {
     return data;
   }
 
-  static #activitySourceMap(activities) {
-    const mapped = {};
-    if (!activities) return mapped;
-
-    // Persistent D&D5e activity data is stored as an id-keyed MappingField.  At runtime
-    // the prepared value becomes an ActivityCollection, so normalize either shape back
-    // into the persistent mapping before writing it to another Item.
-    if (activities instanceof Map || activities?.values instanceof Function) {
-      for (const activity of valuesOf(activities)) {
-        const data = activity?.toObject instanceof Function ? activity.toObject(true) : clone(activity);
-        const id = String(data?._id ?? activity?.id ?? activity?._id ?? "").trim();
-        if (!id || !data || typeof data !== "object") continue;
-        data._id = id;
-        mapped[id] = data;
-      }
-      return mapped;
-    }
-
-    if (Array.isArray(activities)) {
-      for (const activity of activities) {
-        const data = activity?.toObject instanceof Function ? activity.toObject(true) : clone(activity);
-        const id = String(data?._id ?? activity?.id ?? activity?._id ?? "").trim();
-        if (!id || !data || typeof data !== "object") continue;
-        data._id = id;
-        mapped[id] = data;
-      }
-      return mapped;
-    }
-
-    if (typeof activities === "object") {
-      for (const [key, activity] of Object.entries(activities)) {
-        const data = activity?.toObject instanceof Function ? activity.toObject(true) : clone(activity);
-        const id = String(data?._id ?? key ?? "").trim();
-        if (!id || !data || typeof data !== "object") continue;
-        data._id = id;
-        mapped[id] = data;
-      }
-    }
-    return mapped;
+  static #activitySummary(item) {
+    const raw = item?._source?.system?.activities ?? {};
+    const rawEntries = valuesOf(raw);
+    const preparedEntries = valuesOf(item?.system?.activities);
+    const idOf = value => String(value?._id ?? value?.id ?? "");
+    const typeOf = value => String(value?.type ?? value?.constructor?.type ?? value?.constructor?.metadata?.type ?? "");
+    return {
+      rawCount: rawEntries.length,
+      preparedCount: preparedEntries.length,
+      rawIds: rawEntries.map(idOf).filter(Boolean),
+      preparedIds: preparedEntries.map(idOf).filter(Boolean),
+      rawTypes: rawEntries.map(typeOf).filter(Boolean),
+      preparedTypes: preparedEntries.map(typeOf).filter(Boolean)
+    };
   }
 
-  static #sourceActivityCount(source) {
-    return Object.keys(this.#activitySourceMap(source?.system?.activities)).length;
+  static #assertNativeActivities(source, product, label) {
+    const expected = this.#activitySummary(source);
+    const actual = this.#activitySummary(product);
+    const expectedIds = new Set(expected.rawIds);
+    const actualIds = new Set(actual.rawIds);
+    const idsMatch = expectedIds.size === actualIds.size && [...expectedIds].every(id => actualIds.has(id));
+    const expectedTypes = new Map(valuesOf(source?._source?.system?.activities).map(row => [String(row?._id ?? row?.id ?? ""), String(row?.type ?? "")]));
+    const actualTypes = new Map(valuesOf(product?._source?.system?.activities).map(row => [String(row?._id ?? row?.id ?? ""), String(row?.type ?? "")]));
+    const typesMatch = [...expectedTypes].every(([id, type]) => !type || actualTypes.get(id) === type);
+    const countsMatch = expected.rawCount === actual.rawCount && expected.preparedCount === actual.preparedCount;
+    if (!countsMatch || !idsMatch || !typesMatch) {
+      throw new Error(`${label} did not preserve its native SRD Activities (${actual.rawCount}/${expected.rawCount} persisted, ${actual.preparedCount}/${expected.preparedCount} prepared).`);
+    }
+    return true;
   }
 
-  static #documentActivityCount(item) {
-    return valuesOf(item?.system?.activities).length;
+  static #effectData(effect) {
+    const source = effect?._source ?? effect?.toObject?.(true) ?? {};
+    return {
+      id: String(effect?.id ?? source?._id ?? ""),
+      name: String(effect?.name ?? source?.name ?? source?.label ?? ""),
+      changes: Array.isArray(source?.changes) ? source.changes : [],
+      source
+    };
   }
 
-  static #assertActivities(item, source) {
-    const expectedMap = this.#activitySourceMap(source?.system?.activities);
-    const expectedIds = Object.keys(expectedMap);
-    const actualActivities = valuesOf(item?.system?.activities);
-    const actualIds = new Set(actualActivities.map(activity => String(activity?.id ?? activity?._id ?? "")).filter(Boolean));
-    const missingIds = expectedIds.filter(id => !actualIds.has(id));
-    const wrongTypes = expectedIds.filter(id => {
-      const expectedType = String(expectedMap[id]?.type ?? "");
-      const actual = item?.system?.activities?.get instanceof Function
-        ? item.system.activities.get(id)
-        : actualActivities.find(activity => String(activity?.id ?? activity?._id ?? "") === id);
-      return expectedType && String(actual?.type ?? "") !== expectedType;
+  static #wordMatch(value, word) {
+    const escaped = String(word).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|[^a-z])${escaped}([^a-z]|$)`, "i").test(String(value ?? ""));
+  }
+
+  static #findDamageTypeEffect(item, damageType) {
+    const effects = valuesOf(item?.effects);
+    const scored = effects.map(effect => {
+      const data = this.#effectData(effect);
+      let score = 0;
+      if (this.#wordMatch(data.name, damageType)) score += 100;
+      for (const change of data.changes) {
+        const key = String(change?.key ?? "");
+        const value = String(change?.value ?? "");
+        if (this.#wordMatch(value, damageType)) score += key.includes("traits") || key.includes("resist") ? 80 : 30;
+      }
+      return { effect, data, score };
+    }).sort((a, b) => b.score - a.score);
+    if (!scored.length || scored[0].score <= 0) {
+      throw new Error(`Potion of Resistance did not expose a ${damageType} ActiveEffect.`);
+    }
+    if (scored.length > 1 && scored[1].score === scored[0].score) {
+      throw new Error(`Potion of Resistance exposed ambiguous ${damageType} ActiveEffects.`);
+    }
+    return scored[0].effect;
+  }
+
+  static #resistanceDescription(entry, { inscription=false }={}) {
+    const key = String(entry?.variant?.key ?? "").toLowerCase();
+    const label = String(entry?.variant?.label ?? titleCase(key));
+    if (inscription) {
+      return `<p><em>This magical inscription carries a ward against ${label.toLowerCase()} damage.</em></p><p>When you activate this inscription, you gain resistance to <strong>${label.toLowerCase()} damage</strong> for 1 hour.</p>`;
+    }
+    return `<p><em>Potion, Uncommon</em></p><p>When you drink this potion, you gain resistance to <strong>${label.toLowerCase()} damage</strong> for 1 hour.</p>`;
+  }
+
+  static #inscriptionDescription(entry, base) {
+    if (entry?.variant?.type === "resistance") return this.#resistanceDescription(entry, { inscription: true });
+    const existing = String(base?._source?.system?.description?.value ?? base?.system?.description?.value ?? "");
+    return `<section class="crafting-core-inscription-flavor"><p><em>This written Inscription is a Crafting Core presentation variant of <strong>${base.name}</strong>. It preserves the canonical SRD Item's native Activities, effects, uses, and rules.</em></p></section>${existing}`;
+  }
+
+  static #nativeImportData(base, entry, folderId, existing=null) {
+    // Use D&D5e's own Compendium conversion path and persist that entire source.
+    // Never transplant system.activities.
+    const data = game.items.fromCompendium(base, {
+      keepId: false,
+      clearSort: false,
+      clearOwnership: true
     });
-
-    if (expectedIds.length > 0 && (actualActivities.length !== expectedIds.length || missingIds.length || wrongTypes.length)) {
-      const details = [
-        `${actualActivities.length}/${expectedIds.length} SRD Activities`,
-        missingIds.length ? `missing IDs: ${missingIds.join(", ")}` : "",
-        wrongTypes.length ? `type mismatch: ${wrongTypes.join(", ")}` : ""
-      ].filter(Boolean).join("; ");
-      throw new Error(`Curated Item ${item?.name ?? source?.name ?? "Item"} persisted ${details}.`);
-    }
-  }
-
-  static async #replaceActivities(item, activities) {
-    const desired = this.#activitySourceMap(activities);
-
-    // D&D5e 5.3.x ActivitiesField is a MappingField backed by pseudo-documents.  Replacing
-    // `system.activities` wholesale is cleaned as a normal object update by Foundry v14 and
-    // can result in an empty ActivityCollection.  Use the system's own per-activity write
-    // path instead (the same dotted path used by Item5e#createActivity/updateActivity).
-    const currentIds = valuesOf(item.system?.activities)
-      .map(activity => String(activity?.id ?? activity?._id ?? ""))
-      .filter(Boolean);
-    for (const id of currentIds) {
-      if (item.deleteActivity instanceof Function) await item.deleteActivity(id);
-      else await item.update({ [`system.activities.-=${id}`]: null }, { render: false });
-    }
-
-    for (const [id, activity] of Object.entries(desired)) {
-      await item.update({ [`system.activities.${id}`]: clone(activity) }, { render: false });
-    }
-  }
-
-  static async #createEffects(item, effects) {
-    const normalized = normalizeActiveEffectSources(effects);
-    if (!normalized.length) return [];
-    const created = await item.createEmbeddedDocuments("ActiveEffect", normalized, { keepId: true, render: false });
-    if ((created?.length ?? 0) !== normalized.length) {
-      throw new Error(`D&D5e created ${created?.length ?? 0}/${normalized.length} Active Effects for ${item.name}.`);
-    }
-    return created;
-  }
-
-  static async #createProductDocument(pack, source) {
-    const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
-    const core = clone(source);
-    const effects = normalizeActiveEffectSources(core.effects ?? []);
-    const activities = this.#activitySourceMap(core.system?.activities);
-    delete core.effects;
-    if (core.system) delete core.system.activities;
-
-    // Create the shell first, then persist Activities through D&D5e's native MappingField
-    // update path.  This mirrors how Item5e#createActivity writes an Activity in v5.3.x.
-    const [created] = await ItemClass.createDocuments([core], { pack: pack.collection });
-    if (!created) throw new Error(`D&D5e did not create Curated Product ${source.name}.`);
-    await this.#replaceActivities(created, activities);
-    if (effects.length) await this.#createEffects(created, effects);
-    this.#assertActivities(created, source);
-    return created;
-  }
-
-  static async #updateProductDocument(item, source) {
-    const data = clone(source);
-    const desiredEffects = normalizeActiveEffectSources(data.effects ?? []);
-    const desiredActivities = clone(data.system?.activities ?? {});
-    delete data.effects;
-    if (data.system) delete data.system.activities;
     delete data._id;
-    delete data.ownership;
-
-    // Keep a rollback copy so a failed embedded-effect replacement never leaves
-    // an otherwise valid Product silently stripped of its SRD effects.
-    const previousEffects = normalizeActiveEffectSources([...(item.effects ?? [])].map(effect => effect.toObject(true)));
-    const existingEffectIds = [...(item.effects ?? [])].map(effect => effect.id).filter(Boolean);
-    if (existingEffectIds.length) await item.deleteEmbeddedDocuments("ActiveEffect", existingEffectIds, { render: false });
-    await item.update(data, { render: false });
-    await this.#replaceActivities(item, desiredActivities);
-    try {
-      if (desiredEffects.length) await this.#createEffects(item, desiredEffects);
-    } catch (error) {
-      console.error(`${MODULE_ID} | Could not replace SRD Active Effects for ${item.name}; attempting rollback.`, error);
-      const partialIds = [...(item.effects ?? [])].map(effect => effect.id).filter(Boolean);
-      if (partialIds.length) await item.deleteEmbeddedDocuments("ActiveEffect", partialIds, { render: false });
-      if (previousEffects.length) {
-        try { await this.#createEffects(item, previousEffects); }
-        catch (rollbackError) { console.error(`${MODULE_ID} | Active Effect rollback also failed for ${item.name}.`, rollbackError); }
-      }
-      throw error;
+    data.folder = folderId;
+    if (existing) {
+      data._id = existing.id;
+      data.sort = existing.sort;
+      preserveExternalFlags(existing.toObject(true), data);
     }
-    this.#assertActivities(item, source);
-    return item;
+    this.#applyManagedFlags(data, entry, base);
+    return data;
   }
 
   static async #deleteManagedProduct(item) {
@@ -528,7 +425,145 @@ export class CuratedAlchemyService {
     }
   }
 
-  static async #syncProducts(state) {
+  static async #retainOnlyDamageTypeEffect(item, damageType) {
+    const selected = this.#findDamageTypeEffect(item, damageType);
+    const deleteIds = valuesOf(item.effects)
+      .filter(effect => effect.id !== selected.id)
+      .map(effect => effect.id)
+      .filter(Boolean);
+    if (deleteIds.length) await item.deleteEmbeddedDocuments("ActiveEffect", deleteIds, { render: false });
+    const pack = game.packs.get(item.pack);
+    const refreshed = pack ? await pack.getDocument(item.id) : item;
+    const effects = valuesOf(refreshed?.effects);
+    if (effects.length !== 1) throw new Error(`${item.name} retained ${effects.length} ActiveEffects; expected one ${damageType} effect.`);
+    const finalEffect = effects[0];
+    const evidence = `${this.#effectData(finalEffect).name} ${JSON.stringify(this.#effectData(finalEffect).changes)}`;
+    if (!this.#wordMatch(evidence, damageType)) throw new Error(`${item.name} did not retain the expected ${damageType} ActiveEffect.`);
+    return refreshed;
+  }
+
+  static async #materializeFixedResistance(item, entry) {
+    const damageType = String(entry?.variant?.key ?? "").trim().toLowerCase();
+    const label = String(entry?.variant?.label ?? titleCase(damageType));
+    if (!damageType) throw new Error(`Invalid resistance variant for ${entry?.id ?? "Product"}.`);
+
+    let refreshed = await this.#retainOnlyDamageTypeEffect(item, damageType);
+    const effect = valuesOf(refreshed.effects)[0];
+    const activity = valuesOf(refreshed.system?.activities)[0] ?? null;
+    if (!activity) throw new Error(`${entry.name ?? label} has no native Potion of Resistance Activity.`);
+    if (String(activity.type ?? "") !== "utility") throw new Error(`${entry.name ?? label} expected a native Utility Activity, found ${activity.type ?? "unknown"}.`);
+
+    // Edit the existing native Activity through D&D5e's public Item API; do not
+    // write the Activities MappingField directly.
+    await refreshed.updateActivity(activity.id, {
+      name: `Drink — ${label} Resistance`,
+      "roll.formula": "",
+      "roll.name": "",
+      "roll.prompt": false,
+      "roll.visible": false,
+      effects: [{ _id: effect.id }],
+      "target.affects.type": "self",
+      "target.affects.count": "",
+      "target.affects.choice": false,
+      "target.prompt": false,
+      "description.chatFlavor": `Gain resistance to ${damageType} damage for 1 hour.`
+    });
+    await refreshed.update({
+      [`flags.${MODULE_ID}.fixedResistance`]: damageType,
+      [`flags.${MODULE_ID}.autoApplyFixedResistance`]: true
+    }, { render: false });
+
+    const pack = game.packs.get(refreshed.pack);
+    refreshed = pack ? await pack.getDocument(refreshed.id) : refreshed;
+    const finalActivity = valuesOf(refreshed.system?.activities)[0] ?? null;
+    const linkedIds = (finalActivity?.toObject?.().effects ?? []).map(row => String(row?._id ?? "")).filter(Boolean);
+    if (!finalActivity || String(finalActivity.type ?? "") !== "utility" || finalActivity.roll?.formula || !linkedIds.includes(effect.id)) {
+      throw new Error(`${entry.name ?? label} failed to materialize its fixed ${damageType} native Utility Activity.`);
+    }
+    return refreshed;
+  }
+
+  static async #applyPresentation(item, entry, base) {
+    const update = {
+      name: entry.kind === "inscription" ? entry.name : (entry.name ?? item.name),
+      folder: item.folder?.id ?? item.folder ?? null
+    };
+    if (entry.kind === "inscription") {
+      update.img = entry.icon;
+      update["system.description.value"] = this.#inscriptionDescription(entry, base);
+      update["system.description.chat"] = "";
+    } else if (entry?.variant?.type === "resistance") {
+      update["system.description.value"] = this.#resistanceDescription(entry, { inscription: false });
+      update["system.description.chat"] = "";
+    }
+    await item.update(update, { render: false });
+    const pack = game.packs.get(item.pack);
+    return pack ? await pack.getDocument(item.id) : item;
+  }
+
+  static async #rebuildNativeProduct(pack, entry, base, folderId, existing=null) {
+    const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+    const rollback = existing?.toObject?.(true) ?? null;
+    const data = this.#nativeImportData(base, entry, folderId, existing);
+    const keepId = Boolean(existing);
+
+    if (existing) await this.#deleteManagedProduct(existing);
+    let created = null;
+    try {
+      [created] = await ItemClass.createDocuments([data], {
+        pack: pack.collection,
+        fromCompendium: true,
+        keepId
+      });
+      if (!created) throw new Error(`D&D5e did not create ${entry.name ?? base.name}.`);
+    } catch (error) {
+      if (rollback && existing) {
+        try {
+          rollback._id = existing.id;
+          await ItemClass.createDocuments([rollback], { pack: pack.collection, keepId: true });
+        } catch (rollbackError) {
+          console.error(`${MODULE_ID} | Product rollback also failed for ${existing.name}.`, rollbackError);
+        }
+      }
+      throw error;
+    }
+
+    let persisted = await pack.getDocument(created.id);
+    if (!persisted) throw new Error(`${entry.name ?? base.name} could not be reloaded after native Compendium import.`);
+    this.#assertNativeActivities(base, persisted, entry.name ?? base.name);
+
+    if (entry?.variant?.type === "resistance") persisted = await this.#materializeFixedResistance(persisted, entry);
+    persisted = await this.#applyPresentation(persisted, entry, base);
+    this.#assertNativeActivities(base, persisted, entry.name ?? base.name);
+
+    if (entry?.variant?.type === "resistance") {
+      const effects = valuesOf(persisted.effects);
+      if (effects.length !== 1) throw new Error(`${persisted.name} must retain exactly one resistance ActiveEffect.`);
+      const key = String(entry.variant.key ?? "").toLowerCase();
+      const evidence = `${this.#effectData(effects[0]).name} ${JSON.stringify(this.#effectData(effects[0]).changes)}`;
+      if (!this.#wordMatch(evidence, key)) throw new Error(`${persisted.name} retained the wrong resistance ActiveEffect.`);
+    }
+    return persisted;
+  }
+
+  static async #syncInk(pack, entry, folderId, existing=null) {
+    const source = this.#inkSource(entry, folderId);
+    this.#applyManagedFlags(source, entry, null);
+    const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+    if (!existing) {
+      const [created] = await ItemClass.createDocuments([source], { pack: pack.collection });
+      if (!created) throw new Error(`D&D5e did not create ${entry.name}.`);
+      return { item: created, created: true };
+    }
+    preserveExternalFlags(existing.toObject(true), source);
+    const update = clone(source);
+    delete update._id;
+    delete update.ownership;
+    await existing.update(update, { render: false });
+    return { item: existing, created: false };
+  }
+
+  static async #syncProducts(state, { forceRebuild=false }={}) {
     const pack = await this.ensureProductsPack();
     const wasLocked = Boolean(pack.locked);
     if (wasLocked) await pack.configure({ locked: false });
@@ -539,8 +574,9 @@ export class CuratedAlchemyService {
       const suppressed = new Set(state.suppressedProducts);
       let created = 0;
       let updated = 0;
+      let unchanged = 0;
       let retiredRemoved = 0;
-      const missingSources = [];
+      const failures = [];
 
       for (const retiredId of RETIRED_PRODUCT_IDS) {
         const retired = byId.get(retiredId) ?? null;
@@ -554,34 +590,44 @@ export class CuratedAlchemyService {
       for (const entry of CURATED_ALCHEMY_PRODUCTS) {
         if (suppressed.has(entry.productId)) continue;
         const folder = folders.get(entry.folderKey) ?? null;
-        let base = null;
-        let source = null;
+        let existing = byId.get(entry.productId) ?? null;
         try {
-          if (entry.kind === "ink") source = this.#inkSource(entry, folder?.id ?? null);
-          else {
-            base = await this.resolveSrdItem(entry.sourceKey);
-            source = this.#canonicalSource(entry, base, folder?.id ?? null);
+          if (entry.kind === "ink") {
+            const result = await this.#syncInk(pack, entry, folder?.id ?? null, existing);
+            byId.set(entry.productId, result.item);
+            result.created ? created += 1 : updated += 1;
+            continue;
           }
-        } catch (error) {
-          missingSources.push({ productId: entry.productId, name: entry.name ?? entry.id, error: String(error?.message ?? error) });
-          continue;
-        }
-        this.#applyManagedFlags(source, entry, base);
-        const existing = byId.get(entry.productId) ?? null;
-        if (!existing) {
-          const item = await this.#createProductDocument(pack, source);
+
+          const base = await this.resolveSrdItem(entry.sourceKey);
+          const version = Number(existing?.getFlag(MODULE_ID, FLAGS.CURATED_VERSION) ?? 0);
+          const sourceUuid = String(existing?.getFlag(MODULE_ID, FLAGS.PRODUCT_CANONICAL_SOURCE) ?? "");
+          const needsRebuild = forceRebuild || !existing || version < CURATED_ALCHEMY_VERSION || sourceUuid !== String(base.uuid);
+          if (!needsRebuild) {
+            const targetFolder = String(folder?.id ?? "");
+            const currentFolder = String(existing.folder?.id ?? existing.folder ?? "");
+            if (targetFolder !== currentFolder) {
+              await existing.update({ folder: folder?.id ?? null }, { render: false });
+              updated += 1;
+            } else unchanged += 1;
+            continue;
+          }
+
+          const item = await this.#rebuildNativeProduct(pack, entry, base, folder?.id ?? null, existing);
           byId.set(entry.productId, item);
-          created += 1;
-        } else {
-          preserveExternalFlags(existing.toObject(true), source);
-          await this.#updateProductDocument(existing, source);
-          updated += 1;
+          existing ? updated += 1 : created += 1;
+        } catch (error) {
+          failures.push({ productId: entry.productId, name: entry.name ?? entry.id, error: String(error?.message ?? error) });
+          console.error(`${MODULE_ID} | Curated Alchemy Product failed: ${entry.name ?? entry.id}.`, error);
+          const fallback = (await pack.getDocuments()).find(item => String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? "") === entry.productId) ?? null;
+          if (fallback) byId.set(entry.productId, fallback);
         }
       }
+
       docs = await pack.getDocuments();
       const documentsByProductId = new Map(docs.map(item => [String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? ""), item]).filter(([id]) => id));
       await pack.getIndex({ fields: ["name", "img", "type", "folder", `flags.${MODULE_ID}.${FLAGS.PRODUCT_ID}`] });
-      return { pack, created, updated, retiredRemoved, missingSources, documentsByProductId };
+      return { pack, created, updated, unchanged, retiredRemoved, failures, documentsByProductId };
     } finally {
       if (wasLocked) await pack.configure({ locked: true });
     }
@@ -625,25 +671,25 @@ export class CuratedAlchemyService {
 
   static async #updateKnowledgeDocument(item, source) {
     const data = clone(source);
-    const desiredActivities = this.#activitySourceMap(data.system?.activities);
+    const desiredActivities = clone(data.system?.activities ?? {});
     if (data.system) delete data.system.activities;
     delete data._id;
     delete data.ownership;
     await item.update(data, { render: false });
-    await this.#replaceActivities(item, desiredActivities);
-    this.#assertActivities(item, source);
+    const currentIds = valuesOf(item.system?.activities).map(activity => activity?.id ?? activity?._id).filter(Boolean);
+    if (currentIds.length) {
+      const deletions = {};
+      for (const id of currentIds) deletions[`system.activities.-=${id}`] = null;
+      await item.update(deletions, { render: false });
+    }
+    if (Object.keys(desiredActivities).length) await item.update({ "system.activities": desiredActivities }, { render: false });
     return item;
   }
 
   static async #createKnowledgeDocument(pack, source) {
     const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
-    const data = clone(source);
-    const desiredActivities = this.#activitySourceMap(data.system?.activities);
-    if (data.system) delete data.system.activities;
-    const [created] = await ItemClass.createDocuments([data], { pack: pack.collection });
+    const [created] = await ItemClass.createDocuments([source], { pack: pack.collection });
     if (!created) throw new Error(`D&D5e did not create Curated Alchemy Learn Source ${source?.name ?? "Recipe"}.`);
-    await this.#replaceActivities(created, desiredActivities);
-    this.#assertActivities(created, source);
     return created;
   }
 
@@ -761,17 +807,18 @@ export class CuratedAlchemyService {
       state.suppressedProducts = [];
       state.suppressedRecipes = [];
     }
-    // Persist the opt-in before asking MaterialCatalogService for its active definitions.
-    // This makes direct API sync just as safe as the UI restore/install path.
+
+    // Persist opt-in before resolving Materials so the 23 optional definitions become active.
     await this.#saveState(state);
     this.#sourceCache.clear();
     const materialDocs = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
-    const products = await this.#syncProducts(state);
+    const products = await this.#syncProducts(state, { forceRebuild: restore });
     const recipes = await this.#syncRecipes(state, materialDocs, products.documentsByProductId);
-    state.version = CURATED_ALCHEMY_VERSION;
+    const complete = products.failures.length === 0 && recipes.skipped.length === 0;
+    state.version = complete ? CURATED_ALCHEMY_VERSION : Math.min(state.version, CURATED_ALCHEMY_VERSION - 1);
     await this.#saveState(state);
     await KnowledgeItemService.reconcilePublishedKnowledge();
-    return { products, recipes, enabled: true, version: CURATED_ALCHEMY_VERSION };
+    return { products, recipes, enabled: true, version: state.version, currentVersion: CURATED_ALCHEMY_VERSION, complete };
   }
 
   static async catalogContext() {

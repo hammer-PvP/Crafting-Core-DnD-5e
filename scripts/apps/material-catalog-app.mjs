@@ -288,8 +288,14 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       const result = await CuratedAlchemyService.restoreAll();
       const products = result.products ?? {};
       const recipes = result.recipes ?? {};
+      const failed = Number(products.failures?.length ?? 0);
       const skipped = Number(recipes.skipped?.length ?? 0);
-      ui.notifications.info(`Alchemy & Inscription restored: ${products.created ?? 0} Products created, ${products.updated ?? 0} updated; ${recipes.created ?? 0} Recipes created, ${recipes.updated ?? 0} updated${skipped ? `; ${skipped} skipped` : ""}. Re-run Creature Scanner for the new harvest-source links.`);
+      const message = `Alchemy & Inscription: ${products.created ?? 0} Products created, ${products.updated ?? 0} rebuilt/updated; ${recipes.created ?? 0} Recipes created, ${recipes.updated ?? 0} updated${failed ? `; ${failed} Product failures` : ""}${skipped ? `; ${skipped} Recipes skipped` : ""}.`;
+      if (result.complete) ui.notifications.info(`${message} Re-run Creature Scanner for the new harvest-source links.`);
+      else {
+        console.warn(`${MODULE_ID} | Alchemy & Inscription completed with partial failures.`, { products: products.failures ?? [], recipes: recipes.skipped ?? [] });
+        ui.notifications.warn(`${message} The remaining entries were still processed; check the console for the failure summary.`);
+      }
       this.render({ force: true });
     } catch (error) {
       console.error(`${MODULE_ID} | Curated Alchemy & Inscription restore failed.`, error);
