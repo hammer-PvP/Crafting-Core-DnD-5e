@@ -6,7 +6,7 @@
  * of the same canonical SRD Item source, preserving native Activities, effects and consumption data.
  */
 
-export const CURATED_ALCHEMY_VERSION = 2;
+export const CURATED_ALCHEMY_VERSION = 3;
 
 export const CURATED_ALCHEMY_MATERIAL_IDS = Object.freeze(new Set([
   "creature-regenerative-ichor", "creature-venomous-ichor", "creature-corrosive-ichor", "creature-ooze-mucus",
@@ -98,12 +98,14 @@ export const PROFICIENCIES = Object.freeze({
 const productId = id => `crafting-core-alchemy-product-${id}`;
 const recipeId = id => `crafting-core-alchemy-recipe-${id}`;
 
-const canonical = (id, sourceKey, folderKey, { category="alchemy", subcategory="consumable" }={}) => ({
-  id, productId: productId(id), kind: "canonical", sourceKey, folderKey, category, subcategory
+const canonical = (id, sourceKey, folderKey, { category="alchemy", subcategory="consumable", name=null, variant=null }={}) => ({
+  id, productId: productId(id), kind: "canonical", sourceKey, folderKey, category, subcategory,
+  ...(name ? { name } : {}), ...(variant ? { variant } : {})
 });
-const inscription = (id, name, sourceKey, tier, { subcategory="inscription" }={}) => ({
+const inscription = (id, name, sourceKey, tier, { subcategory="inscription", variant=null }={}) => ({
   id, productId: productId(id), kind: "inscription", name, sourceKey, tier,
-  icon: INSCRIPTION_ICONS[tier], folderKey: `inscription:${tier}`, category: "inscription", subcategory
+  icon: INSCRIPTION_ICONS[tier], folderKey: `inscription:${tier}`, category: "inscription", subcategory,
+  ...(variant ? { variant } : {})
 });
 const ink = (rarity, label, priceGp) => ({
   id: `inscription-ink-${rarity}`, productId: productId(`inscription-ink-${rarity}`), kind: "ink",
@@ -132,7 +134,6 @@ const products = [
   canonical("dust-dryness", "dust-dryness", "alchemy:utility"),
   canonical("philter-love", "philter-love", "alchemy:utility"),
   canonical("potion-water-breathing", "potion-water-breathing", "alchemy:utility"),
-  canonical("potion-resistance", "potion-resistance", "alchemy:resistance"),
   canonical("giant-hill", "giant-hill", "alchemy:giant"), canonical("giant-stone", "giant-stone", "alchemy:giant"),
   canonical("giant-frost", "giant-frost", "alchemy:giant"), canonical("giant-fire", "giant-fire", "alchemy:giant"),
   canonical("giant-cloud", "giant-cloud", "alchemy:giant"), canonical("giant-storm", "giant-storm", "alchemy:giant"),
@@ -186,7 +187,15 @@ const resistanceTypes = [
   ["thunder", "Thunder", "essence-thunder", "gathering-wild-sage", PROFICIENCIES.arcana]
 ];
 for (const [key, label] of resistanceTypes) {
-  products.push(inscription(`inscription-resistance-${key}`, `${label} Resistance Inscription`, "potion-resistance", "basic", { subcategory: "resistance-inscription" }));
+  const variant = { type: "resistance", key, label };
+  products.push(
+    canonical(`potion-resistance-${key}`, "potion-resistance", "alchemy:resistance", {
+      name: `Potion of ${label} Resistance`, subcategory: "resistance", variant
+    }),
+    inscription(`inscription-resistance-${key}`, `${label} Resistance Inscription`, "potion-resistance", "basic", {
+      subcategory: "resistance-inscription", variant
+    })
+  );
 }
 
 export const CURATED_ALCHEMY_PRODUCTS = Object.freeze(products.map(Object.freeze));
@@ -275,7 +284,7 @@ const recipes = [
 
 for (const [key, label, essenceId, herbId, secondary] of resistanceTypes) {
   recipes.push(
-    timed(`resistance-${key}`, `Potion of ${label} Resistance`, "potion-resistance", [M(essenceId), M("gathering-common-root",2), M(herbId), S("vial")], [PROFICIENCIES.alchemist, secondary], "alchemy:resistance", `A ${label.toLowerCase()}-aligned method for the SRD Potion of Resistance.`),
+    timed(`resistance-${key}`, `Potion of ${label} Resistance`, `potion-resistance-${key}`, [M(essenceId), M("gathering-common-root",2), M(herbId), S("vial")], [PROFICIENCIES.alchemist, secondary], "alchemy:resistance", `A ${label.toLowerCase()}-aligned method producing a ready-to-use ${label} Resistance potion from the SRD Potion of Resistance template.`),
     project(`inscription-resistance-${key}`, `${label} Resistance Inscription`, `inscription-resistance-${key}`, [S("parchment"), P("inscription-ink-uncommon"), M(essenceId)], "basic", "inscription:basic", `A written ${label.toLowerCase()} resistance working. It preserves the native Potion of Resistance mechanics and Activities.`)
   );
 }

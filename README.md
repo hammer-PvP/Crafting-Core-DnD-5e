@@ -1,11 +1,11 @@
 # Crafting Core (DnD 5e)
 
-## v0.5.1 Live-Test Hotfix
+## v0.5.2 Live-Test Repair
 
-- Repairs SRD ActiveEffect cloning when Foundry exposes an indefinite duration as a prepared non-finite value; the persisted clone now normalizes it back to `null` without changing the SRD effect semantics.
-- The Curated Products tab now counts and lists the installed optional Alchemy & Inscription Products instead of continuing to show only the 58 Culinary Products.
-- The first-install workflow now explicitly warns that Alchemy & Inscription should be installed before Creature Scanner, or Scanner must be run once more after installation.
-- Runtime Integration now labels the detected DnD 5e Item Creator version explicitly.
+- Repairs SRD Product/Inscription cloning by copying the Item's persistent source data, restoring native D&D5e Activities instead of producing placeholder-like consumables.
+- Verifies Activity persistence after every managed Product write; a clone with missing Activities is no longer accepted as a successful sync.
+- Materializes the SRD `Potion of Resistance` template as ten ready-to-use damage-type potions and ten matching Inscription variants, each retaining only its canonical resistance Active Effect.
+- Automatically repairs v0.5.0/v0.5.1 optional libraries through Curated Alchemy schema v3.
 
 
 Crafting Core is a GM-authoritative crafting, harvesting, and material framework for Foundry Virtual Tabletop, built specifically for D&D 5e.
@@ -21,7 +21,7 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.5.1
+- **Crafting Core:** v0.5.2
 - **Foundry VTT:** minimum 14, verified 14.365
 - **D&D 5e:** 5.3.3
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
@@ -231,12 +231,12 @@ All official Curated Product Recipes use **10 seconds** of crafting time. Each P
 
 ## Optional Curated Alchemy & Inscription
 
-Crafting Core v0.5.0 adds an **optional** Curated Alchemy & Inscription library. Existing Worlds are not silently expanded: the GM installs or restores it from **Crafting Core - Materials**.
+Crafting Core v0.5.x adds an **optional** Curated Alchemy & Inscription library. Existing Worlds are not silently expanded: the GM installs or restores it from **Crafting Core - Materials**.
 
 When enabled, the library adds:
 
 - **23 normalized Materials** integrated with Gathering, Creature Harvest, Material Sources, and Scanner v2 where appropriate;
-- **73 Products**: 34 canonical SRD consumables, 34 Inscription presentation variants, and 5 Inscription Inks;
+- **82 Products**: 43 ready-to-use canonical SRD-based consumables, 34 Inscription presentation variants, and 5 Inscription Inks;
 - **97 Recipes**, including cultural Healing preparations, utility/alchemical consumables, Resistance, Giant Strength, advanced potions, Ink recipes, and Inscription recipes.
 
 ### SRD-only Product policy
@@ -244,6 +244,8 @@ When enabled, the library adds:
 Canonical Alchemy Products are resolved at runtime only from the installed D&D5e **SRD 5.2 / SRD 5.1** Compendium packs and must carry the expected **CC-BY-4.0** source license. Crafting Core does not require or redistribute Player's Handbook premium Items for this curated library. If an SRD source cannot be resolved, that Product/Recipe is not fabricated from a premium fallback.
 
 `Potion of Comprehension` and `Potion of Fire Breath` are intentionally not distributed by this library because they are absent from the supplied SRD 5.1/5.2 packs used for the v0.5.x implementation baseline.
+
+The SRD `Potion of Resistance` is a configurable template containing all ten resistance Active Effects. Crafting Core materializes ten ready-to-use curated variants (Acid, Cold, Fire, Force, Lightning, Necrotic, Poison, Psychic, Radiant, and Thunder), each retaining only the matching canonical Active Effect. Their Inscription counterparts use the same filtered SRD mechanics.
 
 ### Inscription
 

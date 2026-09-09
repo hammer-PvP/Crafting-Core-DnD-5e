@@ -15,6 +15,7 @@ import { RecipeService } from "./recipe-service.mjs";
 
 const ALLOWED_SRD_PACKS = new Set(["dnd5e.equipment24", "dnd5e.items"]);
 const REQUIRED_LICENSE = "CC-BY-4.0";
+const RETIRED_PRODUCT_IDS = new Set(["crafting-core-alchemy-product-potion-resistance"]);
 
 function clone(value) { return foundry.utils.deepClone(value); }
 function valuesOf(value) {
@@ -275,8 +276,55 @@ export class CuratedAlchemyService {
     };
   }
 
+  static #applyVariant(data, entry) {
+    const variant = entry?.variant ?? null;
+    if (!variant) return data;
+
+    if (variant.type === "resistance") {
+      const key = String(variant.key ?? "").trim().toLocaleLowerCase();
+      const label = String(variant.label ?? key).trim();
+      if (!key || !label) throw new Error(`Invalid resistance variant definition for ${entry?.id ?? "unknown Product"}.`);
+
+      const effects = Array.isArray(data.effects) ? data.effects : [];
+      const matching = effects.filter(effect => {
+        const name = String(effect?.name ?? "").trim().toLocaleLowerCase();
+        const changes = effect?.system?.changes ?? effect?.changes ?? [];
+        const byName = name === `${label.toLocaleLowerCase()} resistance`;
+        const byChange = Array.isArray(changes) && changes.some(change =>
+          String(change?.key ?? "") === "system.traits.dr.value"
+          && String(change?.value ?? "").trim().toLocaleLowerCase() === key
+        );
+        return byName || byChange;
+      });
+      if (matching.length !== 1) {
+        throw new Error(`SRD Potion of Resistance did not expose exactly one ${label} Resistance Active Effect (found ${matching.length}).`);
+      }
+
+      const chosen = matching[0];
+      const chosenId = String(chosen?._id ?? chosen?.id ?? "");
+      if (!chosenId) throw new Error(`SRD ${label} Resistance Active Effect has no persistent ID.`);
+      data.effects = [chosen];
+
+      const activities = data.system?.activities ?? {};
+      for (const activity of Object.values(activities)) {
+        if (!activity || typeof activity !== "object" || !Array.isArray(activity.effects)) continue;
+        activity.effects = activity.effects.filter(ref => String(ref?._id ?? ref?.id ?? "") === chosenId);
+      }
+
+      data.name = entry.name ?? `Potion of ${label} Resistance`;
+      data.system ??= {};
+      data.system.identifier = `cc-${entry.id}`;
+      data.system.description ??= { value: "", chat: "" };
+      const rarity = titleCase(data.system.rarity ?? "Uncommon");
+      data.system.description.value = `<p><em>Potion, ${rarity}</em></p><p>When you use this consumable, you gain resistance to <strong>${label.toLowerCase()} damage</strong> for 1 hour.</p>`;
+    }
+
+    return data;
+  }
+
   static #canonicalSource(entry, base, folderId) {
-    const data = cleanDocumentSource(base.toObject(false));
+    const data = cleanDocumentSource(base.toObject(true));
+    this.#applyVariant(data, entry);
     data.folder = folderId;
     data.flags ??= {};
     data.flags[MODULE_ID] ??= {};
@@ -286,7 +334,8 @@ export class CuratedAlchemyService {
       data.system ??= {};
       data.system.description ??= { value: "", chat: "" };
       const original = String(data.system.description.value ?? "");
-      data.system.description.value = `<section class="crafting-core-inscription-flavor"><p><em>This written Inscription is a Crafting Core presentation variant of <strong>${base.name}</strong>. It intentionally preserves the canonical SRD Item's native Activities, effects, uses, and rules.</em></p></section>${original}`;
+      const canonicalLabel = entry.variant?.type === "resistance" ? `Potion of ${entry.variant.label} Resistance` : base.name;
+      data.system.description.value = `<section class="crafting-core-inscription-flavor"><p><em>This written Inscription is a Crafting Core presentation variant of <strong>${canonicalLabel}</strong>. It intentionally preserves the canonical SRD Item's native Activities, effects, uses, and rules.</em></p></section>${original}`;
       if (data.system.identifier) data.system.identifier = `cc-${entry.id}`;
     }
     data.effects = normalizeActiveEffectSources(data.effects);
@@ -312,6 +361,23 @@ export class CuratedAlchemyService {
       [FLAGS.PRODUCT_CANONICAL_SOURCE]: base?.uuid ?? ""
     };
     return data;
+  }
+
+  static #sourceActivityCount(source) {
+    const activities = source?.system?.activities ?? {};
+    return activities && typeof activities === "object" ? Object.keys(activities).length : 0;
+  }
+
+  static #documentActivityCount(item) {
+    return valuesOf(item?.system?.activities).length;
+  }
+
+  static #assertActivities(item, source) {
+    const expected = this.#sourceActivityCount(source);
+    const actual = this.#documentActivityCount(item);
+    if (expected > 0 && actual !== expected) {
+      throw new Error(`Curated Product ${item?.name ?? source?.name ?? "Item"} persisted ${actual}/${expected} SRD Activities.`);
+    }
   }
 
   static async #replaceActivities(item, activities) {
@@ -342,6 +408,7 @@ export class CuratedAlchemyService {
     const [created] = await ItemClass.createDocuments([core], { pack: pack.collection });
     if (!created) throw new Error(`D&D5e did not create Curated Product ${source.name}.`);
     if (effects.length) await this.#createEffects(created, effects);
+    this.#assertActivities(created, source);
     return created;
   }
 
@@ -356,7 +423,7 @@ export class CuratedAlchemyService {
 
     // Keep a rollback copy so a failed embedded-effect replacement never leaves
     // an otherwise valid Product silently stripped of its SRD effects.
-    const previousEffects = normalizeActiveEffectSources([...(item.effects ?? [])].map(effect => effect.toObject(false)));
+    const previousEffects = normalizeActiveEffectSources([...(item.effects ?? [])].map(effect => effect.toObject(true)));
     const existingEffectIds = [...(item.effects ?? [])].map(effect => effect.id).filter(Boolean);
     if (existingEffectIds.length) await item.deleteEmbeddedDocuments("ActiveEffect", existingEffectIds, { render: false });
     await item.update(data, { render: false });
@@ -373,7 +440,20 @@ export class CuratedAlchemyService {
       }
       throw error;
     }
+    this.#assertActivities(item, source);
     return item;
+  }
+
+  static async #deleteManagedProduct(item) {
+    if (!item) return false;
+    const token = `${item.pack}:${item.id}`;
+    this.#managedDeletes.add(token);
+    try {
+      await item.delete({ render: false });
+      return true;
+    } finally {
+      this.#managedDeletes.delete(token);
+    }
   }
 
   static async #syncProducts(state) {
@@ -387,7 +467,17 @@ export class CuratedAlchemyService {
       const suppressed = new Set(state.suppressedProducts);
       let created = 0;
       let updated = 0;
+      let retiredRemoved = 0;
       const missingSources = [];
+
+      for (const retiredId of RETIRED_PRODUCT_IDS) {
+        const retired = byId.get(retiredId) ?? null;
+        if (!retired || !retired.getFlag(MODULE_ID, FLAGS.PRODUCT_MANAGED)) continue;
+        if (await this.#deleteManagedProduct(retired)) {
+          byId.delete(retiredId);
+          retiredRemoved += 1;
+        }
+      }
 
       for (const entry of CURATED_ALCHEMY_PRODUCTS) {
         if (suppressed.has(entry.productId)) continue;
@@ -411,7 +501,7 @@ export class CuratedAlchemyService {
           byId.set(entry.productId, item);
           created += 1;
         } else {
-          preserveExternalFlags(existing.toObject(false), source);
+          preserveExternalFlags(existing.toObject(true), source);
           await this.#updateProductDocument(existing, source);
           updated += 1;
         }
@@ -419,7 +509,7 @@ export class CuratedAlchemyService {
       docs = await pack.getDocuments();
       const documentsByProductId = new Map(docs.map(item => [String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? ""), item]).filter(([id]) => id));
       await pack.getIndex({ fields: ["name", "img", "type", "folder", `flags.${MODULE_ID}.${FLAGS.PRODUCT_ID}`] });
-      return { pack, created, updated, missingSources, documentsByProductId };
+      return { pack, created, updated, retiredRemoved, missingSources, documentsByProductId };
     } finally {
       if (wasLocked) await pack.configure({ locked: true });
     }
@@ -527,7 +617,7 @@ export class CuratedAlchemyService {
           [FLAGS.PRODUCT_TIER]: entry.tier ?? "",
           [FLAGS.PRODUCT_YIELD]: Math.max(1, Number(entry.resultQuantity) || 1)
         };
-        if (existing) preserveExternalFlags(existing.toObject(false), data);
+        if (existing) preserveExternalFlags(existing.toObject(true), data);
         const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
         if (!existing) {
           const [createdItem] = await ItemClass.createDocuments([data], { pack: pack.collection });
@@ -589,6 +679,7 @@ export class CuratedAlchemyService {
     if (!game.user?.isGM) throw new Error("Only a GM can synchronize Curated Alchemy & Inscription content.");
     const state = this.state();
     state.enabled = true;
+    state.suppressedProducts = state.suppressedProducts.filter(id => !RETIRED_PRODUCT_IDS.has(id));
     if (restore) {
       state.suppressedProducts = [];
       state.suppressedRecipes = [];

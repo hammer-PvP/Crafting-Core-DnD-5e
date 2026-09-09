@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.2 - SRD Activity Fidelity & Resistance Variants
+
+- Fixed the Curated Alchemy clone pipeline to serialize D&D5e Items from their **persistent source data** (`toObject(true)`) rather than transformed/prepared values. This restores the native SRD `system.activities` mapping on canonical Products and every Inscription counterpart.
+- Added post-write Activity verification: when an SRD source contains Activities, a Curated Product repair now fails loudly unless the same Activity count is actually persisted. Silent placeholder-like Products are no longer accepted as a successful sync.
+- Rebuilt all existing v0.5.0/v0.5.1 Alchemy & Inscription Products automatically by advancing the optional content schema to version 3.
+- Replaced the single generic `Potion of Resistance` Product with **10 ready-to-use variants**: Acid, Cold, Fire, Force, Lightning, Necrotic, Poison, Psychic, Radiant, and Thunder Resistance.
+- Each Resistance Product is still derived from the canonical SRD `Potion of Resistance` template, but retains only the matching native resistance Active Effect and the Activity link to that effect. The ten Resistance Inscriptions use the same filtered mechanics.
+- Removed the retired generic managed Potion of Resistance during sync and repointed the 10 Resistance Recipes to their specific Products.
+- Optional Alchemy & Inscription now contains **82 Products**: 43 canonical/SRD-based Products, 34 Inscription variants, and 5 Inks. Combined with the 58 Culinary Products, an installed World exposes **140 Curated Products**. Recipe count remains 97 and active Material count remains 257.
+
 ## 0.5.1 - Alchemy & Inscription Live-Test Repair
 
 - Fixed SRD ActiveEffect cloning on Foundry VTT 14 when an indefinite effect duration is exposed at runtime as a non-finite prepared value. The clone pipeline now normalizes that value to the canonical persisted `null`, preserving indefinite-duration semantics while satisfying document validation.
