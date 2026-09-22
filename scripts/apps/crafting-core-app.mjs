@@ -7,6 +7,7 @@ import {
 } from "../constants.mjs";
 import { KnowledgeItemService } from "../services/knowledge-item-service.mjs";
 import { RecipeService } from "../services/recipe-service.mjs";
+import { primaryRarity } from "../utils/dnd5e-data.mjs";
 import { ResultDialog } from "../ui/result-dialog.mjs";
 import { MaterialCatalogApp } from "./material-catalog-app.mjs";
 import { MaterialGeneratorApp } from "./material-generator-app.mjs";
@@ -58,7 +59,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const selectedPublishedDraft = selectedPublished ? RecipeService.get(selectedPublished.recipeId) : null;
     const selectedPublishedDraftPending = Boolean(selectedPublishedDraft && !KnowledgeItemService.sameRecipeDefinition(selectedPublishedDraft, selectedPublished.recipe));
 
-    const rarity = String(this.draft?.result?.snapshot?.system?.rarity ?? "");
+    const rarity = String(primaryRarity(this.draft?.result?.snapshot?.system));
     const rarityLabel = rarity ? (CONFIG.DND5E?.itemRarity?.[rarity] ?? rarity) : "No rarity";
     const localizeLabel = value => game.i18n.localize((typeof value === "string" ? value : value?.label) ?? "");
     const skillOptions = Object.entries(CONFIG.DND5E?.skills ?? {}).map(([id, data]) => ({

@@ -13,13 +13,25 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.5.5
-- **Foundry VTT:** minimum 14, verified 14.365
-- **D&D 5e:** 5.3.3
+- **Crafting Core:** v0.5.6
+- **Foundry VTT:** minimum 14.367, verified 14.367
+- **D&D 5e:** 6.0.0-6.0.999, verified 6.0.1
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
 - **DnD 5e Item Creator:** optional for the core module; **0.7.1+ is required for the official persistent Curated Food and Alcohol Products**
 
-Crafting Core is intentionally version-bound to the D&D 5e system version it was built and tested against.
+Crafting Core v0.5.6 normalizes the module for the D&D 5e 6.0.x line without changing crafting behavior or design philosophy.
+
+
+### D&D 5e 6.0.x normalization
+
+v0.5.6 is a compatibility-only patch. It preserves the v0.5.5 gameplay behavior while updating the persisted/API contracts that changed in D&D5e 6.0.x:
+
+- physical Item rarity writes use `system.rarities`;
+- creature movement reads and movement ActiveEffect keys use `system.attributes.movement.speeds.*`;
+- Activity effect resolution uses `activity.getApplicableEffects()`;
+- legacy v0.5.5 Recipe/result snapshots are normalized to the 6.x rarity contract when reused.
+
+No Recipes, drop rates, project rules, curated content, Scanner philosophy, lifecycle behavior, or Alchemy/Inscription design were intentionally changed by this patch.
 
 ## Core Workflow
 

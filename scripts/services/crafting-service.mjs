@@ -1,5 +1,6 @@
 import { FLAGS, MODULE_ID, SOCKET_CHANNEL } from "../constants.mjs";
 import { RecipeService } from "./recipe-service.mjs";
+import { normalizeItemRaritySource } from "../utils/dnd5e-data.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
 import { MaterialStackService } from "./material-stack-service.mjs";
 
@@ -1210,7 +1211,7 @@ export class CraftingService {
   }
 
   static async #createResult(actor, sourceData, quantity, sourceUuid) {
-    const data = foundry.utils.deepClone(sourceData);
+    const data = normalizeItemRaritySource(foundry.utils.deepClone(sourceData));
     delete data._id; delete data.folder; delete data.ownership;
     data.flags ??= {}; data.flags[MODULE_ID] ??= {}; data.flags[MODULE_ID][FLAGS.SOURCE_UUID] = sourceUuid;
     if (foundry.utils.hasProperty(data, "system.quantity")) {

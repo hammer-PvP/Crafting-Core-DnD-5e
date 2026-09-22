@@ -9,6 +9,7 @@ import { CURATED_ALCHEMY_MATERIAL_IDS } from "../data/curated-alchemy-catalog.mj
 import { materialDefaultIcon, materialIconCandidates, materialLegacyCuratedDefault } from "../data/material-icon-catalog.mjs";
 import { CompendiumService } from "./compendium-service.mjs";
 import { MaterialOriginService } from "./material-origin-service.mjs";
+import { primaryRarity, rarityArray, rarityValues } from "../utils/dnd5e-data.mjs";
 
 export class MaterialCatalogService {
   static PACK_NAME = "crafting-core-materials";
@@ -357,7 +358,7 @@ export class MaterialCatalogService {
         const update = {
           _id: item.id,
           folder: folder?.id ?? null,
-          "system.rarity": material.rarity,
+          "system.rarities": rarityArray(material.rarity),
           "system.price.value": material.price,
           "system.price.denomination": material.denomination,
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL}`]: true,
@@ -396,7 +397,7 @@ export class MaterialCatalogService {
       const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
       const created = creates.length ? await ItemClass.createDocuments(creates, { pack: pack.collection }) : [];
       const updated = updates.length ? await ItemClass.updateDocuments(updates, { pack: pack.collection }) : [];
-      await pack.getIndex({ fields: ["name", "img", "type", "folder", "system.rarity", `flags.${MODULE_ID}.${FLAGS.MATERIAL_ID}`] });
+      await pack.getIndex({ fields: ["name", "img", "type", "folder", "system.rarities", `flags.${MODULE_ID}.${FLAGS.MATERIAL_ID}`] });
       Hooks.callAll(`${MODULE_ID}.materialsChanged`);
       return { pack, created: created.length, updated: updated.length, total: this.definitions().length };
     } finally {
@@ -437,7 +438,7 @@ export class MaterialCatalogService {
           quantity: 1,
           weight: sourceWeight,
           price: sourcePrice,
-          rarity,
+          rarities: rarityArray(rarity),
           identified: true,
           unidentified: { description: "" },
           container: null,
@@ -580,7 +581,7 @@ export class MaterialCatalogService {
           name: normalized.name,
           img: normalized.img,
           folder: folder?.id ?? null,
-          "system.rarity": normalized.rarity,
+          "system.rarities": rarityArray(normalized.rarity),
           "system.price.value": normalized.price,
           "system.price.denomination": normalized.denomination,
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_FAMILY}`]: normalized.family,
@@ -661,7 +662,7 @@ export class MaterialCatalogService {
         setIfDifferent("name", String(item.name ?? ""), material.name);
         setIfDifferent("img", String(item.img ?? ""), material.img || DEFAULT_MATERIAL_ICON);
         setIfDifferent("folder", String(item.folder?.id ?? item.folder ?? ""), String(folder?.id ?? ""));
-        setIfDifferent("system.rarity", String(item.system?.rarity ?? ""), material.rarity);
+        setIfDifferent("system.rarities", rarityValues(item.system), rarityArray(material.rarity));
         setIfDifferent("system.price.value", Number(item.system?.price?.value ?? 0), Number(material.price ?? 0));
         setIfDifferent("system.price.denomination", String(item.system?.price?.denomination ?? "gp"), String(material.denomination ?? "gp"));
 
@@ -694,7 +695,7 @@ export class MaterialCatalogService {
       const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
       const created = creates.length ? await ItemClass.createDocuments(creates, { pack: pack.collection }) : [];
       if (updates.length) await ItemClass.updateDocuments(updates, { pack: pack.collection });
-      await pack.getIndex({ fields: ["name", "img", "type", "folder", "system.rarity", `flags.${MODULE_ID}.${FLAGS.MATERIAL_ID}`] });
+      await pack.getIndex({ fields: ["name", "img", "type", "folder", "system.rarities", `flags.${MODULE_ID}.${FLAGS.MATERIAL_ID}`] });
       Hooks.callAll(`${MODULE_ID}.materialsChanged`);
       return { pack, created: created.length, updated: updates.length, total: this.definitions().length };
     } finally {
@@ -762,7 +763,7 @@ export class MaterialCatalogService {
       family,
       nature,
       category: String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_CATEGORY) ?? ""),
-      rarity: String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_RARITY) ?? item.system?.rarity ?? "common"),
+      rarity: String((item.getFlag(MODULE_ID, FLAGS.MATERIAL_RARITY) ?? primaryRarity(item.system)) || "common"),
       chance: Number(item.getFlag(MODULE_ID, FLAGS.MATERIAL_CHANCE) ?? 0),
       quantity: String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_QUANTITY) ?? "1"),
       tags: item.getFlag(MODULE_ID, FLAGS.MATERIAL_TAGS) ?? [],
@@ -797,7 +798,7 @@ export class MaterialCatalogService {
         quantity: 1,
         weight: { value: 0, units: "lb" },
         price: { value: material.price, denomination: material.denomination },
-        rarity: material.rarity,
+        rarities: rarityArray(material.rarity),
         identified: true,
         unidentified: { description: "" },
         container: null,

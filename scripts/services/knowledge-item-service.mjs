@@ -8,6 +8,7 @@ import {
 } from "../constants.mjs";
 import { CompendiumService } from "./compendium-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
+import { primaryRarity, rarityArray } from "../utils/dnd5e-data.mjs";
 import { ResultDialog } from "../ui/result-dialog.mjs";
 
 export class KnowledgeItemService {
@@ -404,7 +405,7 @@ export class KnowledgeItemService {
   }
 
   static #resultRarity(recipe) {
-    return String(recipe?.result?.snapshot?.system?.rarity ?? "");
+    return String(primaryRarity(recipe?.result?.snapshot?.system));
   }
 
   static #knowledgeItemData(recipe, { folderId=null, published=false }={}) {
@@ -431,7 +432,7 @@ export class KnowledgeItemService {
         quantity: 1,
         weight: { value: 0, units: "lb" },
         price: { value: price, denomination: "gp" },
-        rarity,
+        rarities: rarityArray(rarity),
         identified: true,
         unidentified: { description: "" },
         container: null,

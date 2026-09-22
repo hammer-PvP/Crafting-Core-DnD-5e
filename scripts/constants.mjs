@@ -1,6 +1,6 @@
 export const MODULE_ID = "dnd5e-crafting-core";
 export const MODULE_TITLE = "Crafting Core (DnD 5e)";
-export const MODULE_VERSION = "0.5.5";
+export const MODULE_VERSION = "0.5.6";
 
 export const SETTINGS = Object.freeze({
   RECIPES: "recipes",
@@ -81,7 +81,7 @@ export const KNOWLEDGE_ICONS = Object.freeze({
 
 export const DEFAULT_KNOWLEDGE_ICON = KNOWLEDGE_ICONS.Recipe;
 
-// D&D5e 5.3.3 2024 magic-item crafting gold costs. Crafting Core uses the
+// D&D5e 2024 magic-item crafting gold costs. Crafting Core uses the
 // output Item's rarity to price its permanent Knowledge Source.
 export const KNOWLEDGE_PRICE_BY_RARITY = Object.freeze({
   "": 0,

@@ -12,6 +12,7 @@ import { CompendiumService } from "./compendium-service.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
 import { MaterialCatalogService } from "./material-catalog-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
+import { primaryRarity, rarityArray } from "../utils/dnd5e-data.mjs";
 
 const ALLOWED_SRD_PACKS = new Set(["dnd5e.equipment24", "dnd5e.items"]);
 const REQUIRED_LICENSE = "CC-BY-4.0";
@@ -98,9 +99,9 @@ export class CuratedAlchemyService {
     });
 
     // Potion of Resistance is the one SRD template that must be materialized into a
-    // fixed final product.  The native SRD Utility Activity is preserved and linked to
-    // one canonical ActiveEffect.  D&D5e 5.3.3 does not auto-apply that Item effect on
-    // use, so Crafting Core applies the already-linked canonical effect to the user.
+    // fixed final product. The native SRD Utility Activity is preserved and linked to
+    // one canonical ActiveEffect. Crafting Core applies that already-linked effect to
+    // the user without changing the product's gameplay philosophy.
     Hooks.on("dnd5e.postUseActivity", async activity => {
       try {
         const item = activity?.item;
@@ -110,8 +111,11 @@ export class CuratedAlchemyService {
         const actor = activity.actor ?? item.actor;
         if (!actor) return;
 
-        const candidates = Array.isArray(activity.applicableEffects) && activity.applicableEffects.length
-          ? activity.applicableEffects
+        const applicable = activity.getApplicableEffects instanceof Function
+          ? await activity.getApplicableEffects()
+          : null;
+        const candidates = Array.isArray(applicable) && applicable.length
+          ? applicable
           : [...(item.effects ?? [])];
         if (!candidates.length) throw new Error(`${item.name} has no linked resistance ActiveEffect at use time.`);
 
@@ -275,7 +279,7 @@ export class CuratedAlchemyService {
         quantity: 1,
         weight: { value: 0, units: "lb" },
         price: { value: Number(entry.priceGp) || 0, denomination: "gp" },
-        rarity: entry.rarity,
+        rarities: rarityArray(entry.rarity),
         identified: true,
         unidentified: { description: "" },
         container: null,
@@ -301,7 +305,7 @@ export class CuratedAlchemyService {
       [FLAGS.PRODUCT_ID]: entry.productId,
       [FLAGS.PRODUCT_CATEGORY]: entry.category,
       [FLAGS.PRODUCT_SUBCATEGORY]: entry.subcategory,
-      [FLAGS.PRODUCT_RARITY]: String(data.system?.rarity ?? entry.rarity ?? ""),
+      [FLAGS.PRODUCT_RARITY]: String(primaryRarity(data.system) || entry.rarity || ""),
       [FLAGS.PRODUCT_TIER]: entry.tier ?? "",
       [FLAGS.PRODUCT_YIELD]: 1,
       [FLAGS.PRODUCT_MANAGED]: true,
@@ -852,7 +856,7 @@ export class CuratedAlchemyService {
         name: item?.name ?? entry.name ?? sourceName,
         img: item?.img ?? entry.icon ?? "icons/svg/item-bag.svg",
         typeLabel: entry.kind === "canonical" ? "SRD Product" : entry.kind === "inscription" ? "Inscription" : "Inscription Ink",
-        rarityLabel: titleCase(item?.system?.rarity ?? entry.rarity ?? "—"),
+        rarityLabel: titleCase(primaryRarity(item?.system) || entry.rarity || "—"),
         tierLabel: entry.tier ? titleCase(entry.tier) : "—",
         sourceLabel: entry.kind === "inscription" ? sourceName : (entry.kind === "canonical" ? "SRD 5.2 / 5.1" : "Crafting Core")
       };

@@ -3,6 +3,7 @@ import { CompendiumService } from "./compendium-service.mjs";
 import { CuratedContentService } from "./curated-content-service.mjs";
 import { MaterialCatalogService } from "./material-catalog-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
+import { normalizeItemRaritySource } from "../utils/dnd5e-data.mjs";
 
 /**
  * Portable Recipe bundle support.
@@ -97,7 +98,7 @@ export class RecipeTransferService {
   }
 
   static #portableItemSnapshot(source={}) {
-    const snapshot = foundry.utils.deepClone(source ?? {});
+    const snapshot = normalizeItemRaritySource(foundry.utils.deepClone(source ?? {}));
     delete snapshot._id;
     delete snapshot.folder;
     delete snapshot.sort;
@@ -304,7 +305,7 @@ export class RecipeTransferService {
 
     for (const pack of this.#preferredItemPacks()) {
       try {
-        const index = await pack.getIndex({ fields: ["name", "type", "system.identifier", "system.type.baseItem", "system.rarity", "system.magicalBonus", "system.properties", "flags.dnd5e-item-creator.created"] });
+        const index = await pack.getIndex({ fields: ["name", "type", "system.identifier", "system.type.baseItem", "system.rarities", "system.magicalBonus", "system.properties", "flags.dnd5e-item-creator.created"] });
         const rows = index.filter(entry => {
           if (type && entry.type !== type) return false;
           const entryIdentifier = String(entry.system?.identifier || "").trim();

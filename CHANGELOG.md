@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.6 - D&D5e 6.0.x Compatibility Normalization
+
+- Updated module compatibility to Foundry VTT 14.367+ and D&D5e 6.0.0-6.0.999; verified target is D&D5e 6.0.1.
+- Migrated Crafting Core Item rarity persistence from legacy `system.rarity` writes to D&D5e 6.x `system.rarities`.
+- Added transparent normalization for legacy v0.5.5 Recipe/result snapshots so existing saved outputs can still be crafted on D&D5e 6.x without changing Recipe behavior.
+- Migrated Creature Scanner movement reads to `system.attributes.movement.speeds.*`.
+- Migrated Curated Food movement ActiveEffect keys to `system.attributes.movement.speeds.walk`.
+- Migrated fixed Resistance runtime effect resolution from `activity.applicableEffects` to `await activity.getApplicableEffects()`.
+- Updated Compendium index requests and Curated/Knowledge rarity presentation to the D&D5e 6.x rarity contract.
+- No intentional changes to Recipes, material economy, harvesting probabilities, Project progression, Knowledge lifecycle, Curated content, Inscription philosophy, or effect durations.
+
 ## 0.5.5 - Curated Alchemy & Inscription
 
 - Added an optional GM-installed **Curated Alchemy & Inscription** library while preserving the core v0.4.2 workflow for Worlds that do not enable it. The optional library activates 23 additional Materials, 82 Products, and 97 Recipe Learn Sources.

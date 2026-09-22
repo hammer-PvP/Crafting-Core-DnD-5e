@@ -5,6 +5,7 @@ import { CompendiumService } from "./compendium-service.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
 import { MaterialCatalogService } from "./material-catalog-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
+import { primaryRarity, rarityArray } from "../utils/dnd5e-data.mjs";
 
 const ITEM_CREATOR_ID = "dnd5e-item-creator";
 const ITEM_CREATOR_MIN_VERSION = "0.7.1";
@@ -146,7 +147,7 @@ function editableProductSnapshot(source) {
     description: clone(data.system?.description ?? { value: "", chat: "" }),
     weight: clone(data.system?.weight ?? { value: 0, units: "lb" }),
     price: clone(data.system?.price ?? { value: 0, denomination: "gp" }),
-    rarity: String(data.system?.rarity ?? "")
+    rarity: primaryRarity(data.system)
   };
 }
 
@@ -177,7 +178,8 @@ function mergeProductPresentation(current, official, previousBaseline, entry) {
   if (baseline) {
     for (const path of paths) {
       if (!sameValue(getPath(currentEditable, path), getPath(baseline, path))) {
-        setPath(next, path === "name" || path === "img" ? path : `system.${path}`, getPath(currentEditable, path));
+        if (path === "rarity") next.system.rarities = rarityArray(getPath(currentEditable, path));
+        else setPath(next, path === "name" || path === "img" ? path : `system.${path}`, getPath(currentEditable, path));
       }
     }
     return next;
@@ -195,7 +197,7 @@ function mergeProductPresentation(current, official, previousBaseline, entry) {
   const officialPriceCp = priceToCopper(official.system?.price);
   const previousSingleOutputPriceCp = officialPriceCp * Math.max(1, Number(entry.yield) || 1); // v0.2.3/v0.2.4 meal economy.
   if (![legacyPriceCp, officialPriceCp, previousSingleOutputPriceCp].includes(currentPriceCp)) next.system.price = clone(currentEditable.price);
-  if (currentEditable.rarity && currentEditable.rarity !== "common") next.system.rarity = currentEditable.rarity;
+  if (currentEditable.rarity && currentEditable.rarity !== "common") next.system.rarities = rarityArray(currentEditable.rarity);
   return next;
 }
 
@@ -820,7 +822,7 @@ export class CuratedContentService {
         quantity: 1,
         weight: { value: 0, units: "lb" },
         price,
-        rarity: entry.rarity,
+        rarities: rarityArray(entry.rarity),
         identified: true,
         unidentified: { description: "" },
         container: null,
@@ -916,7 +918,7 @@ export class CuratedContentService {
         key: "system.attributes.hp.bonuses.overall", mode: add, value: String(entry.maximumHpBonus), priority: 20
       });
       if (Number(entry.movementBonus) > 0) changes.push({
-        key: "system.attributes.movement.walk", mode: add, value: String(entry.movementBonus), priority: 20
+        key: "system.attributes.movement.speeds.walk", mode: add, value: String(entry.movementBonus), priority: 20
       });
     } else if (entry.effectFamily === "alcohol") {
       for (const [ability, raw] of Object.entries(entry.abilityModifiers ?? {})) {

@@ -1,4 +1,5 @@
 import { DEFAULT_KNOWLEDGE_ICON, FLAGS, KNOWLEDGE_ICONS, MODULE_ID, SETTINGS } from "../constants.mjs";
+import { normalizeItemRaritySource } from "../utils/dnd5e-data.mjs";
 
 export class RecipeService {
   static #toolLabels = new Map();
@@ -103,7 +104,7 @@ export class RecipeService {
         identifier: String(recipe.result.identifier || ""),
         quantity: Math.max(1, Math.floor(Number(recipe.result.quantity) || 1)),
         snapshot: recipe.result.snapshot && typeof recipe.result.snapshot === "object"
-          ? foundry.utils.deepClone(recipe.result.snapshot)
+          ? normalizeItemRaritySource(foundry.utils.deepClone(recipe.result.snapshot))
           : null
       } : null,
       knowledge: (() => {
@@ -485,7 +486,7 @@ export class RecipeService {
       type: item.type,
       identifier: String(item.system?.identifier ?? ""),
       quantity: Math.max(1, Math.floor(Number(quantity) || 1)),
-      ...(snapshot ? { snapshot: item.toObject() } : {})
+      ...(snapshot ? { snapshot: normalizeItemRaritySource(item.toObject()) } : {})
     };
     if (ingredient) {
       const mode = ["baseItem", "exact"].includes(String(matchMode)) ? String(matchMode) : this.ingredientMatchMode(item);

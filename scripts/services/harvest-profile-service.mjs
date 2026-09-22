@@ -575,7 +575,7 @@ export class HarvestProfileService {
         matched = value >= gte && value <= lte;
       } else if (kind === "movement") {
         const movement = String(signal.movement ?? "").toLowerCase();
-        const value = Number(foundry.utils.getProperty(actor, `system.attributes.movement.${movement}`) ?? 0) || 0;
+        const value = Number(foundry.utils.getProperty(actor, `system.attributes.movement.speeds.${movement}`) ?? 0) || 0;
         const gte = signal.gte == null ? 1 : Number(signal.gte);
         matched = value >= gte;
       } else if (kind === "identityTerms") matched = matchedTerms(corpus.identity, signal.terms);
@@ -940,7 +940,7 @@ export class HarvestProfileService {
       add("amorphous", "A structural amorphous feature was detected.");
     }
 
-    const fly = Number(actor.system?.attributes?.movement?.fly ?? 0) || 0;
+    const fly = Number(actor.system?.attributes?.movement?.speeds?.fly ?? 0) || 0;
     if (fly > 0 && anatomy.has("feather")) add("wing", "Flying movement supports explicit feathered anatomy.");
     if (fly > 0 && anatomy.has("beak") && !anatomy.has("feather")) {
       add("feather", "A flying creature with explicit beak anatomy is treated as feathered unless stronger morphology says otherwise.");

@@ -327,7 +327,7 @@ recipes.push(
 );
 
 // Potion of Comprehension and Potion of Fire Breath are deliberately not distributed here.
-// They are not present in the supplied D&D5e 5.3.3 SRD 5.1/5.2 packs, and this catalog never
+// They are not present in the supplied D&D5e SRD 5.1/5.2 packs, and this catalog never
 // falls back to premium content.
 export const CURATED_ALCHEMY_RECIPES = Object.freeze(recipes.map(row => Object.freeze({
   ...row,
