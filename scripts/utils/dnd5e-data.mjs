@@ -40,3 +40,69 @@ export function normalizeItemRaritySource(source) {
   delete source.system.rarity;
   return source;
 }
+
+/**
+ * D&D5e 6.0 moved Actor movement speed fields beneath movement.speeds.
+ * The system still provides temporary shims for the old fields, but persisted
+ * ActiveEffect writes should target the canonical 6.x paths.
+ */
+export function normalizeActiveEffectChange(change) {
+  if (!change || typeof change !== "object") return change;
+  const key = String(change.key ?? "");
+  if (key === "system.attributes.movement.speed") {
+    change.key = "system.attributes.movement.speeds.walk";
+    return change;
+  }
+  const match = key.match(/^system\.attributes\.movement\.(walk|fly|swim|climb|burrow|jump)$/);
+  if (match) change.key = `system.attributes.movement.speeds.${match[1]}`;
+  return change;
+}
+
+/**
+ * Read ActiveEffect changes using the D&D5e 6.x TypeDataModel first, with a
+ * legacy fallback for 5.3.3-era snapshots that still persisted changes at the
+ * document root.
+ */
+export function activeEffectChanges(effectOrSource={}) {
+  const source = effectOrSource?._source ?? effectOrSource?.toObject?.(true) ?? effectOrSource ?? {};
+  const current = source?.system?.changes ?? effectOrSource?.system?.changes;
+  if (Array.isArray(current)) return current;
+  const legacy = source?.changes ?? effectOrSource?.changes;
+  return Array.isArray(legacy) ? legacy : [];
+}
+
+/**
+ * Normalize a serialized ActiveEffect to the D&D5e 6.x persisted TypeDataModel.
+ * Only compatibility-safe structural/path migrations are performed; gameplay
+ * values, modes, priorities, durations, statuses, and flags are untouched.
+ */
+export function normalizeActiveEffectSource(source) {
+  if (!source || typeof source !== "object") return source;
+  const current = Array.isArray(source.system?.changes) ? source.system.changes : null;
+  const legacy = Array.isArray(source.changes) ? source.changes : null;
+  if (current || legacy) {
+    source.system ??= {};
+    source.system.changes = (current ?? legacy ?? []).map(change => normalizeActiveEffectChange(change));
+    delete source.changes;
+  }
+  return source;
+}
+
+/** Normalize embedded ActiveEffects inside an Item source/snapshot. */
+export function normalizeItemActiveEffectsSource(source) {
+  if (!source || typeof source !== "object") return source;
+  if (Array.isArray(source.effects)) {
+    source.effects = source.effects.map(effect => normalizeActiveEffectSource(effect));
+  }
+  return source;
+}
+
+/**
+ * Apply all compatibility-safe persisted-source normalizations currently
+ * required by Crafting Core when reusing 5.3.3-era Item snapshots on D&D5e 6.x.
+ */
+export function normalizeItemSourceForDnd5e6(source) {
+  normalizeItemRaritySource(source);
+  normalizeItemActiveEffectsSource(source);
+  return source;
+}

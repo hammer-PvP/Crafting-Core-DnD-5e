@@ -9,6 +9,7 @@ import {
 import { CompendiumService } from "./compendium-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
 import { primaryRarity, rarityArray } from "../utils/dnd5e-data.mjs";
+import { forcedDeletion, forcedDeletionMap } from "../utils/foundry-data.mjs";
 import { ResultDialog } from "../ui/result-dialog.mjs";
 
 export class KnowledgeItemService {
@@ -230,8 +231,7 @@ export class KnowledgeItemService {
         // the updated document: in some Compendium update paths it writes successfully but
         // returns an empty array. The post-write Compendium state is the success criterion.
         const canonicalActivities = foundry.utils.deepClone(update.system.activities ?? {});
-        const reconciledActivities = {};
-        for (const activityId of Object.keys(item.system?.activities ?? {})) reconciledActivities[`-=${activityId}`] = null;
+        const reconciledActivities = forcedDeletionMap(Object.keys(item.system?.activities ?? {}));
         Object.assign(reconciledActivities, canonicalActivities);
         update.system.activities = reconciledActivities;
         await ItemClass.updateDocuments([update], { pack: pack.collection });
@@ -248,7 +248,7 @@ export class KnowledgeItemService {
         const currentIds = Object.keys(item?.system?.activities ?? {});
         if (item && canonicalId && (currentIds.length !== 1 || currentIds[0] !== canonicalId)) {
           const activities = {};
-          for (const oldId of currentIds) if (oldId !== canonicalId) activities[`-=${oldId}`] = null;
+          for (const oldId of currentIds) if (oldId !== canonicalId) activities[oldId] = forcedDeletion();
           if (!currentIds.includes(canonicalId)) activities[canonicalId] = foundry.utils.deepClone(canonicalActivities[canonicalId]);
           if (Object.keys(activities).length) {
             await ItemClass.updateDocuments([{ _id: item.id, system: { activities } }], { pack: pack.collection });
@@ -698,7 +698,7 @@ export class KnowledgeItemService {
     // with one key omitted does not reliably remove the persisted nested flag. Use the
     // explicit Document deletion operator so the Recipe ID is physically removed.
     await actor.update({
-      [`flags.${MODULE_ID}.${FLAGS.LEARNED_RECIPES}.-=${id}`]: null
+      [`flags.${MODULE_ID}.${FLAGS.LEARNED_RECIPES}`]: forcedDeletionMap([id])
     });
 
     if (Object.hasOwn(this.learnedStore(actor), id)) {

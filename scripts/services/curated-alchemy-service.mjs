@@ -12,7 +12,8 @@ import { CompendiumService } from "./compendium-service.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
 import { MaterialCatalogService } from "./material-catalog-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
-import { primaryRarity, rarityArray } from "../utils/dnd5e-data.mjs";
+import { activeEffectChanges, normalizeActiveEffectSource, primaryRarity, rarityArray } from "../utils/dnd5e-data.mjs";
+import { forcedDeletionMap } from "../utils/foundry-data.mjs";
 
 const ALLOWED_SRD_PACKS = new Set(["dnd5e.equipment24", "dnd5e.items"]);
 const REQUIRED_LICENSE = "CC-BY-4.0";
@@ -123,11 +124,13 @@ export class CuratedAlchemyService {
         const existing = actor.effects?.find?.(effect => String(effect.getFlag?.(MODULE_ID, "appliedFixedResistance") ?? "") === damageType);
         if (existing) await existing.delete();
 
-        const data = selected.toObject?.(true) ?? selected.toObject?.() ?? clone(selected);
+        const data = normalizeActiveEffectSource(selected.toObject?.(true) ?? selected.toObject?.() ?? clone(selected));
         delete data._id;
         data.disabled = false;
         data.transfer = false;
-        data.origin = item.uuid;
+        data.system ??= {};
+        data.system.origin = { ...(data.system.origin ?? {}), activity: activity.uuid, item: item.uuid };
+        delete data.origin;
         data.flags ??= {};
         data.flags[MODULE_ID] ??= {};
         data.flags[MODULE_ID].appliedFixedResistance = damageType;
@@ -351,7 +354,7 @@ export class CuratedAlchemyService {
     return {
       id: String(effect?.id ?? source?._id ?? ""),
       name: String(effect?.name ?? source?.name ?? source?.label ?? ""),
-      changes: Array.isArray(source?.changes) ? source.changes : [],
+      changes: activeEffectChanges(source).map(change => foundry.utils.deepClone(change)),
       source
     };
   }
@@ -682,9 +685,7 @@ export class CuratedAlchemyService {
     await item.update(data, { render: false });
     const currentIds = valuesOf(item.system?.activities).map(activity => activity?.id ?? activity?._id).filter(Boolean);
     if (currentIds.length) {
-      const deletions = {};
-      for (const id of currentIds) deletions[`system.activities.-=${id}`] = null;
-      await item.update(deletions, { render: false });
+      await item.update({ "system.activities": forcedDeletionMap(currentIds) }, { render: false });
     }
     if (Object.keys(desiredActivities).length) await item.update({ "system.activities": desiredActivities }, { render: false });
     return item;

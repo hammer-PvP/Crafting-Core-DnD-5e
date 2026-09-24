@@ -5,7 +5,8 @@ import { CompendiumService } from "./compendium-service.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
 import { MaterialCatalogService } from "./material-catalog-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
-import { primaryRarity, rarityArray } from "../utils/dnd5e-data.mjs";
+import { normalizeActiveEffectSource, primaryRarity, rarityArray } from "../utils/dnd5e-data.mjs";
+import { forcedDeletionMap } from "../utils/foundry-data.mjs";
 
 const ITEM_CREATOR_ID = "dnd5e-item-creator";
 const ITEM_CREATOR_MIN_VERSION = "0.7.1";
@@ -941,7 +942,10 @@ export class CuratedContentService {
       disabled: false,
       transfer: false,
       statuses: [],
-      changes,
+      system: {
+        changes,
+        magical: false
+      },
       flags: {
         [ITEM_CREATOR_ID]: {
           blueprint: true,
@@ -1019,7 +1023,7 @@ export class CuratedContentService {
       const provisional = new ItemClass(itemData, { temporary: true });
       const ActiveEffectClass = CONFIG.ActiveEffect?.documentClass ?? globalThis.ActiveEffect?.implementation ?? globalThis.ActiveEffect;
       if (ActiveEffectClass) {
-        for (const effect of effects) new ActiveEffectClass(effect, { parent: provisional });
+        for (const effect of effects) new ActiveEffectClass(normalizeActiveEffectSource(effect), { parent: provisional });
       }
       return true;
     } catch (error) {
@@ -1031,9 +1035,7 @@ export class CuratedContentService {
   static async #replaceActivities(item, activities) {
     const currentIds = valuesOf(item.system?.activities).map(activity => activity?.id ?? activity?._id).filter(Boolean);
     if (currentIds.length) {
-      const deletions = {};
-      for (const id of currentIds) deletions[`system.activities.-=${id}`] = null;
-      await item.update(deletions, { render: false });
+      await item.update({ "system.activities": forcedDeletionMap(currentIds) }, { render: false });
     }
     if (activities && Object.keys(activities).length) await item.update({ "system.activities": clone(activities) }, { render: false });
   }
@@ -1041,7 +1043,7 @@ export class CuratedContentService {
   static async #replaceEffects(item, effects) {
     const ids = [...(item.effects ?? [])].map(effect => effect.id).filter(Boolean);
     if (ids.length) await item.deleteEmbeddedDocuments("ActiveEffect", ids, { render: false });
-    if (effects?.length) await item.createEmbeddedDocuments("ActiveEffect", clone(effects), { keepId: true, render: false });
+    if (effects?.length) await item.createEmbeddedDocuments("ActiveEffect", clone(effects).map(normalizeActiveEffectSource), { keepId: true, render: false });
   }
 
   static async #createProductDocument(pack, source) {
@@ -1051,7 +1053,7 @@ export class CuratedContentService {
     delete core.effects;
     const [created] = await ItemClass.createDocuments([core], { pack: pack.collection });
     if (!created) throw new Error(`D&D5e did not create Curated Product ${source.name}.`);
-    if (effects.length) await created.createEmbeddedDocuments("ActiveEffect", effects, { keepId: true, render: false });
+    if (effects.length) await created.createEmbeddedDocuments("ActiveEffect", effects.map(normalizeActiveEffectSource), { keepId: true, render: false });
     return created;
   }
 
@@ -1072,7 +1074,7 @@ export class CuratedContentService {
     if (existingEffectIds.length) await item.deleteEmbeddedDocuments("ActiveEffect", existingEffectIds, { render: false });
     await item.update(data, { render: false });
     await this.#replaceActivities(item, desiredActivities);
-    if (desiredEffects.length) await item.createEmbeddedDocuments("ActiveEffect", desiredEffects, { keepId: true, render: false });
+    if (desiredEffects.length) await item.createEmbeddedDocuments("ActiveEffect", desiredEffects.map(normalizeActiveEffectSource), { keepId: true, render: false });
     return item;
   }
 
@@ -1191,9 +1193,7 @@ export class CuratedContentService {
     await item.update(data, { render: false });
     const currentIds = valuesOf(item.system?.activities).map(activity => activity?.id ?? activity?._id).filter(Boolean);
     if (currentIds.length) {
-      const deletions = {};
-      for (const id of currentIds) deletions[`system.activities.-=${id}`] = null;
-      await item.update(deletions, { render: false });
+      await item.update({ "system.activities": forcedDeletionMap(currentIds) }, { render: false });
     }
     if (Object.keys(desiredActivities).length) await item.update({ "system.activities": desiredActivities }, { render: false });
     return item;

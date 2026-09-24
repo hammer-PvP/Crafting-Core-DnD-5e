@@ -3,7 +3,8 @@ import { CompendiumService } from "./compendium-service.mjs";
 import { CuratedContentService } from "./curated-content-service.mjs";
 import { MaterialCatalogService } from "./material-catalog-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
-import { normalizeItemRaritySource } from "../utils/dnd5e-data.mjs";
+import { normalizeActiveEffectSource, normalizeItemSourceForDnd5e6 } from "../utils/dnd5e-data.mjs";
+import { forcedDeletion } from "../utils/foundry-data.mjs";
 
 /**
  * Portable Recipe bundle support.
@@ -98,7 +99,7 @@ export class RecipeTransferService {
   }
 
   static #portableItemSnapshot(source={}) {
-    const snapshot = normalizeItemRaritySource(foundry.utils.deepClone(source ?? {}));
+    const snapshot = normalizeItemSourceForDnd5e6(foundry.utils.deepClone(source ?? {}));
     delete snapshot._id;
     delete snapshot.folder;
     delete snapshot.sort;
@@ -519,7 +520,7 @@ export class RecipeTransferService {
     const [created] = await ItemClass.createDocuments([core], { pack: pack.collection });
     if (!created) return null;
     if (effects.length) await created.createEmbeddedDocuments("ActiveEffect", effects.map(effect => {
-      const source = foundry.utils.deepClone(effect);
+      const source = normalizeActiveEffectSource(foundry.utils.deepClone(effect));
       delete source._id;
       return source;
     }), { render: false });
@@ -536,14 +537,14 @@ export class RecipeTransferService {
       const desired = foundry.utils.deepClone(core.system.activities);
       const currentIds = Object.keys(item.system?.activities ?? {});
       const desiredIds = new Set(Object.keys(desired));
-      for (const oldId of currentIds) if (!desiredIds.has(oldId)) desired[`-=${oldId}`] = null;
+      for (const oldId of currentIds) if (!desiredIds.has(oldId)) desired[oldId] = forcedDeletion();
       core.system.activities = desired;
     }
     await item.update(core, { render: false });
     const effectIds = [...(item.effects ?? [])].map(effect => effect.id).filter(Boolean);
     if (effectIds.length) await item.deleteEmbeddedDocuments("ActiveEffect", effectIds, { render: false });
     if (effects.length) await item.createEmbeddedDocuments("ActiveEffect", effects.map(effect => {
-      const source = foundry.utils.deepClone(effect);
+      const source = normalizeActiveEffectSource(foundry.utils.deepClone(effect));
       delete source._id;
       return source;
     }), { render: false });

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.7 - Foundry v14 / D&D5e 6.x Effect Compatibility Cleanup
+
+- Migrated Crafting Core-managed Food and Alcohol ActiveEffect changes to the D&D5e 6.x `system.changes` TypeDataModel.
+- Added compatibility-safe normalization for legacy 5.3.3 ActiveEffect snapshots when Recipes are saved, transferred, or crafted.
+- Normalized legacy Actor movement effect targets (`movement.walk/fly/swim/climb/burrow/jump` and legacy `movement.speed`) to `system.attributes.movement.speeds.*`.
+- Kept Food maximum-HP bonuses and Alcohol ability modifiers behaviorally unchanged while persisting them through the 6.x ActiveEffect contract.
+- Updated fixed Resistance effect inspection to prefer D&D5e 6.x `system.changes`, with legacy `changes` fallback for migrated Worlds.
+- Updated fixed Resistance runtime application to use structured D&D5e 6.x effect origin metadata.
+- Replaced all Crafting Core-generated Foundry v14 legacy `-=key: null` forced-deletion updates with `foundry.data.operators.ForcedDeletion()`, including Activities, Recipe Knowledge deletion, and Recipe Transfer reconciliation.
+- Existing Curated Product Restore/Sync continues to update documents in place, preserving IDs, Recipes, Knowledge, and GM-owned catalog state.
+- No intentional changes to Recipe content, material economy, harvesting probabilities, crafting progression, effect values, effect durations, or Alchemy/Inscription design.
+
 ## 0.5.6 - D&D5e 6.0.x Compatibility Normalization
 
 - Updated module compatibility to Foundry VTT 14.367+ and D&D5e 6.0.0-6.0.999; verified target is D&D5e 6.0.1.

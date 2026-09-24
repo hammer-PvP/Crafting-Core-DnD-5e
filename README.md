@@ -13,23 +13,24 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.5.6
+- **Crafting Core:** v0.5.7
 - **Foundry VTT:** minimum 14.367, verified 14.367
 - **D&D 5e:** 6.0.0-6.0.999, verified 6.0.1
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
 - **DnD 5e Item Creator:** optional for the core module; **0.7.1+ is required for the official persistent Curated Food and Alcohol Products**
 
-Crafting Core v0.5.6 normalizes the module for the D&D 5e 6.0.x line without changing crafting behavior or design philosophy.
+Crafting Core v0.5.7 completes the Foundry VTT 14 / D&D 5e 6.0.x compatibility cleanup for Crafting Core-managed ActiveEffects and document deletion updates without changing crafting behavior or design philosophy.
 
 
 ### D&D 5e 6.0.x normalization
 
-v0.5.6 is a compatibility-only patch. It preserves the v0.5.5 gameplay behavior while updating the persisted/API contracts that changed in D&D5e 6.0.x:
+v0.5.7 is a compatibility-only cleanup built on the approved v0.5.6 behavior:
 
-- physical Item rarity writes use `system.rarities`;
-- creature movement reads and movement ActiveEffect keys use `system.attributes.movement.speeds.*`;
-- Activity effect resolution uses `activity.getApplicableEffects()`;
-- legacy v0.5.5 Recipe/result snapshots are normalized to the 6.x rarity contract when reused.
+- Crafting Core-managed ActiveEffects persist changes in the D&D5e 6.x `system.changes` model;
+- legacy movement effect targets are normalized to `system.attributes.movement.speeds.*`;
+- 5.3.3-era Recipe/result snapshots are normalized when saved, transferred, or crafted;
+- Resistance effect inspection reads `system.changes` first with a legacy fallback;
+- Foundry v14 nested-map removals use `foundry.data.operators.ForcedDeletion()` rather than deprecated `-=key: null` update syntax.
 
 No Recipes, drop rates, project rules, curated content, Scanner philosophy, lifecycle behavior, or Alchemy/Inscription design were intentionally changed by this patch.
 
