@@ -95,9 +95,16 @@ export class RecipeService {
           exactSignature: String(row.exactSignature || ""),
           quantity: Math.max(1, Math.floor(Number(row.quantity) || 1))
         })),
-      result: recipe.result?.uuid ? {
-        uuid: String(recipe.result.uuid),
-        sourceUuid: String(recipe.result.sourceUuid || recipe.result.uuid),
+      result: (recipe.result?.uuid || recipe.result?.sourceUuid || recipe.result?.fallbackUuid || recipe.result?.snapshot) ? {
+        uuid: String(recipe.result.uuid || recipe.result.sourceUuid || recipe.result.fallbackUuid || ""),
+        sourceUuid: String(recipe.result.sourceUuid || recipe.result.uuid || recipe.result.fallbackUuid || ""),
+        fallbackUuid: String(recipe.result.fallbackUuid || ""),
+        sourceFingerprint: String(recipe.result.sourceFingerprint || ""),
+        sourceIdentityFingerprint: String(recipe.result.sourceIdentityFingerprint || ""),
+        syncStatus: ["synced", "updated", "sourceMissing", "needsReview"].includes(String(recipe.result.syncStatus))
+          ? String(recipe.result.syncStatus)
+          : "",
+        lastSyncedAt: Math.max(0, Number(recipe.result.lastSyncedAt) || 0),
         name: String(recipe.result.name || "Item"),
         img: String(recipe.result.img || "icons/svg/item-bag.svg"),
         type: String(recipe.result.type || ""),

@@ -5,6 +5,7 @@ import { CompendiumService } from "./compendium-service.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
 import { MaterialCatalogService } from "./material-catalog-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
+import { ProductSourceService } from "./product-source-service.mjs";
 import { normalizeActiveEffectSource, primaryRarity, rarityArray } from "../utils/dnd5e-data.mjs";
 import { forcedDeletionMap } from "../utils/foundry-data.mjs";
 
@@ -740,6 +741,7 @@ export class CuratedContentService {
         ingredientCostLabel: formatPrice(priceFromCopper(ingredientCostCopper)),
         priceLabel: formatPrice(item?.system?.price ?? buyPrice),
         benefitLabel: benefitLabel(entry),
+        syncStatusLabel: ProductSourceService.statusLabel(item?.getFlag?.(MODULE_ID, FLAGS.PRODUCT_SYNC_STATUS) ?? (item ? ProductSourceService.STATUS.SYNCED : ProductSourceService.STATUS.SOURCE_MISSING)),
         yieldLabel: `${yieldCount} serving${yieldCount === 1 ? "" : "s"}`,
         iconCandidates: iconPaths.map((icon, index) => ({ path: icon, index: index + 1, selected: icon === selectedIcon }))
       };
@@ -917,9 +919,11 @@ export class CuratedContentService {
   static #persistentBlueprint(entry) {
     if (!entry.effectFamily) return null;
     const changes = [];
-    const add = CONST.ACTIVE_EFFECT_MODES.ADD;
-    const downgrade = CONST.ACTIVE_EFFECT_MODES.DOWNGRADE ?? 3;
-    const upgrade = CONST.ACTIVE_EFFECT_MODES.UPGRADE ?? 4;
+    // Persisted ActiveEffect mode values are stable Foundry document data. Avoid the
+    // deprecated compatibility enum getter on Foundry v14.
+    const add = 2;
+    const downgrade = 3;
+    const upgrade = 4;
 
     if (entry.effectFamily === "food") {
       if (Number(entry.maximumHpBonus) > 0) changes.push({
@@ -1112,6 +1116,7 @@ export class CuratedContentService {
         baselines[entry.productId] = editableProductSnapshot(official);
         if (!existing) {
           const item = await this.#createProductDocument(pack, official);
+          await ProductSourceService.bindExistingFallback(item, { source: item });
           byId.set(entry.productId, item);
           created += 1;
           report(entry);
@@ -1123,6 +1128,7 @@ export class CuratedContentService {
         this.#validateItemSource(merged, `Curated Product ${entry.name}`);
         const hadLegacyNullDuration = [...(existing.effects ?? [])].some(effect => effect.duration?.value === null);
         await this.#updateProductDocument(existing, merged);
+        await ProductSourceService.bindExistingFallback(existing, { source: existing });
         if (hadLegacyNullDuration) repairedLegacyEffects += 1;
         updated += 1;
         report(entry);
@@ -1146,7 +1152,7 @@ export class CuratedContentService {
     }
   }
 
-  static #recipeSnapshot(entry, materialDocs, product) {
+  static async #recipeSnapshot(entry, materialDocs, product) {
     const ingredients = entry.ingredients.map(row => {
       const item = materialDocs.get(row.materialId);
       if (!item) throw new Error(`Curated Recipe ${entry.name} is missing Material ${row.materialId}.`);
@@ -1177,16 +1183,7 @@ export class CuratedContentService {
       },
       learning: { access: "anyone" },
       ingredients,
-      result: {
-        uuid: product.uuid,
-        sourceUuid: product.uuid,
-        name: product.name,
-        img: product.img,
-        type: product.type,
-        identifier: String(product.system?.identifier ?? ""),
-        quantity: Math.max(1, Number(entry.yield) || 1),
-        snapshot: product.toObject(false)
-      },
+      result: await ProductSourceService.referenceForItem(product, Math.max(1, Number(entry.yield) || 1)),
       knowledge: {
         label: "Recipe",
         name: `Recipe — ${entry.name}`,
@@ -1240,7 +1237,7 @@ export class CuratedContentService {
           continue;
         }
         const existing = byRecipeId.get(entry.recipeId) ?? null;
-        const officialRecipe = this.#recipeSnapshot(entry, materialDocs, product);
+        const officialRecipe = await this.#recipeSnapshot(entry, materialDocs, product);
         const expectedIngredientNames = entry.ingredients.map(row => materialDocs.get(row.materialId)?.name ?? "");
         const currentRecipe = existing?.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT) ?? null;
         const recipe = existing

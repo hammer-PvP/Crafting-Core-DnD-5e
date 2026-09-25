@@ -13,23 +13,28 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.5.7b
+- **Crafting Core:** v0.5.8
 - **Foundry VTT:** minimum 14.367, verified 14.367
 - **D&D 5e:** 6.0.0-6.0.999, verified 6.0.1
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
 - **DnD 5e Item Creator:** optional for the core module; **0.7.1+ is required for the official persistent Curated Food and Alcohol Products**
 
-Crafting Core v0.5.7b is the hotfix release for the v0.5.7a long-operation progress UI. It fixes a Foundry VTT 14 `ApplicationV2.state` naming collision that prevented maintenance actions from starting. Gameplay, Recipes, Products, Materials, Harvest logic, and the v0.5.7 D&D5e 6.x compatibility behavior are unchanged.
+Crafting Core v0.5.8 adds the Product source/fallback architecture. Recipe outputs can now follow a current mother Item from any compatible Compendium while retaining a stable mirror in **Crafting Core — Products**. Source synchronization uses fingerprints and the states **Synced**, **Updated**, **Source Missing**, and **Needs Review**; broken links are never guessed or reconnected by name. Existing Recipe IDs, published Knowledge, learned Characters, Curated Product identity, and active Crafting Projects are preserved during migration.
+
+### Product source synchronization
+
+The Products view includes **Synchronize Product Sources**. Normal updates to the same mother Item synchronize its fallback mirror and Recipe definitions. If the mother source disappears, crafting uses the fallback. If its identity fingerprint changes, the link enters **Needs Review** instead of silently adopting the replacement. Product-source migration also runs non-blocking for the active GM after startup.
 
 ### Long-operation progress
 
-v0.5.7b retains the v0.5.7a progress feature and fixes its ApplicationV2 state collision. The progress UI provides a reusable real-progress window for the maintenance actions that can take several seconds on established Worlds:
+The reusable progress UI covers maintenance actions that can take several seconds on established Worlds and v0.5.8 brings the completed result window back to the foreground:
 
 - Synchronize Materials;
 - Reset Curated Material defaults;
 - Restore the 58 Curated Culinary Products and Recipes;
 - Install / Restore the optional Alchemy & Inscription library;
-- Resync Material Sources.
+- Resync Material Sources;
+- Synchronize Product Sources.
 
 The window reports the current phase, current Product/Recipe/Material, X/Y progress when available, elapsed time, live counters, and a persistent completion summary. A maintenance lock prevents a second long operation from starting while one is already running. The operation itself is not cancellable mid-write, avoiding intentionally half-applied restore states.
 

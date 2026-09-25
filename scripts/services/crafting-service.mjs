@@ -3,6 +3,7 @@ import { RecipeService } from "./recipe-service.mjs";
 import { normalizeItemSourceForDnd5e6 } from "../utils/dnd5e-data.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
 import { MaterialStackService } from "./material-stack-service.mjs";
+import { ProductSourceService } from "./product-source-service.mjs";
 
 const REQUEST_TIMED = "craft-request";
 const REQUEST_PROJECT_START = "craft-project-start";
@@ -485,7 +486,7 @@ export class CraftingService {
     const { requester, actor } = this.#requestContext(request);
     const recipe = KnowledgeItemService.recipeForActor(actor, String(request.recipeId ?? ""));
     if (!recipe) throw new Error(`${actor.name} has not learned this recipe.`);
-    if (!recipe.result?.uuid && !recipe.result?.snapshot) throw new Error("The recipe has no result Item configured.");
+    if (!recipe.result?.uuid && !recipe.result?.sourceUuid && !recipe.result?.fallbackUuid && !recipe.result?.snapshot) throw new Error("The recipe has no result Item configured.");
     if (this.isBusy(actor)) throw new Error(`${actor.name} is already crafting something.`);
 
     const prepared = this.prepareRecipeForActor(actor, recipe);
@@ -509,19 +510,18 @@ export class CraftingService {
       return { actorId: actor.id, recipeId: recipe.id, outcome: "failure", total: rollResult.total, dc: prepared.resolution.check.dc, lossPercent };
     }
 
-    let resultData = recipe.result?.snapshot ? foundry.utils.deepClone(recipe.result.snapshot) : null;
-    if (!resultData && recipe.result?.uuid) {
-      const resultSource = await fromUuid(recipe.result.uuid);
-      if (!(resultSource instanceof Item)) throw new Error(`Result Item not found: ${recipe.result.uuid}`);
-      resultData = resultSource.toObject();
-    }
+    // Resolve the current mother Product at craft start. If that source disappeared, the
+    // persistent Crafting Core Products mirror is used. The resolved definition is then frozen
+    // into this timed job so a later source update cannot mutate an in-progress craft.
+    const frozenResult = await ProductSourceService.freezeResult(recipe.result);
+    const resultData = frozenResult.data;
     await this.#consumeIngredients(actor, recipe.ingredients, { revealNames: prepared.playerVisibility?.ingredients });
     const startedAt = this.serverTime();
     const endsAt = startedAt + Math.max(0, Number(recipe.craftingTime) || 0) * 1000;
     const job = {
       mode: "timed",
       id: foundry.utils.randomID(20), recipeId: recipe.id, recipeName: recipe.name,
-      resultUuid: recipe.result.sourceUuid || recipe.result.uuid, resultQuantity: recipe.result.quantity,
+      resultUuid: recipe.result.sourceUuid || frozenResult.sourceUuid || recipe.result.fallbackUuid || recipe.result.uuid, resultQuantity: recipe.result.quantity,
       resultData, startedAt, endsAt, status: "active", requesterId: requester.id,
       resolution: { automaticSuccess: prepared.resolution.automaticSuccess, checkLabel: RecipeService.checkLabel(finalCheck, actor), dc: finalCheck.dc, total: rollResult.total }
     };
@@ -535,7 +535,7 @@ export class CraftingService {
     if (this.isBusy(actor)) throw new Error(`${actor.name} already has an active crafting project.`);
     const recipe = KnowledgeItemService.recipeForActor(actor, String(request.recipeId ?? ""));
     if (!recipe || recipe.craftingMode !== "project") throw new Error("This is not an available Crafting Project recipe.");
-    if (!recipe.result?.uuid && !recipe.result?.snapshot) throw new Error("The recipe has no result Item configured.");
+    if (!recipe.result?.uuid && !recipe.result?.sourceUuid && !recipe.result?.fallbackUuid && !recipe.result?.snapshot) throw new Error("The recipe has no result Item configured.");
     const prepared = this.prepareRecipeForActor(actor, recipe);
     const missing = prepared.ingredientRows.filter(row => !row.sufficient);
     if (missing.length) throw new Error(prepared.playerVisibility?.ingredients
@@ -552,6 +552,10 @@ export class CraftingService {
 
     const reservedMaterials = await this.#reserveIngredients(actor, recipe.ingredients, { revealNames: prepared.playerVisibility?.ingredients });
     const snapshot = RecipeService.snapshot(recipe);
+    // Projects intentionally freeze the Product definition when the Project begins. This keeps
+    // existing/in-progress Projects stable while future Projects use the newest synchronized source.
+    const frozenResult = await ProductSourceService.freezeResult(recipe.result);
+    if (snapshot.result) snapshot.result.snapshot = frozenResult.data;
     const project = {
       mode: "project", id: foundry.utils.randomID(20), status: "active", phase: "working",
       recipeId: recipe.id, recipeName: recipe.name, recipe: snapshot,
@@ -877,12 +881,11 @@ export class CraftingService {
   static async #completeProject(actor, project, recipe, rollResult={ total: null }, { feedbackFacts=[], completedBy="final" }={}) {
     const result = recipe.result;
     let resultData = result?.snapshot ? foundry.utils.deepClone(result.snapshot) : null;
-    let sourceUuid = String(result?.sourceUuid || result?.uuid || "");
+    let sourceUuid = String(result?.sourceUuid || result?.fallbackUuid || result?.uuid || "");
     if (!resultData) {
-      const source = await fromUuid(String(result?.uuid || ""));
-      if (!(source instanceof Item)) throw new Error(`Result Item not found: ${result?.uuid}`);
-      resultData = source.toObject();
-      sourceUuid = source.uuid;
+      const frozen = await ProductSourceService.freezeResult(result);
+      resultData = frozen.data;
+      sourceUuid = String(result?.sourceUuid || frozen.sourceUuid || result?.fallbackUuid || result?.uuid || "");
     }
     const finalizing = { ...project, status: "finalizing", updatedAt: this.serverTime() };
     await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, finalizing);

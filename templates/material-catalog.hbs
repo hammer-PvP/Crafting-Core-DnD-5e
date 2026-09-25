@@ -127,6 +127,14 @@
       </section>
 
       <section class="cc-form-card">
+        <span class="cc-kicker">Source Integrity</span>
+        <h3>Product Source Sync</h3>
+        <p class="cc-note">Recipes resolve their Product from the current mother Item first and keep a stable fallback mirror in <strong>Crafting Core — Products</strong>. Normal source changes synchronize automatically; identity changes are held for review instead of being reconnected by name.</p>
+        <p class="cc-note"><strong>{{linkedProducts.count}}</strong> external Product mirror(s) currently managed in addition to the Curated libraries.</p>
+        <button type="button" class="cc-secondary-action cc-wide" data-action="sync-product-sources"><i class="fa-solid fa-rotate"></i> Synchronize Product Sources</button>
+      </section>
+
+      <section class="cc-form-card">
         <span class="cc-kicker">Optional Curated Homebrew</span>
         <h3>Alchemy &amp; Inscription</h3>
         <p class="cc-note"><strong>{{alchemy.statusLabel}}</strong> · {{alchemy.productCount}} / {{alchemy.productTotal}} Products · {{alchemy.recipeCount}} / {{alchemy.recipeTotal}} Recipes.</p>
@@ -175,7 +183,7 @@
             <div class="cc-product-table-head"><span>Product</span><span>Benefit</span><span>Yield</span><span>Ingredient Cost</span><span>Unit Price</span><span>Icon — choose 1 of 3</span></div>
             {{#each products}}
             <div class="cc-product-table-row" data-product-id="{{productId}}" data-current-icon="{{selectedIcon}}">
-              <span class="cc-material-name"><img src="{{selectedIcon}}" alt=""><span><strong>{{name}}</strong><small>{{#if exists}}Published Product{{else}}Missing — restore defaults{{/if}}</small></span></span>
+              <span class="cc-material-name"><img src="{{selectedIcon}}" alt=""><span><strong>{{name}}</strong><small>{{#if exists}}Published Product · {{syncStatusLabel}}{{else}}Missing — restore defaults{{/if}}</small></span></span>
               <span class="cc-product-benefit">{{benefitLabel}}</span>
               <span>{{yieldLabel}}</span>
               <span>{{ingredientCostLabel}}</span>
@@ -215,7 +223,7 @@
               <span>{{rarityLabel}}</span>
               <span>{{tierLabel}}</span>
               <span>{{sourceLabel}}</span>
-              <span>{{#if exists}}Ready{{else}}Missing{{/if}}</span>
+              <span>{{syncStatusLabel}}</span>
             </div>
             {{/each}}
           </div>
@@ -225,6 +233,26 @@
       </section>
       {{else}}
       <div class="cc-curated-unavailable"><i class="fa-solid fa-flask-vial"></i><strong>Alchemy &amp; Inscription is optional</strong><p>Use <strong>Install / Restore Alchemy &amp; Inscription</strong> to add its 23 Materials, 82 Products, and 97 Recipes to this World. Install it before the first Creature Scanner pass if you want the new harvest materials included immediately.</p></div>
+      {{/if}}
+
+      {{#if linkedProducts.count}}
+      <section class="cc-curated-product-section">
+        <div class="cc-curated-product-section-title"><strong>Linked Products</strong><small>{{linkedProducts.count}} external mirrors</small></div>
+        <details class="cc-material-group" open>
+          <summary><span>External Compendium Sources</span><small>{{linkedProducts.count}} products</small></summary>
+          <div class="cc-product-table">
+            <div class="cc-product-table-head"><span>Product</span><span>Mother Item</span><span>Status</span><span></span><span></span><span></span></div>
+            {{#each linkedProducts.rows}}
+            <div class="cc-product-table-row">
+              <span class="cc-material-name"><img src="{{img}}" alt=""><span><strong>{{name}}</strong><small>Fallback mirror</small></span></span>
+              <span>{{sourceName}}</span>
+              <span><strong>{{statusLabel}}</strong></span>
+              <span></span><span></span><span></span>
+            </div>
+            {{/each}}
+          </div>
+        </details>
+      </section>
       {{/if}}
     </main>
   </div>

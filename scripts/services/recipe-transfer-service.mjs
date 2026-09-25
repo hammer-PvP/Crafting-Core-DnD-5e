@@ -3,6 +3,7 @@ import { CompendiumService } from "./compendium-service.mjs";
 import { CuratedContentService } from "./curated-content-service.mjs";
 import { MaterialCatalogService } from "./material-catalog-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
+import { ProductSourceService } from "./product-source-service.mjs";
 import { normalizeActiveEffectSource, normalizeItemSourceForDnd5e6 } from "../utils/dnd5e-data.mjs";
 import { forcedDeletion } from "../utils/foundry-data.mjs";
 
@@ -51,11 +52,9 @@ export class RecipeTransferService {
     // Publication is World-specific authority metadata and never travels between Worlds.
     normalized.publication = null;
 
-    const resultDoc = await this.#resolveReferenceDocument(normalized.result);
-    const resultSnapshot = normalized.result?.snapshot
-      ? foundry.utils.deepClone(normalized.result.snapshot)
-      : resultDoc?.toObject?.() ?? null;
-    if (!resultSnapshot) throw new Error(`${normalized.name}: the Result Item could not be resolved for export.`);
+    const frozenResult = await ProductSourceService.freezeResult(normalized.result);
+    const resultSnapshot = foundry.utils.deepClone(frozenResult.data ?? {});
+    if (!Object.keys(resultSnapshot).length) throw new Error(`${normalized.name}: the Result Item could not be resolved for export.`);
 
     const result = {
       name: String(normalized.result?.name || resultSnapshot.name || "Item"),
@@ -125,7 +124,7 @@ export class RecipeTransferService {
 
   static async #resolveReferenceDocument(reference) {
     if (!reference) return null;
-    for (const uuid of [reference.uuid, reference.sourceUuid].filter(Boolean)) {
+    for (const uuid of [reference.sourceUuid, reference.fallbackUuid, reference.uuid].filter(Boolean)) {
       try {
         const doc = await fromUuid(String(uuid));
         if (doc instanceof Item) return doc;
@@ -494,7 +493,7 @@ export class RecipeTransferService {
 
         const draft = foundry.utils.deepClone(entry.recipe);
         draft.ingredients = entry.resolvedIngredients;
-        draft.result = RecipeService.itemReference(resultDoc, entry.result.quantity || draft.result?.quantity || 1, { snapshot: true });
+        draft.result = await ProductSourceService.referenceForItem(resultDoc, entry.result.quantity || draft.result?.quantity || 1);
         draft.img = entry.iconResolution.path || resultDoc.img || draft.img;
         draft.publication = null;
 

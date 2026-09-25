@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.8 - Product Source Architecture & Safe Fallback Sync
+
+- Added the Product source/fallback architecture: Recipe results now track a current `sourceUuid` plus a persistent `fallbackUuid` in **Crafting Core — Products**.
+- Crafting resolves the current mother Item first and falls back to the stable Crafting Core Product mirror when the source is unavailable.
+- Added source/content and identity fingerprints with the explicit states **Synced**, **Updated**, **Source Missing**, and **Needs Review**.
+- Normal changes to the same source UUID synchronize automatically. Identity changes are held for review; Crafting Core never reconnects a broken Product source by Item name.
+- Added safe v0.5.7b migration for existing Recipe outputs without changing Recipe IDs, published Knowledge UUIDs, learned Character state, Curated Product IDs, or active Crafting Projects.
+- Existing Projects remain frozen to the Product definition captured when the Project began; new crafts resolve the current synchronized Product definition.
+- Added persistent fallback mirrors for Products selected from arbitrary compatible Compendiums and a **Synchronize Product Sources** maintenance action in Materials & Products.
+- Curated Culinary and optional Alchemy & Inscription restore now reconcile Product source links as part of the maintenance workflow.
+- Canonical plain Alchemy Products can use their native SRD Item as the mother source while presentation/mechanical variants such as Inscriptions and fixed Resistance Products retain their own Curated Product identity.
+- Product Source migration/synchronization runs non-blocking for the active GM after world startup.
+- Removed the remaining runtime use of deprecated `CONST.ACTIVE_EFFECT_MODES` compatibility constants from Curated persistent-effect generation.
+- Completed maintenance progress windows are promoted to the foreground so the final result is not hidden behind other Foundry applications.
+- No new Recipes, Materials, Scanner/Harvest rules, crafting balance, or Alchemy/Inscription redesign is included.
+
 ## 0.5.7b - Operation Progress ApplicationV2 Hotfix
 
 - Fixed a Foundry VTT 14 `ApplicationV2.state` naming collision in the v0.5.7a progress window that caused Sync/Reset/Restore operations to fail before their service tasks began.

@@ -147,6 +147,62 @@ export class KnowledgeItemService {
     return (await this.publishedSources()).find(record => record.recipeId === id) ?? null;
   }
 
+  static async rebuildAuthorityCache() {
+    return this.#rebuildAuthorityCacheFromPack();
+  }
+
+  /**
+   * Refresh an already-published Recipe definition in place without creating a new
+   * Knowledge Source. Used by Product source migration/synchronization so Recipe IDs,
+   * Knowledge UUIDs, and learned Character state remain stable.
+   */
+  static async refreshPublishedRecipeDefinition(recipe, { refreshActors=true, rebuildCache=true }={}) {
+    if (!game.user?.isGM || !recipe?.id) return { updated: false, reason: "not-gm-or-invalid" };
+    const source = await this.publishedSource(recipe.id);
+    if (!source?.item) return { updated: false, reason: "not-published" };
+    const pack = this.pack();
+    if (!pack) return { updated: false, reason: "missing-pack" };
+
+    const normalized = RecipeService.snapshot(recipe);
+    normalized.publication = {
+      uuid: source.uuid,
+      pack: pack.collection,
+      sourceType: source.sourceType,
+      publishedAt: source.publishedAt,
+      updatedAt: Date.now()
+    };
+
+    const wasLocked = Boolean(pack.locked);
+    if (wasLocked) await pack.configure({ locked: false });
+    try {
+      const data = this.#knowledgeItemData(normalized, {
+        folderId: source.item.folder?.id ?? source.item.folder ?? null,
+        published: true
+      });
+      data._id = source.item.id;
+      data.system ??= {};
+      const canonicalActivities = foundry.utils.deepClone(data.system.activities ?? {});
+      const reconciledActivities = forcedDeletionMap(Object.keys(source.item._source?.system?.activities ?? {}));
+      Object.assign(reconciledActivities, canonicalActivities);
+      data.system.activities = reconciledActivities;
+
+      const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+      await ItemClass.updateDocuments([data], { pack: pack.collection });
+      const persistedItem = await pack.getDocument(source.item.id);
+      const persisted = this.#sourceRecord(persistedItem);
+      if (!persisted || persisted.recipeId !== normalized.id || !this.sameRecipeDefinition(persisted.recipe, normalized)) {
+        throw new Error(`Crafting Core could not verify synchronized Knowledge Source for ${normalized.name}.`);
+      }
+
+      if (rebuildCache) await this.#rebuildAuthorityCacheFromPack();
+      const learnedSync = refreshActors ? await this.refreshLearnedRecipe(persisted.recipe) : { changed: 0, failed: [] };
+      Hooks.callAll(`${MODULE_ID}.knowledgeSourcesChanged`, persisted.recipeId);
+      return { updated: true, item: persisted.item, recipe: persisted.recipe, learnedSync };
+    } finally {
+      if (wasLocked) await pack.configure({ locked: true });
+    }
+  }
+
   static async #rebuildAuthorityCacheFromPack() {
     if (!game.user?.isGM) return this.authorityIndex();
     const records = await this.publishedSources();
@@ -173,12 +229,20 @@ export class KnowledgeItemService {
     let recipe = RecipeService.get(recipeId);
     if (!recipe) throw new Error("The selected Crafting Core draft no longer exists.");
     await RecipeService.prepareSystemLabels();
-    if (!recipe.result?.uuid && !recipe.result?.snapshot) throw new Error("The recipe has no result Item configured.");
+    if (!recipe.result?.uuid && !recipe.result?.sourceUuid && !recipe.result?.fallbackUuid && !recipe.result?.snapshot) throw new Error("The recipe has no result Item configured.");
 
     // Refresh a missing legacy output snapshot before publication so the source is autonomous.
-    if (!recipe.result?.snapshot && recipe.result?.uuid) {
-      const source = await fromUuid(recipe.result.uuid);
-      if (!(source instanceof Item)) throw new Error(`Result Item not found: ${recipe.result.uuid}`);
+    if (!recipe.result?.snapshot && (recipe.result?.sourceUuid || recipe.result?.fallbackUuid || recipe.result?.uuid)) {
+      let source = null;
+      let candidateUuid = "";
+      for (const uuid of [recipe.result.sourceUuid, recipe.result.fallbackUuid, recipe.result.uuid].filter(Boolean)) {
+        candidateUuid = String(uuid);
+        try {
+          const candidate = await fromUuid(candidateUuid);
+          if (candidate instanceof Item) { source = candidate; break; }
+        } catch (_) { /* try the fallback identity */ }
+      }
+      if (!(source instanceof Item)) throw new Error(`Result Item not found: ${candidateUuid || "unknown"}`);
       recipe.result.snapshot = source.toObject();
       recipe = await RecipeService.save(recipe);
     }

@@ -16,6 +16,7 @@ import { MaterialStackService } from "./services/material-stack-service.mjs";
 import { CuratedContentService } from "./services/curated-content-service.mjs";
 import { MaterialSourceService } from "./services/material-source-service.mjs";
 import { CuratedAlchemyService } from "./services/curated-alchemy-service.mjs";
+import { ProductSourceService } from "./services/product-source-service.mjs";
 
 let app = null;
 let generatorApp = null;
@@ -63,7 +64,8 @@ const API = {
   materialStacking: MaterialStackService,
   get curated() { return game.user?.isGM ? CuratedContentService : undefined; },
   get curatedAlchemy() { return game.user?.isGM ? CuratedAlchemyService : undefined; },
-  get materialSources() { return game.user?.isGM ? MaterialSourceService : undefined; }
+  get materialSources() { return game.user?.isGM ? MaterialSourceService : undefined; },
+  get productSources() { return game.user?.isGM ? ProductSourceService : undefined; }
 };
 
 function exposeApi() {
@@ -85,6 +87,7 @@ Hooks.once("init", () => {
   // the Crafting Core button unusable.
   exposeApi();
   runInitStep("recipe settings", () => RecipeService.registerSettings());
+  runInitStep("product source settings", () => ProductSourceService.registerSettings());
   runInitStep("knowledge lifecycle settings", () => KnowledgeItemService.registerSettings());
   runInitStep("material settings", () => MaterialCatalogService.registerSettings());
   runInitStep("harvest profile settings", () => HarvestProfileService.registerSettings());
@@ -173,6 +176,21 @@ Hooks.once("ready", async () => {
     } catch (error) {
       console.error(`${MODULE_TITLE} | Material Source resync failed.`, error);
     }
+
+    // Product-source migration/sync is deliberately detached from the blocking ready sequence.
+    // The world is usable immediately while the active GM reconciles Recipe links and fallbacks.
+    setTimeout(() => {
+      const currentGM = game.users?.activeGM ?? game.users?.contents?.find(user => user.active && user.isGM);
+      if (!game.user?.isGM || (currentGM && currentGM.id !== game.user.id)) return;
+      void ProductSourceService.syncAll().then(result => {
+        console.info(`${MODULE_TITLE} | Product Sources synchronized:`, result);
+        if (Number(result?.needsReview ?? 0) > 0) {
+          ui.notifications?.warn?.(`Crafting Core found ${result.needsReview} Product source link${result.needsReview === 1 ? "" : "s"} that need review. Open Materials & Products → Products → Product Source Sync.`);
+        }
+      }).catch(error => {
+        console.error(`${MODULE_TITLE} | Product Source synchronization failed.`, error);
+      });
+    }, 0);
   }
 });
 

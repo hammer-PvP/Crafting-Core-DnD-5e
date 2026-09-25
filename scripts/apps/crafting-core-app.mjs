@@ -7,6 +7,7 @@ import {
 } from "../constants.mjs";
 import { KnowledgeItemService } from "../services/knowledge-item-service.mjs";
 import { RecipeService } from "../services/recipe-service.mjs";
+import { ProductSourceService } from "../services/product-source-service.mjs";
 import { primaryRarity } from "../utils/dnd5e-data.mjs";
 import { ResultDialog } from "../ui/result-dialog.mjs";
 import { MaterialCatalogApp } from "./material-catalog-app.mjs";
@@ -505,7 +506,9 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
         ui.notifications.warn("Crafting Core could not resolve that Item.");
         return;
       }
-      const ref = RecipeService.itemReference(item, 1, { snapshot: kind === "result", ingredient: kind !== "result" });
+      const ref = kind === "result"
+        ? await ProductSourceService.referenceForItem(item, 1)
+        : RecipeService.itemReference(item, 1, { ingredient: true });
       if (kind === "result") this.draft.result = ref;
       else {
         const existing = this.draft.ingredients.find(row => RecipeService.referencesEquivalent(row, ref));
@@ -541,7 +544,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   #validateDraft() {
     if (!this.draft.name?.trim()) throw new Error("Give the recipe a name.");
-    if (!this.draft.result?.uuid) throw new Error("Drop a result Item into the recipe first.");
+    if (!this.draft.result?.uuid && !this.draft.result?.sourceUuid && !this.draft.result?.fallbackUuid && !this.draft.result?.snapshot) throw new Error("Drop a result Item into the recipe first.");
     if (!this.draft.ingredients.length) throw new Error("Add at least one required Item.");
     const resolution = RecipeService.normalizeCraftingResolution(this.draft.craftingResolution);
     if (resolution.attemptPolicy === "requiresProficiency" && !resolution.proficiencies.length) {
@@ -562,6 +565,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this.#syncDraftFromForm();
     try {
       this.#validateDraft();
+      this.draft = await ProductSourceService.ensureRecipeResult(this.draft);
       const saved = await RecipeService.save(this.draft);
       this.selectedId = saved.id;
       this.draft = foundry.utils.deepClone(saved);
@@ -578,6 +582,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this.#syncDraftFromForm();
     try {
       this.#validateDraft();
+      this.draft = await ProductSourceService.ensureRecipeResult(this.draft);
       const saved = await RecipeService.save(this.draft);
       this.selectedId = saved.id;
       this.draft = foundry.utils.deepClone(saved);

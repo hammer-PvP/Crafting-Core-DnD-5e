@@ -1,6 +1,6 @@
 export const MODULE_ID = "dnd5e-crafting-core";
 export const MODULE_TITLE = "Crafting Core (DnD 5e)";
-export const MODULE_VERSION = "0.5.7b";
+export const MODULE_VERSION = "0.5.8";
 
 export const SETTINGS = Object.freeze({
   RECIPES: "recipes",
@@ -11,7 +11,8 @@ export const SETTINGS = Object.freeze({
   SCANNER_SOURCES: "scannerSources",
   GEAR_NORMALIZATION: "gearNormalization",
   CURATED_CONTENT_STATE: "curatedContentState",
-  CURATED_ALCHEMY_STATE: "curatedAlchemyState"
+  CURATED_ALCHEMY_STATE: "curatedAlchemyState",
+  PRODUCT_SOURCE_STATE: "productSourceState"
 });
 
 export const FLAGS = Object.freeze({
@@ -65,6 +66,13 @@ export const FLAGS = Object.freeze({
   PRODUCT_ICON_CANDIDATES: "productIconCandidates",
   PRODUCT_MANAGED: "productManaged",
   PRODUCT_CANONICAL_SOURCE: "productCanonicalSource",
+  PRODUCT_MIRROR: "productMirror",
+  PRODUCT_SOURCE_UUID: "productSourceUuid",
+  PRODUCT_SOURCE_NAME: "productSourceName",
+  PRODUCT_SOURCE_FINGERPRINT: "productSourceFingerprint",
+  PRODUCT_IDENTITY_FINGERPRINT: "productIdentityFingerprint",
+  PRODUCT_SYNC_STATUS: "productSyncStatus",
+  PRODUCT_SYNCED_AT: "productSyncedAt",
   CURATED_FOOD_STATE: "curatedFoodState"
 });
 

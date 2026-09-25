@@ -12,6 +12,7 @@ import { CompendiumService } from "./compendium-service.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
 import { MaterialCatalogService } from "./material-catalog-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
+import { ProductSourceService } from "./product-source-service.mjs";
 import { activeEffectChanges, normalizeActiveEffectSource, primaryRarity, rarityArray } from "../utils/dnd5e-data.mjs";
 import { forcedDeletionMap } from "../utils/foundry-data.mjs";
 
@@ -606,6 +607,7 @@ export class CuratedAlchemyService {
         try {
           if (entry.kind === "ink") {
             const result = await this.#syncInk(pack, entry, folder?.id ?? null, existing);
+            await ProductSourceService.bindExistingFallback(result.item, { source: result.item });
             byId.set(entry.productId, result.item);
             result.created ? created += 1 : updated += 1;
             continue;
@@ -622,10 +624,14 @@ export class CuratedAlchemyService {
               await existing.update({ folder: folder?.id ?? null }, { render: false });
               updated += 1;
             } else unchanged += 1;
+            const mother = entry.kind === "canonical" && !entry.variant ? base : existing;
+            await ProductSourceService.bindExistingFallback(existing, { source: mother });
             continue;
           }
 
           const item = await this.#rebuildNativeProduct(pack, entry, base, folder?.id ?? null, existing);
+          const mother = entry.kind === "canonical" && !entry.variant ? base : item;
+          await ProductSourceService.bindExistingFallback(item, { source: mother });
           byId.set(entry.productId, item);
           existing ? updated += 1 : created += 1;
         } catch (error) {
@@ -672,10 +678,7 @@ export class CuratedAlchemyService {
       craftingResolution: entry.craftingResolution,
       learning: { access: "anyone" },
       ingredients,
-      result: {
-        ...RecipeService.itemReference(product, entry.resultQuantity, { snapshot: true }),
-        sourceUuid: product.uuid
-      },
+      result: await ProductSourceService.referenceForItem(product, entry.resultQuantity),
       knowledge: { label: "Recipe", name: `Recipe — ${entry.name}`, img: KNOWLEDGE_ICONS.Recipe },
       publication: null,
       createdAt: Date.now(),
@@ -884,7 +887,8 @@ export class CuratedAlchemyService {
         typeLabel: entry.kind === "canonical" ? "SRD Product" : entry.kind === "inscription" ? "Inscription" : "Inscription Ink",
         rarityLabel: titleCase(primaryRarity(item?.system) || entry.rarity || "—"),
         tierLabel: entry.tier ? titleCase(entry.tier) : "—",
-        sourceLabel: entry.kind === "inscription" ? sourceName : (entry.kind === "canonical" ? "SRD 5.2 / 5.1" : "Crafting Core")
+        sourceLabel: entry.kind === "inscription" ? sourceName : (entry.kind === "canonical" ? "SRD 5.2 / 5.1" : "Crafting Core"),
+        syncStatusLabel: ProductSourceService.statusLabel(item?.getFlag?.(MODULE_ID, FLAGS.PRODUCT_SYNC_STATUS) ?? (item ? ProductSourceService.STATUS.SYNCED : ProductSourceService.STATUS.SOURCE_MISSING))
       };
     });
     const buildGroups = keys => groups.filter(([key]) => keys.includes(key)).map(([key, label]) => {

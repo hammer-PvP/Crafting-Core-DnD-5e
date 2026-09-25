@@ -123,6 +123,7 @@ export class OperationProgressApp extends HandlebarsApplicationMixin(Application
       stats: stats ? { ...(this.#progressState.stats ?? {}), ...stats } : (this.#progressState.stats ?? {})
     };
     this.#paint();
+    this.#foreground();
   }
 
   fail(error) {
@@ -136,6 +137,22 @@ export class OperationProgressApp extends HandlebarsApplicationMixin(Application
       summary: []
     };
     this.#paint();
+    this.#foreground();
+  }
+
+  #foreground() {
+    requestAnimationFrame(() => {
+      try { this.bringToFront?.(); }
+      catch (_) { /* Fall back to z-index promotion below. */ }
+      const root = this.element;
+      if (!(root instanceof HTMLElement)) return;
+      const highest = [...document.querySelectorAll(".application")].reduce((max, node) => {
+        const value = Number.parseInt(getComputedStyle(node).zIndex, 10);
+        return Number.isFinite(value) ? Math.max(max, value) : max;
+      }, 0);
+      root.style.zIndex = String(highest + 1);
+      root.focus?.({ preventScroll: true });
+    });
   }
 
   #context() {

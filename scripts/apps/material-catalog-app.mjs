@@ -2,6 +2,7 @@ import { MODULE_ID } from "../constants.mjs";
 import { MaterialCatalogService } from "../services/material-catalog-service.mjs";
 import { CuratedContentService } from "../services/curated-content-service.mjs";
 import { CuratedAlchemyService } from "../services/curated-alchemy-service.mjs";
+import { ProductSourceService } from "../services/product-source-service.mjs";
 import { MaterialEditorApp } from "./material-editor-app.mjs";
 import { OperationProgressApp } from "../ui/operation-progress.mjs";
 
@@ -35,6 +36,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     const natures = [...new Set(entries.map(entry => entry.nature).filter(Boolean))].sort((a,b) => a.localeCompare(b, game.i18n.lang));
     const culinary = await CuratedContentService.culinaryCatalogContext();
     const alchemy = await CuratedAlchemyService.catalogContext();
+    const linkedProducts = await ProductSourceService.catalogContext();
     const productCatalogTotal = Number(culinary.total ?? 0) + (alchemy.enabled ? Number(alchemy.productTotal ?? 0) : 0);
     const productCatalogCount = Number(culinary.count ?? 0) + (alchemy.enabled ? Number(alchemy.productCount ?? 0) : 0);
     return {
@@ -51,6 +53,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       isProducts: this.catalogView === "products",
       culinary,
       alchemy,
+      linkedProducts,
       natureOptions: natures.map(value => ({ value, label: value.replace(/[-_]+/g," ").replace(/\b\w/g,c=>c.toUpperCase()), selected: this.filters.nature === value })),
       familyOptions: [
         { value: "all", label: "All Families", selected: this.filters.family === "all" },
@@ -72,6 +75,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     }));
     root.querySelector('[data-action="restore-curated-culinary"]')?.addEventListener("click", event => this.#restoreCuratedCulinary(event));
     root.querySelector('[data-action="restore-curated-alchemy"]')?.addEventListener("click", event => this.#restoreCuratedAlchemy(event));
+    root.querySelector('[data-action="sync-product-sources"]')?.addEventListener("click", event => this.#syncProductSources(event));
     root.querySelector('[data-action="open-alchemy-products"]')?.addEventListener("click", event => {
       event.preventDefault();
       if (!CuratedAlchemyService.openProductsPack()) ui.notifications.warn("Install the optional Alchemy & Inscription library first.");
@@ -129,7 +133,8 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       '[data-action="sync-materials"]',
       '[data-action="reset-curated-defaults"]',
       '[data-action="restore-curated-culinary"]',
-      '[data-action="restore-curated-alchemy"]'
+      '[data-action="restore-curated-alchemy"]',
+      '[data-action="sync-product-sources"]'
     ];
     this.element?.querySelectorAll?.(selectors.join(","))?.forEach(button => { button.disabled = Boolean(disabled); });
   }
@@ -248,6 +253,40 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     }
   }
 
+  async #syncProductSources(event) {
+    event.preventDefault();
+    if (OperationProgressApp.busy) return ui.notifications.warn("Crafting Core is already running another maintenance operation.");
+    this.#setMaintenanceButtonsDisabled(true);
+    try {
+      const result = await OperationProgressApp.run({
+        title: "Crafting Core — Synchronize Product Sources",
+        initial: { phase: "Preparing Product Sources", label: "Resolving mother Items and fallback mirrors…" },
+        task: report => ProductSourceService.syncAll({ onProgress: report, reconcile: true }),
+        summarize: result => ({
+          message: "Product Sources synchronized.",
+          summary: [
+            { label: "Synced", value: result.synced ?? 0 },
+            { label: "Updated", value: result.updated ?? 0 },
+            { label: "Source Missing", value: result.sourceMissing ?? 0 },
+            { label: "Needs Review", value: result.needsReview ?? 0 },
+            { label: "Recipes Updated", value: (result.draftsUpdated ?? 0) + (result.publishedUpdated ?? 0) }
+          ]
+        })
+      });
+      if (!result) return;
+      const warning = Number(result.sourceMissing ?? 0) + Number(result.needsReview ?? 0);
+      const text = `Product Sources: ${result.synced ?? 0} synced, ${result.updated ?? 0} updated, ${result.sourceMissing ?? 0} source missing, ${result.needsReview ?? 0} need review.`;
+      if (warning) ui.notifications.warn(text);
+      else ui.notifications.info(text);
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Product Source sync failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not synchronize Product Sources.");
+    } finally {
+      this.#setMaintenanceButtonsDisabled(false);
+    }
+  }
+
   async #resetCuratedDefaults(event) {
     event.preventDefault();
     const confirmed = await foundry.applications.api.DialogV2.confirm({
@@ -299,7 +338,11 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       const result = await OperationProgressApp.run({
         title: "Crafting Core — Restore Curated Products",
         initial: { phase: "Preparing Curated Culinary", label: "Resolving Materials and Product definitions…" },
-        task: report => CuratedContentService.restoreAll({ onProgress: report }),
+        task: async report => {
+          const restored = await CuratedContentService.restoreAll({ onProgress: report });
+          const productSources = await ProductSourceService.syncAll({ onProgress: report, reconcile: true });
+          return { ...restored, productSources };
+        },
         summarize: result => {
           const products = result.products ?? {};
           const recipes = result.recipes ?? {};
@@ -348,7 +391,9 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
           const audit = await CuratedAlchemyService.auditSrdSources();
           if (!audit.ok) throw new Error(`Missing SRD sources: ${audit.missing.map(row => row.key).join(", ")}`);
           report({ phase: "SRD Sources Ready", label: "All required native source Items were resolved.", current: 1, total: 1, overallCurrent: 1, overallTotal: 1 });
-          return CuratedAlchemyService.restoreAll({ onProgress: report });
+          const restored = await CuratedAlchemyService.restoreAll({ onProgress: report });
+          const productSources = await ProductSourceService.syncAll({ onProgress: report, reconcile: true });
+          return { ...restored, productSources };
         },
         summarize: result => {
           const products = result.products ?? {};
