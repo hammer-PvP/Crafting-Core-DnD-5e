@@ -570,7 +570,7 @@ export class CuratedAlchemyService {
     return { item: existing, created: false };
   }
 
-  static async #syncProducts(state, { forceRebuild=false }={}) {
+  static async #syncProducts(state, { forceRebuild=false, onProgress=null, overallBase=0, overallTotal=0, phaseTotal=0 }={}) {
     const pack = await this.ensureProductsPack();
     const wasLocked = Boolean(pack.locked);
     if (wasLocked) await pack.configure({ locked: false });
@@ -584,6 +584,11 @@ export class CuratedAlchemyService {
       let unchanged = 0;
       let retiredRemoved = 0;
       const failures = [];
+      let progressIndex = 0;
+      const report = entry => {
+        progressIndex += 1;
+        onProgress?.({ phase: "Restoring Alchemy Products", label: entry.name ?? entry.id, current: progressIndex, total: phaseTotal || progressIndex, overallCurrent: overallBase + progressIndex, overallTotal, stats: { products: progressIndex, created, updated, unchanged, failed: failures.length } });
+      };
 
       for (const retiredId of RETIRED_PRODUCT_IDS) {
         const retired = byId.get(retiredId) ?? null;
@@ -628,6 +633,8 @@ export class CuratedAlchemyService {
           console.error(`${MODULE_ID} | Curated Alchemy Product failed: ${entry.name ?? entry.id}.`, error);
           const fallback = (await pack.getDocuments()).find(item => String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? "") === entry.productId) ?? null;
           if (fallback) byId.set(entry.productId, fallback);
+        } finally {
+          report(entry);
         }
       }
 
@@ -698,7 +705,7 @@ export class CuratedAlchemyService {
     return created;
   }
 
-  static async #syncRecipes(state, materialDocs, productDocs) {
+  static async #syncRecipes(state, materialDocs, productDocs, { onProgress=null, overallBase=0, overallTotal=0, phaseTotal=0 }={}) {
     const pack = await KnowledgeItemService.ensurePack();
     const wasLocked = Boolean(pack.locked);
     if (wasLocked) await pack.configure({ locked: false });
@@ -711,17 +718,24 @@ export class CuratedAlchemyService {
       let updated = 0;
       let foldersRepaired = 0;
       const skipped = [];
+      let progressIndex = 0;
+      const report = entry => {
+        progressIndex += 1;
+        onProgress?.({ phase: "Restoring Alchemy Recipes", label: entry.name, current: progressIndex, total: phaseTotal || progressIndex, overallCurrent: overallBase + progressIndex, overallTotal, stats: { recipes: progressIndex, created, updated, skipped: skipped.length } });
+      };
 
       for (const entry of CURATED_ALCHEMY_RECIPES) {
         if (suppressed.has(entry.recipeId)) continue;
         if (!productDocs.has(entry.productId)) {
           skipped.push({ recipeId: entry.recipeId, name: entry.name, reason: "missing-result-product" });
+          report(entry);
           continue;
         }
         let recipe;
         try { recipe = await this.#recipeSnapshot(entry, materialDocs, productDocs); }
         catch (error) {
           skipped.push({ recipeId: entry.recipeId, name: entry.name, reason: String(error?.message ?? error) });
+          report(entry);
           continue;
         }
         const existing = byRecipeId.get(entry.recipeId) ?? null;
@@ -759,7 +773,9 @@ export class CuratedAlchemyService {
           if (oldFolder !== newFolder) foldersRepaired += 1;
           updated += 1;
         }
+        report(entry);
       }
+      onProgress?.({ phase: "Reindexing Alchemy Recipes", label: "Refreshing the Learn Sources Compendium index…", current: phaseTotal, total: phaseTotal, overallCurrent: overallBase + phaseTotal, overallTotal, stats: { recipes: progressIndex, created, updated, skipped: skipped.length } });
       docs = await pack.getDocuments();
       const documentsByRecipeId = new Map(docs.map(item => [String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? ""), item]).filter(([id]) => id));
       await pack.getIndex({ fields: ["name", "img", "type", "folder", `flags.${MODULE_ID}.${FLAGS.KNOWLEDGE_RECIPE_ID}`] });
@@ -793,17 +809,17 @@ export class CuratedAlchemyService {
     return this.sync({ restore: false });
   }
 
-  static async restoreAll() {
+  static async restoreAll({ onProgress=null }={}) {
     if (!game.user?.isGM) throw new Error("Only a GM can restore Curated Alchemy & Inscription content.");
     const state = this.state();
     state.enabled = true;
     state.suppressedProducts = [];
     state.suppressedRecipes = [];
     await this.#saveState(state);
-    return this.sync({ restore: true });
+    return this.sync({ restore: true, onProgress });
   }
 
-  static async sync({ restore=false }={}) {
+  static async sync({ restore=false, onProgress=null }={}) {
     if (!game.user?.isGM) throw new Error("Only a GM can synchronize Curated Alchemy & Inscription content.");
     const state = this.state();
     state.enabled = true;
@@ -813,16 +829,25 @@ export class CuratedAlchemyService {
       state.suppressedRecipes = [];
     }
 
+    const productTotal = CURATED_ALCHEMY_PRODUCTS.filter(entry => !state.suppressedProducts.includes(entry.productId)).length;
+    const recipeTotal = CURATED_ALCHEMY_RECIPES.filter(entry => !state.suppressedRecipes.includes(entry.recipeId)).length;
+    const overallTotal = productTotal + recipeTotal + 3;
+
     // Persist opt-in before resolving Materials so the 23 optional definitions become active.
+    onProgress?.({ phase: "Preparing Alchemy & Inscription", label: "Enabling optional curated Materials…", current: 0, total: productTotal, overallCurrent: 0, overallTotal, stats: { products: 0, recipes: 0, failed: 0, skipped: 0 } });
     await this.#saveState(state);
     this.#sourceCache.clear();
+    onProgress?.({ phase: "Resolving Materials", label: "Resolving optional Materials and native dependencies…", current: 1, total: 1, overallCurrent: 1, overallTotal, stats: { products: 0, recipes: 0, failed: 0, skipped: 0 } });
     const materialDocs = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
-    const products = await this.#syncProducts(state, { forceRebuild: restore });
-    const recipes = await this.#syncRecipes(state, materialDocs, products.documentsByProductId);
+    const products = await this.#syncProducts(state, { forceRebuild: restore, onProgress, overallBase: 1, overallTotal, phaseTotal: productTotal });
+    const recipes = await this.#syncRecipes(state, materialDocs, products.documentsByProductId, { onProgress, overallBase: 1 + productTotal, overallTotal, phaseTotal: recipeTotal });
     const complete = products.failures.length === 0 && recipes.skipped.length === 0;
     state.version = complete ? CURATED_ALCHEMY_VERSION : Math.min(state.version, CURATED_ALCHEMY_VERSION - 1);
+    onProgress?.({ phase: "Saving Alchemy State", label: "Persisting optional catalog state…", current: 1, total: 1, overallCurrent: 2 + productTotal + recipeTotal, overallTotal, stats: { products: productTotal, recipes: recipeTotal, failed: products.failures.length, skipped: recipes.skipped.length } });
     await this.#saveState(state);
+    onProgress?.({ phase: "Reconciling Recipe Knowledge", label: "Refreshing Characters that already know published Recipes…", current: 0, total: 1, overallCurrent: 2 + productTotal + recipeTotal, overallTotal, stats: { products: productTotal, recipes: recipeTotal, failed: products.failures.length, skipped: recipes.skipped.length } });
     await KnowledgeItemService.reconcilePublishedKnowledge();
+    onProgress?.({ phase: "Alchemy & Inscription Complete", label: "Products and Recipes are restored.", current: 1, total: 1, overallCurrent: overallTotal, overallTotal, stats: { products: productTotal, recipes: recipeTotal, failed: products.failures.length, skipped: recipes.skipped.length } });
     return { products, recipes, enabled: true, version: state.version, currentVersion: CURATED_ALCHEMY_VERSION, complete };
   }
 

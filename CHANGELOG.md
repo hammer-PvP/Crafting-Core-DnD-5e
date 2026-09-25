@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.7a - Long Operation Progress & Maintenance QoL
+
+- Added a reusable Crafting Core progress window for long GM maintenance operations.
+- Added real phase/item progress reporting for Materials synchronization and Curated Material reset.
+- Added per-Product and per-Recipe progress reporting for Curated Culinary restore.
+- Added per-Product and per-Recipe progress reporting for optional Alchemy & Inscription install/restore, including SRD source audit and Knowledge reconciliation phases.
+- Added progress reporting for Material Source resynchronization.
+- Added elapsed time, live counters, final operation summaries, and explicit success/error states.
+- Added a maintenance-operation lock so a second restore/reset/sync cannot start while another long Crafting Core maintenance task is active.
+- Long restore/reset operations cannot be cancelled mid-write, preventing intentionally partial Compendium rebuild states.
+- No changes to Recipe definitions, Product mechanics, Materials, harvesting/gathering rules, Creature Scanner eligibility, Knowledge semantics, ActiveEffect values, or the planned v0.5.8 canonical Compendium-source architecture.
+
 ## 0.5.7 - Foundry v14 / D&D5e 6.x Effect Compatibility Cleanup
 
 - Migrated Crafting Core-managed Food and Alcohol ActiveEffect changes to the D&D5e 6.x `system.changes` TypeDataModel.

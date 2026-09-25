@@ -44,16 +44,17 @@ export class MaterialSourceService {
     };
   }
 
-  static async rebuild() {
+  static async rebuild({ onProgress=null }={}) {
     if (!game.user?.isGM) throw new Error("Only a GM can resync Material Sources.");
     if (this.#running) return this.#running;
-    this.#running = this.#rebuildInternal();
+    this.#running = this.#rebuildInternal({ onProgress });
     try { return await this.#running; }
     finally { this.#running = null; }
   }
 
-  static async #rebuildInternal() {
+  static async #rebuildInternal({ onProgress=null }={}) {
     // Ensures newly-added curated Materials exist before constructing the reverse index.
+    onProgress?.({ phase: "Resolving Materials", label: "Loading Materials and Harvest Profiles…", current: 0, total: 1, overallCurrent: 0, overallTotal: 3, stats: { materials: 0 } });
     const documentsById = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
     const entries = await MaterialCatalogService.allEntries();
     const entriesById = new Map(entries.map(entry => [String(entry.id), entry]));
@@ -71,7 +72,10 @@ export class MaterialSourceService {
     const profiles = HarvestProfileService.list();
     let profilesUsed = 0;
 
+    let profileIndex = 0;
     for (const profile of profiles) {
+      profileIndex += 1;
+      onProgress?.({ phase: "Indexing Creature Sources", label: String(profile?.name ?? "Creature"), current: profileIndex, total: profiles.length, overallCurrent: 1, overallTotal: 3, stats: { materials: entries.length } });
       const sourceUuid = String(profile?.sourceUuid ?? "").trim();
       if (!sourceUuid) continue;
       const possible = this.#possibleMaterialIds(profile, essenceByAffinity);
@@ -102,7 +106,11 @@ export class MaterialSourceService {
     let creatureLinks = 0;
     try {
       const updates = [];
+      let materialIndex = 0;
+      const materialTotal = documentsById.size;
       for (const [materialId, item] of documentsById) {
+        materialIndex += 1;
+        onProgress?.({ phase: "Building Material Source Links", label: item.name ?? materialId, current: materialIndex, total: materialTotal, overallCurrent: 2, overallTotal: 3, stats: { materials: materialTotal } });
         const material = entriesById.get(materialId);
         if (!material) continue;
         const creatureSources = MaterialOriginService.normalizeCreatureSources([...(reverse.get(materialId)?.values?.() ?? [])]);
@@ -126,16 +134,19 @@ export class MaterialSourceService {
       }
 
       const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+      onProgress?.({ phase: "Writing Material Sources", label: `${updates.length} Material documents`, current: 0, total: updates.length, overallCurrent: 2, overallTotal: 3, stats: { materials: entries.length } });
       if (updates.length) {
         const result = await ItemClass.updateDocuments(updates, { pack: pack.collection });
         updated = result?.length ?? updates.length;
       }
+      onProgress?.({ phase: "Reindexing Materials", label: "Refreshing the Materials Compendium index…", current: updates.length, total: updates.length, overallCurrent: 2, overallTotal: 3, stats: { materials: entries.length } });
       await pack.getIndex({ fields: ["name", "img", "type", "folder", `flags.${MODULE_ID}.${FLAGS.MATERIAL_ID}`] });
     } finally {
       if (wasLocked) await pack.configure({ locked: true });
     }
 
     Hooks.callAll(`${MODULE_ID}.materialsChanged`, null);
+    onProgress?.({ phase: "Material Sources Complete", label: "Reverse source links are synchronized.", current: entries.length, total: entries.length, overallCurrent: 3, overallTotal: 3, stats: { materials: entries.length } });
     return {
       profiles: profiles.length,
       profilesUsed,

@@ -3,6 +3,7 @@ import { HarvestProfileService } from "../services/harvest-profile-service.mjs";
 import { GearNormalizationService } from "../services/gear-normalization-service.mjs";
 import { RecipeTransferApp } from "./recipe-transfer-app.mjs";
 import { MaterialSourceService } from "../services/material-source-service.mjs";
+import { OperationProgressApp } from "../ui/operation-progress.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -167,19 +168,37 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
 
   async #resyncMaterialSources(event) {
     event.preventDefault();
+    if (OperationProgressApp.busy) return ui.notifications.warn("Crafting Core is already running another maintenance operation.");
     const button = event.currentTarget;
     button.disabled = true;
     const old = button.innerHTML;
     button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Resyncing…';
     try {
-      const result = await MaterialSourceService.rebuild();
+      const result = await OperationProgressApp.run({
+        title: "Crafting Core — Resync Material Sources",
+        initial: { phase: "Resolving Materials", label: "Preparing the reverse Material source index…" },
+        task: report => MaterialSourceService.rebuild({ onProgress: report }),
+        summarize: result => ({
+          message: "Material Sources resynchronized successfully.",
+          summary: [
+            { label: "Materials", value: result.materials ?? 0 },
+            { label: "Linked Materials", value: result.linkedMaterials ?? 0 },
+            { label: "Creature Links", value: result.creatureLinks ?? 0 },
+            { label: "Harvest Profiles", value: result.profiles ?? 0 }
+          ]
+        })
+      });
+      if (!result) return;
       ui.notifications.info(`Material Sources resynced: ${result.linkedMaterials} linked Materials · ${result.creatureLinks} Actor links.`);
       this.render({ force: true });
     } catch (error) {
       console.error(`${MODULE_ID} | Material Source resync failed.`, error);
       ui.notifications.error(error.message ?? "Crafting Core could not resync Material Sources.");
-      button.disabled = false;
-      button.innerHTML = old;
+    } finally {
+      if (button?.isConnected) {
+        button.disabled = false;
+        button.innerHTML = old;
+      }
     }
   }
 

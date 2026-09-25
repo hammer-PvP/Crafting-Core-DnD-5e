@@ -642,17 +642,17 @@ export class CuratedContentService {
     return this.sync({ restore: false });
   }
 
-  static async restoreAll() {
+  static async restoreAll({ onProgress=null }={}) {
     if (!game.user?.isGM) throw new Error("Only a GM can restore Crafting Core Curated content.");
     if (!this.itemCreatorCompatible()) throw new Error(`Persistent Curated Food and Alcohol Products require active DnD 5e Item Creator ${ITEM_CREATOR_MIN_VERSION} or newer.`);
     const state = this.state();
     state.suppressedProducts = [];
     state.suppressedRecipes = [];
     await this.#saveState(state);
-    return this.sync({ restore: true });
+    return this.sync({ restore: true, onProgress });
   }
 
-  static async sync({ restore=false }={}) {
+  static async sync({ restore=false, onProgress=null }={}) {
     if (!game.user?.isGM) throw new Error("Only a GM can synchronize Crafting Core Curated content.");
     if (!this.itemCreatorCompatible()) throw new Error(`Persistent Curated Food and Alcohol Products require active DnD 5e Item Creator ${ITEM_CREATOR_MIN_VERSION} or newer.`);
 
@@ -661,14 +661,21 @@ export class CuratedContentService {
       state.suppressedProducts = [];
       state.suppressedRecipes = [];
     }
+    const productTotal = CURATED_RECIPES.filter(entry => !state.suppressedProducts.includes(entry.productId)).length;
+    const recipeTotal = CURATED_RECIPES.filter(entry => !state.suppressedRecipes.includes(entry.recipeId)).length;
+    const overallTotal = productTotal + recipeTotal + 2;
+    onProgress?.({ phase: "Resolving Materials", label: "Preparing Curated Culinary dependencies…", current: 0, total: productTotal, overallCurrent: 0, overallTotal, stats: { products: 0, recipes: 0 } });
     const materialDocs = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
-    const products = await this.#syncProducts(state, materialDocs);
-    const recipes = await this.#syncRecipes(state, materialDocs, products.documentsByProductId);
+    const products = await this.#syncProducts(state, materialDocs, { onProgress, overallBase: 0, overallTotal, phaseTotal: productTotal });
+    const recipes = await this.#syncRecipes(state, materialDocs, products.documentsByProductId, { onProgress, overallBase: productTotal, overallTotal, phaseTotal: recipeTotal });
     state.culinaryVersion = CURATED_CONTENT_VERSION;
     state.productBaselines = products.baselines;
     state.recipeBaselines = recipes.baselines;
+    onProgress?.({ phase: "Saving Curated State", label: "Persisting catalog baselines…", current: 1, total: 1, overallCurrent: productTotal + recipeTotal + 1, overallTotal, stats: { products: productTotal, recipes: recipeTotal, created: products.created + recipes.created, updated: products.updated + recipes.updated } });
     await this.#saveState(state);
+    onProgress?.({ phase: "Reconciling Recipe Knowledge", label: "Refreshing Characters that already know published Recipes…", current: 0, total: 1, overallCurrent: productTotal + recipeTotal + 1, overallTotal, stats: { products: productTotal, recipes: recipeTotal, created: products.created + recipes.created, updated: products.updated + recipes.updated } });
     await KnowledgeItemService.reconcilePublishedKnowledge();
+    onProgress?.({ phase: "Curated Culinary Complete", label: "Products and Recipes are restored.", current: 1, total: 1, overallCurrent: overallTotal, overallTotal, stats: { products: productTotal, recipes: recipeTotal, created: products.created + recipes.created, updated: products.updated + recipes.updated } });
     return { products, recipes };
   }
 
@@ -1078,7 +1085,7 @@ export class CuratedContentService {
     return item;
   }
 
-  static async #syncProducts(state, materialDocs) {
+  static async #syncProducts(state, materialDocs, { onProgress=null, overallBase=0, overallTotal=0, phaseTotal=0 }={}) {
     const pack = await this.ensureProductsPack();
     const wasLocked = Boolean(pack.locked);
     if (wasLocked) await pack.configure({ locked: false });
@@ -1091,6 +1098,11 @@ export class CuratedContentService {
       let created = 0;
       let updated = 0;
       let repairedLegacyEffects = 0;
+      let progressIndex = 0;
+      const report = entry => {
+        progressIndex += 1;
+        onProgress?.({ phase: "Restoring Curated Products", label: entry.name, current: progressIndex, total: phaseTotal || progressIndex, overallCurrent: overallBase + progressIndex, overallTotal, stats: { products: progressIndex, created, updated } });
+      };
 
       for (const entry of CURATED_RECIPES) {
         if (suppressed.has(entry.productId)) continue;
@@ -1102,6 +1114,7 @@ export class CuratedContentService {
           const item = await this.#createProductDocument(pack, official);
           byId.set(entry.productId, item);
           created += 1;
+          report(entry);
           continue;
         }
 
@@ -1112,6 +1125,7 @@ export class CuratedContentService {
         await this.#updateProductDocument(existing, merged);
         if (hadLegacyNullDuration) repairedLegacyEffects += 1;
         updated += 1;
+        report(entry);
       }
 
       docs = await pack.getDocuments();
@@ -1199,7 +1213,7 @@ export class CuratedContentService {
     return item;
   }
 
-  static async #syncRecipes(state, materialDocs, productDocs) {
+  static async #syncRecipes(state, materialDocs, productDocs, { onProgress=null, overallBase=0, overallTotal=0, phaseTotal=0 }={}) {
     const pack = await KnowledgeItemService.ensurePack();
     const wasLocked = Boolean(pack.locked);
     if (wasLocked) await pack.configure({ locked: false });
@@ -1212,11 +1226,19 @@ export class CuratedContentService {
       let created = 0;
       let updated = 0;
       const folderRepairIds = new Set();
+      let progressIndex = 0;
+      const report = entry => {
+        progressIndex += 1;
+        onProgress?.({ phase: "Restoring Curated Recipes", label: entry.name, current: progressIndex, total: phaseTotal || progressIndex, overallCurrent: overallBase + progressIndex, overallTotal, stats: { recipes: progressIndex, created, updated } });
+      };
 
       for (const entry of CURATED_RECIPES) {
         if (suppressed.has(entry.recipeId)) continue;
         const product = productDocs.get(entry.productId);
-        if (!product) continue;
+        if (!product) {
+          report(entry);
+          continue;
+        }
         const existing = byRecipeId.get(entry.recipeId) ?? null;
         const officialRecipe = this.#recipeSnapshot(entry, materialDocs, product);
         const expectedIngredientNames = entry.ingredients.map(row => materialDocs.get(row.materialId)?.name ?? "");
@@ -1269,8 +1291,10 @@ export class CuratedContentService {
           await this.#updateKnowledgeDocument(existing, data);
           updated += 1;
         }
+        report(entry);
       }
 
+      onProgress?.({ phase: "Verifying Curated Recipes", label: "Checking persisted Recipe folders and documents…", current: phaseTotal, total: phaseTotal, overallCurrent: overallBase + phaseTotal, overallTotal, stats: { recipes: progressIndex, created, updated } });
       docs = await pack.getDocuments();
       let documentsByRecipeId = new Map(docs.map(item => [String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? ""), item]).filter(([id]) => id));
 

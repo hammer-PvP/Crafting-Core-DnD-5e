@@ -2147,3 +2147,26 @@
 }
 .cc-material-origin-separator { opacity: 0.65; }
 .cc-material-document-link { display: inline; }
+
+/* v0.5.7a — long-operation progress and maintenance feedback. */
+.crafting-core-operation-progress .window-content { padding: 0; }
+.cc-operation-progress-panel { display: grid; gap: 12px; padding: 14px; min-height: 250px; background: #17171a; }
+.cc-operation-progress-header { display: grid; grid-template-columns: 44px minmax(0,1fr); gap: 10px; align-items: center; }
+.cc-operation-progress-icon { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid var(--cc-border); border-radius: 50%; color: var(--cc-gold); background: rgba(201,164,87,.07); font-size: 18px; }
+.cc-operation-progress-header h2 { margin: 1px 0 0; font-size: 17px; }
+.cc-operation-progress-header p { margin: 3px 0 0; min-height: 1.25em; opacity: .68; font-size: 10px; }
+.cc-operation-progress-bar-row { display: grid; grid-template-columns: minmax(0,1fr) 48px; gap: 9px; align-items: center; }
+.cc-operation-progress-bar-row progress { width: 100%; height: 14px; accent-color: var(--cc-gold); }
+.cc-operation-progress-bar-row strong { text-align: right; font-size: 11px; }
+.cc-operation-progress-meta { display: flex; justify-content: space-between; gap: 10px; font-size: 9px; opacity: .62; }
+.cc-operation-progress-detail, .cc-operation-progress-message { margin: 0; min-height: 1.2em; font-size: 10px; line-height: 1.35; }
+.cc-operation-progress-detail { opacity: .72; }
+.cc-operation-progress-message { font-weight: 700; }
+.cc-operation-progress-stats, .cc-operation-progress-summary { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5px; }
+.cc-operation-progress-stats > div, .cc-operation-progress-summary > div { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 1px solid rgba(255,255,255,.055); background: rgba(255,255,255,.025); border-radius: 3px; font-size: 9px; }
+.cc-operation-progress-stats span, .cc-operation-progress-summary span { opacity: .62; }
+.cc-operation-progress-footer { display: flex; justify-content: flex-end; padding-top: 4px; border-top: 1px solid var(--cc-border-soft); }
+.cc-operation-progress-footer button { min-width: 110px; margin: 0; }
+.crafting-core-operation-progress [data-status="complete"] .cc-operation-progress-icon { color: #bdf77c; border-color: rgba(141,233,1,.28); background: rgba(141,233,1,.06); }
+.crafting-core-operation-progress [data-status="error"] .cc-operation-progress-icon { color: #ff9d9d; border-color: rgba(214,107,107,.35); background: rgba(214,107,107,.07); }
+.crafting-core-operation-progress [data-status="error"] .cc-operation-progress-message { color: #ffb0b0; }

@@ -13,18 +13,29 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.5.7
+- **Crafting Core:** v0.5.7a
 - **Foundry VTT:** minimum 14.367, verified 14.367
 - **D&D 5e:** 6.0.0-6.0.999, verified 6.0.1
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
 - **DnD 5e Item Creator:** optional for the core module; **0.7.1+ is required for the official persistent Curated Food and Alcohol Products**
 
-Crafting Core v0.5.7 completes the Foundry VTT 14 / D&D 5e 6.0.x compatibility cleanup for Crafting Core-managed ActiveEffects and document deletion updates without changing crafting behavior or design philosophy.
+Crafting Core v0.5.7a closes the v0.5.7 compatibility cycle with quality-of-life feedback for long GM maintenance operations. Gameplay, Recipes, Products, Materials, Harvest logic, and the v0.5.7 D&D5e 6.x compatibility behavior are unchanged.
 
+### Long-operation progress
+
+v0.5.7a adds a reusable real-progress window for the maintenance actions that can take several seconds on established Worlds:
+
+- Synchronize Materials;
+- Reset Curated Material defaults;
+- Restore the 58 Curated Culinary Products and Recipes;
+- Install / Restore the optional Alchemy & Inscription library;
+- Resync Material Sources.
+
+The window reports the current phase, current Product/Recipe/Material, X/Y progress when available, elapsed time, live counters, and a persistent completion summary. A maintenance lock prevents a second long operation from starting while one is already running. The operation itself is not cancellable mid-write, avoiding intentionally half-applied restore states.
 
 ### D&D 5e 6.0.x normalization
 
-v0.5.7 is a compatibility-only cleanup built on the approved v0.5.6 behavior:
+v0.5.7 retains the compatibility cleanup built on the approved v0.5.6 behavior:
 
 - Crafting Core-managed ActiveEffects persist changes in the D&D5e 6.x `system.changes` model;
 - legacy movement effect targets are normalized to `system.attributes.movement.speeds.*`;

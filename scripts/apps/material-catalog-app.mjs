@@ -3,6 +3,7 @@ import { MaterialCatalogService } from "../services/material-catalog-service.mjs
 import { CuratedContentService } from "../services/curated-content-service.mjs";
 import { CuratedAlchemyService } from "../services/curated-alchemy-service.mjs";
 import { MaterialEditorApp } from "./material-editor-app.mjs";
+import { OperationProgressApp } from "../ui/operation-progress.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const TextEditor = foundry.applications.ux.TextEditor.implementation;
@@ -123,6 +124,16 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     this._ccMaterialSavedHook ??= Hooks.on(`${MODULE_ID}.materialEditorSaved`, () => this.render({ force: true }));
   }
 
+  #setMaintenanceButtonsDisabled(disabled) {
+    const selectors = [
+      '[data-action="sync-materials"]',
+      '[data-action="reset-curated-defaults"]',
+      '[data-action="restore-curated-culinary"]',
+      '[data-action="restore-curated-alchemy"]'
+    ];
+    this.element?.querySelectorAll?.(selectors.join(","))?.forEach(button => { button.disabled = Boolean(disabled); });
+  }
+
   async close(options={}) {
     if (this._ccMaterialSavedHook) Hooks.off(`${MODULE_ID}.materialEditorSaved`, this._ccMaterialSavedHook);
     this._ccMaterialSavedHook = null;
@@ -209,23 +220,36 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
 
   async #sync(event) {
     event.preventDefault();
-    const button = event.currentTarget;
-    button.disabled = true;
+    if (OperationProgressApp.busy) return ui.notifications.warn("Crafting Core is already running another maintenance operation.");
+    this.#setMaintenanceButtonsDisabled(true);
     try {
       await this.#saveEconomy(null, { notify: false });
-      const result = await MaterialCatalogService.sync();
+      const result = await OperationProgressApp.run({
+        title: "Crafting Core — Synchronize Materials",
+        initial: { phase: "Preparing Materials", label: "Starting catalog synchronization…" },
+        task: report => MaterialCatalogService.sync({ onProgress: report }),
+        summarize: result => ({
+          message: "Materials synchronized successfully.",
+          summary: [
+            { label: "Created", value: result.created ?? 0 },
+            { label: "Updated", value: result.updated ?? 0 },
+            { label: "Catalog Materials", value: result.total ?? 0 }
+          ]
+        })
+      });
+      if (!result) return;
       ui.notifications.info(`Materials synchronized: ${result.created} created, ${result.updated} updated.`);
       this.render({ force: true });
     } catch (error) {
       console.error(`${MODULE_ID} | Material sync failed.`, error);
       ui.notifications.error(error.message ?? "Crafting Core could not synchronize materials.");
-      button.disabled = false;
+    } finally {
+      this.#setMaintenanceButtonsDisabled(false);
     }
   }
 
   async #resetCuratedDefaults(event) {
     event.preventDefault();
-    const button = event.currentTarget;
     const confirmed = await foundry.applications.api.DialogV2.confirm({
       window: { title: "Reset Curated Material Catalog" },
       content: "<p>Reset every <strong>built-in curated material</strong> to the Crafting Core defaults?</p><p>This restores curated names, icons, rarity/value/drop defaults, quantities, tags and biome metadata. Registered custom materials are preserved.</p>",
@@ -233,21 +257,35 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       no: { label: "Cancel" }
     });
     if (!confirmed) return;
-    if (button) button.disabled = true;
+    if (OperationProgressApp.busy) return ui.notifications.warn("Crafting Core is already running another maintenance operation.");
+    this.#setMaintenanceButtonsDisabled(true);
     try {
-      const result = await MaterialCatalogService.resetCuratedDefaults();
+      const result = await OperationProgressApp.run({
+        title: "Crafting Core — Reset Curated Materials",
+        initial: { phase: "Preparing Curated Reset", label: "Comparing the catalog with Crafting Core defaults…" },
+        task: report => MaterialCatalogService.resetCuratedDefaults({ onProgress: report }),
+        summarize: result => ({
+          message: "Curated Material defaults restored successfully.",
+          summary: [
+            { label: "Created", value: result.created ?? 0 },
+            { label: "Restored", value: result.updated ?? 0 },
+            { label: "Catalog Materials", value: result.total ?? 0 }
+          ]
+        })
+      });
+      if (!result) return;
       ui.notifications.info(`Curated catalog reset: ${result.created} created, ${result.updated} restored.`);
       this.render({ force: true });
     } catch (error) {
       console.error(`${MODULE_ID} | Curated material reset failed.`, error);
       ui.notifications.error(error.message ?? "Crafting Core could not reset the curated catalog.");
-      if (button) button.disabled = false;
+    } finally {
+      this.#setMaintenanceButtonsDisabled(false);
     }
   }
 
   async #restoreCuratedCulinary(event) {
     event.preventDefault();
-    const button = event.currentTarget;
     const confirmed = await foundry.applications.api.DialogV2.confirm({
       window: { title: "Restore Curated Product Library" },
       content: "<p>Repair and restore the <strong>58 official Curated Products and Recipe Learn Sources</strong>?</p><p>This includes 15 Meals, 28 Alcoholic Drinks, and 15 Non-Alcoholic Drinks. Missing official content is recreated. Fields that still match older Crafting Core defaults are upgraded. GM-customized presentation fields are preserved.</p>",
@@ -255,9 +293,27 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       no: { label: "Cancel" }
     });
     if (!confirmed) return;
-    if (button) button.disabled = true;
+    if (OperationProgressApp.busy) return ui.notifications.warn("Crafting Core is already running another maintenance operation.");
+    this.#setMaintenanceButtonsDisabled(true);
     try {
-      const result = await CuratedContentService.restoreAll();
+      const result = await OperationProgressApp.run({
+        title: "Crafting Core — Restore Curated Products",
+        initial: { phase: "Preparing Curated Culinary", label: "Resolving Materials and Product definitions…" },
+        task: report => CuratedContentService.restoreAll({ onProgress: report }),
+        summarize: result => {
+          const products = result.products ?? {};
+          const recipes = result.recipes ?? {};
+          return {
+            message: "Curated Product library restored successfully.",
+            summary: [
+              { label: "Products", value: `${products.created ?? 0} created · ${products.updated ?? 0} updated` },
+              { label: "Recipes", value: `${recipes.created ?? 0} created · ${recipes.updated ?? 0} updated` },
+              { label: "Folder Repairs", value: recipes.foldersRepaired ?? 0 }
+            ]
+          };
+        }
+      });
+      if (!result) return;
       const products = result.products ?? {};
       const recipes = result.recipes ?? {};
       const repairedFolders = Number(recipes.foldersRepaired ?? 0);
@@ -267,13 +323,13 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     } catch (error) {
       console.error(`${MODULE_ID} | Curated Product restore failed.`, error);
       ui.notifications.error(error.message ?? "Crafting Core could not restore the Curated Product library.");
-      if (button) button.disabled = false;
+    } finally {
+      this.#setMaintenanceButtonsDisabled(false);
     }
   }
 
   async #restoreCuratedAlchemy(event) {
     event.preventDefault();
-    const button = event.currentTarget;
     const confirmed = await foundry.applications.api.DialogV2.confirm({
       window: { title: "Install / Restore Alchemy & Inscription" },
       content: "<p>Install or repair the optional <strong>Curated Alchemy & Inscription</strong> library?</p><p>Canonical Products are cloned at runtime only from the installed D&D5e <strong>SRD 5.2 / SRD 5.1 CC-BY-4.0</strong> packs. Inscription variants preserve the original SRD Activities and effects while changing presentation and crafting.</p><p>New Creature Harvest materials use the Scanner v2 eligibility rules. Re-run Creature Scanner after installation to populate their World-specific creature sources.</p>",
@@ -281,11 +337,34 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       no: { label: "Cancel" }
     });
     if (!confirmed) return;
-    if (button) button.disabled = true;
+    if (OperationProgressApp.busy) return ui.notifications.warn("Crafting Core is already running another maintenance operation.");
+    this.#setMaintenanceButtonsDisabled(true);
     try {
-      const audit = await CuratedAlchemyService.auditSrdSources();
-      if (!audit.ok) throw new Error(`Missing SRD sources: ${audit.missing.map(row => row.key).join(", ")}`);
-      const result = await CuratedAlchemyService.restoreAll();
+      const result = await OperationProgressApp.run({
+        title: "Crafting Core — Restore Alchemy & Inscription",
+        initial: { phase: "Checking SRD Sources", label: "Validating native D&D5e source Items…", overallCurrent: 0, overallTotal: 1 },
+        task: async report => {
+          report({ phase: "Checking SRD Sources", label: "Validating native D&D5e source Items…", current: 0, total: 1, overallCurrent: 0, overallTotal: 1 });
+          const audit = await CuratedAlchemyService.auditSrdSources();
+          if (!audit.ok) throw new Error(`Missing SRD sources: ${audit.missing.map(row => row.key).join(", ")}`);
+          report({ phase: "SRD Sources Ready", label: "All required native source Items were resolved.", current: 1, total: 1, overallCurrent: 1, overallTotal: 1 });
+          return CuratedAlchemyService.restoreAll({ onProgress: report });
+        },
+        summarize: result => {
+          const products = result.products ?? {};
+          const recipes = result.recipes ?? {};
+          return {
+            message: result.complete ? "Alchemy & Inscription restored successfully." : "Alchemy & Inscription completed with partial failures.",
+            summary: [
+              { label: "Products", value: `${products.created ?? 0} created · ${products.updated ?? 0} updated` },
+              { label: "Recipes", value: `${recipes.created ?? 0} created · ${recipes.updated ?? 0} updated` },
+              { label: "Product Failures", value: products.failures?.length ?? 0 },
+              { label: "Recipes Skipped", value: recipes.skipped?.length ?? 0 }
+            ]
+          };
+        }
+      });
+      if (!result) return;
       const products = result.products ?? {};
       const recipes = result.recipes ?? {};
       const failed = Number(products.failures?.length ?? 0);
@@ -300,7 +379,8 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     } catch (error) {
       console.error(`${MODULE_ID} | Curated Alchemy & Inscription restore failed.`, error);
       ui.notifications.error(error.message ?? "Crafting Core could not restore Alchemy & Inscription.");
-      if (button) button.disabled = false;
+    } finally {
+      this.#setMaintenanceButtonsDisabled(false);
     }
   }
 

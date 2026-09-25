@@ -329,7 +329,7 @@ export class MaterialCatalogService {
     return defs;
   }
 
-  static async sync() {
+  static async sync({ onProgress=null }={}) {
     if (!game.user.isGM) throw new Error("Only a GM can synchronize Crafting Core materials.");
     const pack = await this.ensurePack();
     const wasLocked = Boolean(pack.locked);
@@ -342,14 +342,20 @@ export class MaterialCatalogService {
         .map(item => [String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? ""), item])
         .filter(([id]) => id));
       const catalogOverrides = this.overrides();
+      const definitions = this.definitions();
+      const overallTotal = definitions.length + 2;
+      onProgress?.({ phase: "Preparing Materials", label: "Reading the curated catalog…", current: 0, total: definitions.length, overallCurrent: 0, overallTotal, stats: { created: 0, updated: 0 } });
 
       const creates = [];
       const updates = [];
-      for (const material of this.definitions()) {
+      let progressIndex = 0;
+      for (const material of definitions) {
         const folder = folders.get(`${material.family}:${material.category}`) ?? folders.get(material.family) ?? null;
         const item = byMaterialId.get(material.id);
         if (!item) {
           creates.push(this.#itemData(material, folder?.id ?? null));
+          progressIndex += 1;
+          onProgress?.({ phase: "Preparing Materials", label: material.name, current: progressIndex, total: definitions.length, overallCurrent: progressIndex, overallTotal, stats: { created: creates.length, updated: updates.length } });
           continue;
         }
 
@@ -392,14 +398,19 @@ export class MaterialCatalogService {
           && currentImg !== String(material.img ?? "");
         if (!currentImg || currentImg === DEFAULT_MATERIAL_ICON || mayAdvanceCuratedDefault) update.img = material.img;
         updates.push(update);
+        progressIndex += 1;
+        onProgress?.({ phase: "Preparing Materials", label: material.name, current: progressIndex, total: definitions.length, overallCurrent: progressIndex, overallTotal, stats: { created: creates.length, updated: updates.length } });
       }
 
       const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+      onProgress?.({ phase: "Writing Materials", label: `${creates.length} create · ${updates.length} update`, current: 0, total: creates.length + updates.length, overallCurrent: definitions.length, overallTotal, stats: { created: creates.length, updated: updates.length } });
       const created = creates.length ? await ItemClass.createDocuments(creates, { pack: pack.collection }) : [];
       const updated = updates.length ? await ItemClass.updateDocuments(updates, { pack: pack.collection }) : [];
+      onProgress?.({ phase: "Reindexing Materials", label: "Refreshing the Materials Compendium index…", current: creates.length + updates.length, total: creates.length + updates.length, overallCurrent: definitions.length + 1, overallTotal, stats: { created: created.length, updated: updated.length } });
       await pack.getIndex({ fields: ["name", "img", "type", "folder", "system.rarities", `flags.${MODULE_ID}.${FLAGS.MATERIAL_ID}`] });
       Hooks.callAll(`${MODULE_ID}.materialsChanged`);
-      return { pack, created: created.length, updated: updated.length, total: this.definitions().length };
+      onProgress?.({ phase: "Materials Complete", label: "Materials Compendium is synchronized.", current: definitions.length, total: definitions.length, overallCurrent: overallTotal, overallTotal, stats: { created: created.length, updated: updated.length } });
+      return { pack, created: created.length, updated: updated.length, total: definitions.length };
     } finally {
       if (wasLocked) await pack.configure({ locked: true });
     }
@@ -606,7 +617,7 @@ export class MaterialCatalogService {
     return this.getEntry(id);
   }
 
-  static async resetCuratedDefaults() {
+  static async resetCuratedDefaults({ onProgress=null }={}) {
     if (!game.user.isGM) throw new Error("Only a GM can reset Crafting Core materials.");
 
     // A catalog-wide reset is stronger than Sync Catalog, but it should also be
@@ -641,13 +652,19 @@ export class MaterialCatalogService {
         return JSON.stringify(normalize(left)) === JSON.stringify(normalize(right));
       };
 
+      const definitions = this.definitions();
+      const overallTotal = definitions.length + 2;
       const updates = [];
       const creates = [];
-      for (const material of this.definitions()) {
+      let progressIndex = 0;
+      onProgress?.({ phase: "Preparing Curated Reset", label: "Comparing curated defaults…", current: 0, total: definitions.length, overallCurrent: 0, overallTotal, stats: { created: 0, restored: 0 } });
+      for (const material of definitions) {
         const folder = folders.get(`${material.family}:${material.category}`) ?? folders.get(material.family) ?? null;
         const item = byMaterialId.get(material.id);
         if (!item) {
           creates.push(this.#itemData(material, folder?.id ?? null));
+          progressIndex += 1;
+          onProgress?.({ phase: "Preparing Curated Reset", label: material.name, current: progressIndex, total: definitions.length, overallCurrent: progressIndex, overallTotal, stats: { created: creates.length, restored: updates.length } });
           continue;
         }
 
@@ -690,14 +707,19 @@ export class MaterialCatalogService {
         }
 
         if (changed) updates.push(update);
+        progressIndex += 1;
+        onProgress?.({ phase: "Preparing Curated Reset", label: material.name, current: progressIndex, total: definitions.length, overallCurrent: progressIndex, overallTotal, stats: { created: creates.length, restored: updates.length } });
       }
 
       const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+      onProgress?.({ phase: "Restoring Curated Materials", label: `${creates.length} create · ${updates.length} restore`, current: 0, total: creates.length + updates.length, overallCurrent: definitions.length, overallTotal, stats: { created: creates.length, restored: updates.length } });
       const created = creates.length ? await ItemClass.createDocuments(creates, { pack: pack.collection }) : [];
       if (updates.length) await ItemClass.updateDocuments(updates, { pack: pack.collection });
+      onProgress?.({ phase: "Reindexing Materials", label: "Refreshing the Materials Compendium index…", current: creates.length + updates.length, total: creates.length + updates.length, overallCurrent: definitions.length + 1, overallTotal, stats: { created: created.length, restored: updates.length } });
       await pack.getIndex({ fields: ["name", "img", "type", "folder", "system.rarities", `flags.${MODULE_ID}.${FLAGS.MATERIAL_ID}`] });
       Hooks.callAll(`${MODULE_ID}.materialsChanged`);
-      return { pack, created: created.length, updated: updates.length, total: this.definitions().length };
+      onProgress?.({ phase: "Curated Reset Complete", label: "Curated Material defaults are restored.", current: definitions.length, total: definitions.length, overallCurrent: overallTotal, overallTotal, stats: { created: created.length, restored: updates.length } });
+      return { pack, created: created.length, updated: updates.length, total: definitions.length };
     } finally {
       if (wasLocked) await pack.configure({ locked: true });
     }

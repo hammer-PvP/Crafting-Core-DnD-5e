@@ -1,0 +1,41 @@
+<section class="cc-operation-progress-panel" data-status="{{status}}">
+  <header class="cc-operation-progress-header">
+    <div class="cc-operation-progress-icon"><i data-role="status-icon" class="fa-solid fa-spinner fa-spin"></i></div>
+    <div>
+      <span class="cc-kicker">Crafting Core</span>
+      <h2 data-role="phase">{{phase}}</h2>
+      <p data-role="label">{{label}}</p>
+    </div>
+  </header>
+
+  <div class="cc-operation-progress-bar-row">
+    <progress data-role="progress" max="100" value="{{percent}}"></progress>
+    <strong data-role="percent">{{percent}}%</strong>
+  </div>
+
+  <div class="cc-operation-progress-meta">
+    <span data-role="counter">{{counter}}</span>
+    <span>Elapsed <strong data-role="elapsed">{{elapsed}}</strong></span>
+  </div>
+
+  <p class="cc-operation-progress-detail" data-role="detail">{{detail}}</p>
+  <p class="cc-operation-progress-message" data-role="message">{{message}}</p>
+
+  <div class="cc-operation-progress-stats" data-role="stats" {{#unless statRows.length}}hidden{{/unless}}>
+    {{#each statRows}}
+    <div><span>{{label}}</span><strong>{{value}}</strong></div>
+    {{/each}}
+  </div>
+
+  <div class="cc-operation-progress-summary" data-role="summary" {{#unless summaryRows.length}}hidden{{/unless}}>
+    {{#each summaryRows}}
+    <div><span>{{label}}</span><strong>{{value}}</strong></div>
+    {{/each}}
+  </div>
+
+  <footer class="cc-operation-progress-footer">
+    <button type="button" data-action="close-progress" {{#if running}}disabled{{/if}}>
+      <i class="fa-solid fa-check"></i> Close
+    </button>
+  </footer>
+</section>
