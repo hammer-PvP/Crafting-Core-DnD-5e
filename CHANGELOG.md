@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.7b - Operation Progress ApplicationV2 Hotfix
+
+- Fixed a Foundry VTT 14 `ApplicationV2.state` naming collision in the v0.5.7a progress window that caused Sync/Reset/Restore operations to fail before their service tasks began.
+- Progress-window mutable data now lives in private Crafting Core fields and no longer writes to Foundry's getter-only `ApplicationV2.state`.
+- Also keeps operation running/timing bookkeeping in private fields to avoid future collisions with ApplicationV2 properties.
+- Restores the intended v0.5.7a long-operation progress workflow for Material Sync, Curated Material Reset, Curated Product Restore, Alchemy & Inscription Restore, and Material Source Resync.
+- No Product, Recipe, Material, ActiveEffect, Scanner, crafting-rule, or v0.5.8 source-UUID architecture changes are included.
+
 ## 0.5.7a - Long Operation Progress & Maintenance QoL
 
 - Added a reusable Crafting Core progress window for long GM maintenance operations.

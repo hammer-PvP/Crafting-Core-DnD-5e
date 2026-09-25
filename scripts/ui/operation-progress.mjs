@@ -8,6 +8,10 @@ export class OperationProgressApp extends HandlebarsApplicationMixin(Application
   static #active = null;
   static #last = null;
   #elapsedTimer = null;
+  #progressState = {};
+  #startedAt = 0;
+  #endedAt = null;
+  #running = false;
 
   static DEFAULT_OPTIONS = {
     id: "crafting-core-operation-progress",
@@ -22,7 +26,7 @@ export class OperationProgressApp extends HandlebarsApplicationMixin(Application
   };
 
   static get busy() {
-    return Boolean(this.#active?.running);
+    return Boolean(this.#active?.#running);
   }
 
   static async run({ title="Crafting Core — Working", initial={}, task, summarize=null }={}) {
@@ -33,13 +37,13 @@ export class OperationProgressApp extends HandlebarsApplicationMixin(Application
     }
     if (typeof task !== "function") throw new Error("Crafting Core progress operation requires a task.");
 
-    if (this.#last && !this.#last.running) {
+    if (this.#last && !this.#last.#running) {
       try { await this.#last.close({ force: true }); }
       catch (_) { /* The previous result window may already be closed. */ }
     }
 
     const app = new this({ window: { title } });
-    app.state = {
+    app.#progressState = {
       phase: String(initial.phase ?? "Preparing…"),
       label: String(initial.label ?? ""),
       detail: String(initial.detail ?? ""),
@@ -52,9 +56,9 @@ export class OperationProgressApp extends HandlebarsApplicationMixin(Application
       message: "",
       summary: []
     };
-    app.startedAt = performance.now();
-    app.endedAt = null;
-    app.running = true;
+    app.#startedAt = performance.now();
+    app.#endedAt = null;
+    app.#running = true;
     this.#active = app;
     this.#last = app;
 
@@ -71,7 +75,7 @@ export class OperationProgressApp extends HandlebarsApplicationMixin(Application
       app.fail(error);
       throw error;
     } finally {
-      app.running = false;
+      app.#running = false;
       if (this.#active === app) this.#active = null;
       app.#paint();
     }
@@ -91,7 +95,7 @@ export class OperationProgressApp extends HandlebarsApplicationMixin(Application
   }
 
   async close(options={}) {
-    if (this.running && !options?.force) {
+    if (this.#running && !options?.force) {
       ui.notifications.warn("Wait for the current Crafting Core maintenance operation to finish.");
       return this;
     }
@@ -102,31 +106,31 @@ export class OperationProgressApp extends HandlebarsApplicationMixin(Application
 
   updateProgress(update={}) {
     const next = { ...update };
-    if (next.stats) next.stats = { ...(this.state.stats ?? {}), ...next.stats };
-    this.state = { ...this.state, ...next };
+    if (next.stats) next.stats = { ...(this.#progressState.stats ?? {}), ...next.stats };
+    this.#progressState = { ...this.#progressState, ...next };
     this.#paint();
   }
 
   complete({ message="Operation complete.", summary=[], stats=null }={}) {
-    this.endedAt = performance.now();
+    this.#endedAt = performance.now();
     if (this.#elapsedTimer) clearInterval(this.#elapsedTimer);
     this.#elapsedTimer = null;
-    this.state = {
-      ...this.state,
+    this.#progressState = {
+      ...this.#progressState,
       status: "complete",
       message: String(message ?? "Operation complete."),
       summary: Array.isArray(summary) ? summary : [],
-      stats: stats ? { ...(this.state.stats ?? {}), ...stats } : (this.state.stats ?? {})
+      stats: stats ? { ...(this.#progressState.stats ?? {}), ...stats } : (this.#progressState.stats ?? {})
     };
     this.#paint();
   }
 
   fail(error) {
-    this.endedAt = performance.now();
+    this.#endedAt = performance.now();
     if (this.#elapsedTimer) clearInterval(this.#elapsedTimer);
     this.#elapsedTimer = null;
-    this.state = {
-      ...this.state,
+    this.#progressState = {
+      ...this.#progressState,
       status: "error",
       message: String(error?.message ?? error ?? "The operation failed."),
       summary: []
@@ -135,7 +139,7 @@ export class OperationProgressApp extends HandlebarsApplicationMixin(Application
   }
 
   #context() {
-    const state = this.state ?? {};
+    const state = this.#progressState ?? {};
     const total = Number(state.overallTotal ?? 0) > 0 ? Number(state.overallTotal) : Number(state.total ?? 0);
     const current = Number(state.overallTotal ?? 0) > 0 ? Number(state.overallCurrent ?? 0) : Number(state.current ?? 0);
     const percent = total > 0 ? clampPercent(Math.round((current / total) * 100)) : 0;
@@ -225,8 +229,8 @@ export class OperationProgressApp extends HandlebarsApplicationMixin(Application
   }
 
   #elapsedText() {
-    const now = this.endedAt ?? (performance.now?.() ?? Date.now());
-    const seconds = Math.max(0, Math.floor((now - (this.startedAt ?? 0)) / 1000));
+    const now = this.#endedAt ?? (performance.now?.() ?? Date.now());
+    const seconds = Math.max(0, Math.floor((now - (this.#startedAt ?? 0)) / 1000));
     const minutes = Math.floor(seconds / 60);
     const remainder = seconds % 60;
     return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;

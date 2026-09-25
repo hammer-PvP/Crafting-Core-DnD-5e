@@ -13,17 +13,17 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.5.7a
+- **Crafting Core:** v0.5.7b
 - **Foundry VTT:** minimum 14.367, verified 14.367
 - **D&D 5e:** 6.0.0-6.0.999, verified 6.0.1
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
 - **DnD 5e Item Creator:** optional for the core module; **0.7.1+ is required for the official persistent Curated Food and Alcohol Products**
 
-Crafting Core v0.5.7a closes the v0.5.7 compatibility cycle with quality-of-life feedback for long GM maintenance operations. Gameplay, Recipes, Products, Materials, Harvest logic, and the v0.5.7 D&D5e 6.x compatibility behavior are unchanged.
+Crafting Core v0.5.7b is the hotfix release for the v0.5.7a long-operation progress UI. It fixes a Foundry VTT 14 `ApplicationV2.state` naming collision that prevented maintenance actions from starting. Gameplay, Recipes, Products, Materials, Harvest logic, and the v0.5.7 D&D5e 6.x compatibility behavior are unchanged.
 
 ### Long-operation progress
 
-v0.5.7a adds a reusable real-progress window for the maintenance actions that can take several seconds on established Worlds:
+v0.5.7b retains the v0.5.7a progress feature and fixes its ApplicationV2 state collision. The progress UI provides a reusable real-progress window for the maintenance actions that can take several seconds on established Worlds:
 
 - Synchronize Materials;
 - Reset Curated Material defaults;

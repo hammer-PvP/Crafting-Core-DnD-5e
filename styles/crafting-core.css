@@ -2148,7 +2148,7 @@
 .cc-material-origin-separator { opacity: 0.65; }
 .cc-material-document-link { display: inline; }
 
-/* v0.5.7a — long-operation progress and maintenance feedback. */
+/* v0.5.7a/v0.5.7b — long-operation progress and ApplicationV2 hotfix. */
 .crafting-core-operation-progress .window-content { padding: 0; }
 .cc-operation-progress-panel { display: grid; gap: 12px; padding: 14px; min-height: 250px; background: #17171a; }
 .cc-operation-progress-header { display: grid; grid-template-columns: 44px minmax(0,1fr); gap: 10px; align-items: center; }
