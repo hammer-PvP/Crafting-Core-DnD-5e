@@ -152,6 +152,32 @@ export class KnowledgeItemService {
   }
 
   /**
+   * Foundry deep-merges object flags during Document updates. Recipe snapshots are
+   * authoritative whole-object payloads, so legacy keys from an older schema must
+   * not survive when a published Knowledge Source is refreshed. Remove only the
+   * persisted snapshot flag first; the caller then writes the canonical replacement
+   * while preserving the Knowledge Item itself, its UUID, folder, and publication.
+   */
+  static async clearPersistedRecipeSnapshot(item) {
+    if (!(item instanceof Item)) return item ?? null;
+    if (!item.getFlag?.(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT)) return item;
+
+    await item.update({
+      [`flags.${MODULE_ID}.${FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT}`]: forcedDeletion()
+    }, { render: false });
+
+    let persisted = item;
+    if (item.pack) {
+      const pack = game.packs?.get(item.pack);
+      if (pack) persisted = await pack.getDocument(item.id) ?? item;
+    }
+    if (persisted.getFlag?.(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT)) {
+      throw new Error(`Crafting Core could not clear the legacy Knowledge snapshot for ${item.name}.`);
+    }
+    return persisted;
+  }
+
+  /**
    * Refresh an already-published Recipe definition in place without creating a new
    * Knowledge Source. Used by Product source migration/synchronization so Recipe IDs,
    * Knowledge UUIDs, and learned Character state remain stable.
@@ -187,6 +213,7 @@ export class KnowledgeItemService {
       data.system.activities = reconciledActivities;
 
       const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+      await this.clearPersistedRecipeSnapshot(source.item);
       await ItemClass.updateDocuments([data], { pack: pack.collection });
       const persistedItem = await pack.getDocument(source.item.id);
       const persisted = this.#sourceRecord(persistedItem);
@@ -298,6 +325,7 @@ export class KnowledgeItemService {
         const reconciledActivities = forcedDeletionMap(Object.keys(item.system?.activities ?? {}));
         Object.assign(reconciledActivities, canonicalActivities);
         update.system.activities = reconciledActivities;
+        item = await this.clearPersistedRecipeSnapshot(item);
         await ItemClass.updateDocuments([update], { pack: pack.collection });
         sourceId = update._id;
 

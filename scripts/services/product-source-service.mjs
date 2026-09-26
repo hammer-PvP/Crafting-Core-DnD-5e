@@ -5,7 +5,7 @@ import { CompendiumService } from "./compendium-service.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
 
-const PRODUCT_SOURCE_VERSION = 1;
+const PRODUCT_SOURCE_VERSION = 2;
 const PRODUCTS_PACK_NAME = "crafting-core-products";
 const PRODUCTS_PACK_LABEL = "Crafting Core — Products";
 const PRODUCTS_PACK_ID = `world.${PRODUCTS_PACK_NAME}`;
@@ -438,6 +438,7 @@ export class ProductSourceService {
     if (!game.user?.isGM) return { skipped: true, reason: "not-gm" };
 
     const previousState = this.state();
+    const rewriteLegacyKnowledgeSnapshots = previousState.version < PRODUCT_SOURCE_VERSION;
     const drafts = RecipeService.list();
     const published = await KnowledgeItemService.publishedSources();
     const total = drafts.length + published.length;
@@ -472,7 +473,7 @@ export class ProductSourceService {
       if (!recipe.result) continue;
       const synced = await this.synchronizeResult(recipe.result, { createFallback: true });
       countStatus(synced.status);
-      if (synced.changed) {
+      if (synced.changed || rewriteLegacyKnowledgeSnapshots) {
         recipe.result = synced.result;
         const refreshed = await KnowledgeItemService.refreshPublishedRecipeDefinition(recipe, { refreshActors: false, rebuildCache: false });
         if (refreshed?.updated) stats.publishedUpdated += 1;

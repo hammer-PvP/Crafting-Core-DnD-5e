@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.8a - Legacy Knowledge Snapshot Migration Hotfix
+
+- Fixed migration of existing **Crafting Core — Learn Sources** documents created before the v0.5.8 Product Source schema.
+- Published Recipe snapshots are now replaced exactly instead of being deep-merged into the legacy snapshot, preventing stale nested Recipe/Item keys from surviving and failing post-write synchronization verification.
+- The repair is in-place: Knowledge Item IDs/UUIDs, folders, publication metadata, Recipe IDs, Curated identity, and learned-character ownership are preserved.
+- Applied the exact snapshot replacement path to normal Recipe publication, Product Source synchronization, Curated Culinary restore, and Curated Alchemy & Inscription restore.
+- Bumped the Product Source migration state so upgrading Worlds perform one complete in-place rewrite of all published Knowledge snapshots once, including Worlds left partially migrated by the v0.5.8 failure.
+- No duplicate cleanup/auditor was added in this hotfix; duplicate Knowledge Sources remain preserved for a later guided audit workflow.
+- No Recipe content, Product mechanics, Materials, Scanner/Harvest rules, crafting balance, or Product Source architecture changes are included.
+
 ## 0.5.8 - Product Source Architecture & Safe Fallback Sync
 
 - Added the Product source/fallback architecture: Recipe results now track a current `sourceUuid` plus a persistent `fallbackUuid` in **Crafting Core — Products**.

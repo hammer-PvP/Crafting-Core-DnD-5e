@@ -1201,6 +1201,7 @@ export class CuratedContentService {
     if (data.system) delete data.system.activities;
     delete data._id;
     delete data.ownership;
+    item = await KnowledgeItemService.clearPersistedRecipeSnapshot(item);
     await item.update(data, { render: false });
     const currentIds = valuesOf(item.system?.activities).map(activity => activity?.id ?? activity?._id).filter(Boolean);
     if (currentIds.length) {

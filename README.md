@@ -13,13 +13,13 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.5.8
+- **Crafting Core:** v0.5.8a
 - **Foundry VTT:** minimum 14.367, verified 14.367
 - **D&D 5e:** 6.0.0-6.0.999, verified 6.0.1
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
 - **DnD 5e Item Creator:** optional for the core module; **0.7.1+ is required for the official persistent Curated Food and Alcohol Products**
 
-Crafting Core v0.5.8 adds the Product source/fallback architecture. Recipe outputs can now follow a current mother Item from any compatible Compendium while retaining a stable mirror in **Crafting Core — Products**. Source synchronization uses fingerprints and the states **Synced**, **Updated**, **Source Missing**, and **Needs Review**; broken links are never guessed or reconnected by name. Existing Recipe IDs, published Knowledge, learned Characters, Curated Product identity, and active Crafting Projects are preserved during migration.
+Crafting Core v0.5.8a includes the v0.5.8 Product source/fallback architecture plus an in-place migration hotfix for legacy Knowledge Source Recipe snapshots. Recipe outputs can now follow a current mother Item from any compatible Compendium while retaining a stable mirror in **Crafting Core — Products**. Source synchronization uses fingerprints and the states **Synced**, **Updated**, **Source Missing**, and **Needs Review**; broken links are never guessed or reconnected by name. Existing Recipe IDs, published Knowledge, learned Characters, Curated Product identity, and active Crafting Projects are preserved during migration.
 
 ### Product source synchronization
 
