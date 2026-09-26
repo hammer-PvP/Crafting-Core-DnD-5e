@@ -771,7 +771,6 @@ export class KnowledgeItemService {
       try {
         store[recipe.id] = { ...store[recipe.id], recipe: snapshot, revisedAt: Date.now() };
         await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
-        actor.sheet?.render?.({ force: true });
         changed += 1;
       } catch (error) {
         console.error(`${MODULE_ID} | Could not refresh learned Recipe ${recipe.id} for ${actor.name}.`, error);
@@ -825,7 +824,6 @@ export class KnowledgeItemService {
       throw new Error(`Crafting Core could not verify that ${actor.name} forgot Recipe ${id}.`);
     }
 
-    if (changed) actor.sheet?.render?.({ force: true });
     return changed;
   }
 
@@ -977,7 +975,6 @@ export class KnowledgeItemService {
         }
 
         if (!actorRefreshed && !actorForgotten) continue;
-        actor.sheet?.render?.({ force: true });
         refreshed += actorRefreshed;
         forgotten += actorForgotten;
       } catch (error) {
@@ -1120,7 +1117,6 @@ export class KnowledgeItemService {
         });
         if (learned) {
           ui.notifications.info(`${actor.name} learned ${recipe.name}.`);
-          actor.sheet?.render?.({ force: true });
         }
       } catch (error) {
         console.error(`${MODULE_ID} | Learn Recipe failed.`, error);

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.8b - Character Sheet Refresh Hotfix
+
+- Fixed maintenance and Knowledge synchronization opening Character sheets that were closed.
+- Crafting Core now refreshes only Character sheet windows that are already open when learned Recipe data or crafting flags change.
+- Removed direct `actor.sheet.render()` calls from learned-Recipe refresh, forget, and reconciliation paths so background migration/synchronization cannot instantiate and open a sheet.
+- Preserves live refresh for Character sheets that are already open.
+- No changes to Product Source migration, Recipe/Knowledge data, Curated content, Materials, Scanner/Harvest behavior, or crafting rules.
+
 ## 0.5.8a - Legacy Knowledge Snapshot Migration Hotfix
 
 - Fixed migration of existing **Crafting Core — Learn Sources** documents created before the v0.5.8 Product Source schema.

@@ -964,7 +964,6 @@ export class CraftingService {
     project.lastRestAt = this.serverTime();
     project.updatedAt = this.serverTime();
     await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
-    actor.sheet?.render?.({ force: true });
     return true;
   }
 

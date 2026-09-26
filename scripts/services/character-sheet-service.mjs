@@ -54,12 +54,24 @@ export class CharacterSheetService {
       const watched = [FLAGS.CRAFTING_JOB, FLAGS.LEARNED_RECIPES, FLAGS.KNOWN_RECIPES];
       const relevant = watched.some(flag => (flag in flagChanges) || (`-=${flag}` in flagChanges));
       if (!relevant) return;
-      actor.sheet?.render?.({ force: true });
+      this.#renderOpenCharacterSheets(actor);
     });
 
     Hooks.on(`${MODULE_ID}.recipesChanged`, () => {
       for (const app of Object.values(ui.windows ?? {})) if (this.#isCharacterSheet(app)) app.render({ force: true });
     });
+  }
+
+
+  static #renderOpenCharacterSheets(actor) {
+    const actorId = String(actor?.id ?? "");
+    if (!actorId) return;
+    for (const app of Object.values(ui.windows ?? {})) {
+      if (!this.#isCharacterSheet(app)) continue;
+      const sheetActor = app.actor ?? app.document;
+      if (String(sheetActor?.id ?? "") !== actorId) continue;
+      app.render({ force: true });
+    }
   }
 
   static #prepareContext(actor, sheet) {
