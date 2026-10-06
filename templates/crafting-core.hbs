@@ -236,15 +236,28 @@
 
       <section class="cc-form-card">
         <div class="cc-card-heading"><div><span class="cc-kicker">Requirements</span><h3>Items Consumed</h3></div><small>Any D&D5e Item can be an input. Materials from Crafting Core — Materials are only the organized automatic source.</small></div>
-        <div class="cc-drop-zone" data-drop-kind="ingredient"><i class="fa-solid fa-arrow-down-to-line"></i><strong>Drop required Items here</strong></div>
-        <div class="cc-item-rows">
-          {{#each draft.ingredients}}
-          <div class="cc-item-row">
-            <img src="{{img}}" alt="">
-            <div class="cc-item-name"><strong>{{name}}</strong><small>{{type}}{{#if (eq matchMode "baseItem")}} · Base Item match{{/if}}{{#if (eq matchMode "exact")}} · Exact Item{{/if}}</small></div>
-            <label><span>Qty</span><input type="number" min="1" step="1" value="{{quantity}}" data-ingredient-quantity="{{@index}}"></label>
-            <button type="button" class="cc-icon-button danger" data-action="remove-ingredient" data-index="{{@index}}" aria-label="Remove"><i class="fa-solid fa-trash"></i></button>
-          </div>
+        <div class="cc-drop-zone" data-drop-kind="ingredient"><i class="fa-solid fa-arrow-down-to-line"></i><strong>Drop an Item here to create a new Ingredient Slot</strong></div>
+        <div class="cc-item-rows cc-ingredient-slot-editor">
+          {{#each ingredientEditorRows}}
+          <section class="cc-ingredient-slot-card">
+            <div class="cc-ingredient-slot-toolbar">
+              <div><span class="cc-kicker">Ingredient Slot {{@index}}</span><strong>{{#if (eq mode "fixed")}}Fixed Requirement{{else}}{{#if (eq mode "or")}}Choose One (OR){{else}}Mix / Pool{{/if}}{{/if}}</strong><input type="text" value="{{label}}" placeholder="Optional slot label" data-ingredient-slot-label="{{index}}"></div>
+              <label><span>Mode</span><select data-ingredient-mode="{{index}}"><option value="fixed" {{#if (eq mode "fixed")}}selected{{/if}} {{#if hasAlternatives}}disabled{{/if}}>Fixed</option><option value="or" {{#if (eq mode "or")}}selected{{/if}}>OR</option><option value="pool" {{#if (eq mode "pool")}}selected{{/if}}>Mix / Pool</option></select></label>
+              {{#if (eq mode "pool")}}<label><span>Total Units</span><input type="number" min="1" step="1" value="{{poolQuantity}}" data-ingredient-pool-quantity="{{index}}"></label>{{/if}}
+              <button type="button" class="cc-icon-button danger" data-action="remove-ingredient" data-index="{{index}}" aria-label="Remove Slot"><i class="fa-solid fa-trash"></i></button>
+            </div>
+            <div class="cc-ingredient-options">
+              {{#each options}}
+              <div class="cc-item-row">
+                <img src="{{img}}" alt="">
+                <div class="cc-item-name"><strong>{{name}}</strong><small>{{type}}{{#if (eq matchMode "baseItem")}} · Base Item match{{/if}}{{#if (eq matchMode "exact")}} · Exact Item{{/if}}</small></div>
+                {{#unless (eq ../mode "pool")}}<label><span>Qty</span><input type="number" min="1" step="1" value="{{quantity}}" {{#if ../storedAsSlot}}data-ingredient-option-quantity data-slot-index="{{../index}}" data-option-index="{{optionIndex}}"{{else}}data-ingredient-quantity="{{../index}}"{{/if}}></label>{{else}}<span class="cc-slot-unit-note">1 unit each</span>{{/unless}}
+                {{#if ../storedAsSlot}}<button type="button" class="cc-icon-button danger" data-action="remove-ingredient-option" data-slot-index="{{../index}}" data-option-index="{{optionIndex}}" aria-label="Remove Option"><i class="fa-solid fa-xmark"></i></button>{{/if}}
+              </div>
+              {{/each}}
+            </div>
+            <div class="cc-drop-zone compact" data-drop-kind="ingredient-slot" data-slot-index="{{index}}"><i class="fa-solid fa-plus"></i><strong>Drop another Item here to add an alternative</strong></div>
+          </section>
           {{else}}
           <div class="cc-empty-row">No required Items yet.</div>
           {{/each}}
@@ -334,8 +347,8 @@
           <div>
             <span class="cc-kicker">Inputs</span>
             <div class="cc-item-rows">
-              {{#each selectedPublished.recipe.ingredients}}
-              <div class="cc-item-row cc-knowledge-row"><img src="{{img}}" alt=""><div class="cc-item-name"><strong>{{name}}</strong><small>{{type}}</small></div><strong>×{{quantity}}</strong></div>
+              {{#each selectedPublishedIngredientRows}}
+              <div class="cc-item-row cc-knowledge-row"><img src="{{img}}" alt=""><div class="cc-item-name"><strong>{{label}}</strong><small>{{modeLabel}}</small></div><strong>{{quantityLabel}}</strong></div>
               {{else}}<div class="cc-empty-row">No ingredients.</div>{{/each}}
             </div>
           </div>

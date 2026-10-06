@@ -16,6 +16,7 @@ import { MaterialStackService } from "./services/material-stack-service.mjs";
 import { CuratedContentService } from "./services/curated-content-service.mjs";
 import { MaterialSourceService } from "./services/material-source-service.mjs";
 import { CuratedAlchemyService } from "./services/curated-alchemy-service.mjs";
+import { CuratedEquipmentService } from "./services/curated-equipment-service.mjs";
 import { ProductSourceService } from "./services/product-source-service.mjs";
 
 let app = null;
@@ -64,6 +65,7 @@ const API = {
   materialStacking: MaterialStackService,
   get curated() { return game.user?.isGM ? CuratedContentService : undefined; },
   get curatedAlchemy() { return game.user?.isGM ? CuratedAlchemyService : undefined; },
+  get curatedEquipment() { return game.user?.isGM ? CuratedEquipmentService : undefined; },
   get materialSources() { return game.user?.isGM ? MaterialSourceService : undefined; },
   get productSources() { return game.user?.isGM ? ProductSourceService : undefined; }
 };
@@ -94,6 +96,7 @@ Hooks.once("init", () => {
   runInitStep("gear normalization settings", () => GearNormalizationService.registerSettings());
   runInitStep("curated content settings", () => CuratedContentService.registerSettings());
   runInitStep("curated alchemy settings", () => CuratedAlchemyService.registerSettings());
+  runInitStep("curated equipment settings", () => CuratedEquipmentService.registerSettings());
   runInitStep("Crafting Core settings menu", () => game.settings.registerMenu(MODULE_ID, "craftingCoreSettings", {
     name: "Crafting Core",
     label: "Configure Crafting Core",

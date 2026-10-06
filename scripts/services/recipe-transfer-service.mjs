@@ -15,8 +15,8 @@ import { forcedDeletion } from "../utils/foundry-data.mjs";
  */
 export class RecipeTransferService {
   static FORMAT = "crafting-core-recipes";
-  static SCHEMA_VERSION = 2;
-  static SUPPORTED_SCHEMA_VERSIONS = new Set([1, 2]);
+  static SCHEMA_VERSION = 3;
+  static SUPPORTED_SCHEMA_VERSIONS = new Set([1, 2, 3]);
   static CUSTOM_ITEMS_FOLDER = "Custom Items";
 
   static listRecipes() {
@@ -68,12 +68,18 @@ export class RecipeTransferService {
     };
 
     const ingredients = [];
-    for (const ingredient of normalized.ingredients ?? []) {
+    for (const slot of RecipeService.ingredientSlots(normalized.ingredients ?? [])) {
+      for (const ingredient of slot.options) {
       const doc = await this.#resolveReferenceDocument(ingredient);
       const materialId = String(doc?.getFlag?.(MODULE_ID, FLAGS.MATERIAL_ID) ?? "");
       const explicitMode = ["baseItem", "exact"].includes(String(ingredient.matchMode)) ? String(ingredient.matchMode) : "";
       const matchMode = materialId ? "exact" : (explicitMode || (doc ? RecipeService.ingredientMatchMode(doc) : "legacy"));
       ingredients.push({
+        slotId: slot.slotId,
+        slotLabel: slot.label,
+        slotMode: slot.mode,
+        slotQuantity: slot.quantity,
+        optionId: ingredient.optionId,
         name: String(ingredient.name || doc?.name || "Item"),
         img: String(ingredient.img || doc?.img || ""),
         type: String(ingredient.type || doc?.type || ""),
@@ -88,6 +94,7 @@ export class RecipeTransferService {
           ? String(ingredient.exactSignature || (doc ? RecipeService.itemDefinitionSignature(doc) : ""))
           : ""
       });
+      }
     }
 
     return {
@@ -153,6 +160,7 @@ export class RecipeTransferService {
       const recipe = RecipeService.normalize(foundry.utils.deepClone(raw?.recipe ?? {}));
       const dependencies = [];
       const resolvedIngredients = [];
+      const resolvedSlots = new Map();
 
       for (const ingredient of raw?.ingredients ?? []) {
         const resolution = await this.#resolveImportedIngredient(ingredient, materialById);
@@ -175,8 +183,24 @@ export class RecipeTransferService {
           // Generic Base Item dependencies retain the canonical exported label instead of
           // borrowing the name/icon of an arbitrary local derivative.
           if (resolution.matchMode === "baseItem" && ingredient?.name) ref.name = String(ingredient.name);
-          resolvedIngredients.push(ref);
+          const hasSlotMetadata = Number(bundle.schemaVersion) >= 3 && ingredient?.slotId;
+          if (!hasSlotMetadata) resolvedIngredients.push(ref);
+          else {
+            const slotId = String(ingredient.slotId);
+            if (!resolvedSlots.has(slotId)) resolvedSlots.set(slotId, {
+              slotId, label: String(ingredient.slotLabel || ""),
+              mode: ["fixed", "or", "pool"].includes(String(ingredient.slotMode)) ? String(ingredient.slotMode) : "fixed",
+              quantity: Math.max(1, Number(ingredient.slotQuantity) || 1), options: []
+            });
+            ref.optionId = String(ingredient.optionId || `option-${resolvedSlots.get(slotId).options.length + 1}`);
+            resolvedSlots.get(slotId).options.push(ref);
+          }
         }
+      }
+
+      if (resolvedSlots.size) {
+        resolvedIngredients.length = 0;
+        for (const slot of resolvedSlots.values()) resolvedIngredients.push(slot);
       }
 
       const missingDependencies = dependencies.filter(row => row.status === "missing");

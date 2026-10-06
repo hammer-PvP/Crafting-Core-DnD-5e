@@ -180,13 +180,17 @@ export class CharacterSheetService {
       const recipeId = this.#selection.get(app.id ?? actor.id);
       if (!recipeId) return;
       if (!await this.#ensureFreshSelection(app, actor, recipeId)) return { cancelled: true };
-      return CraftingService.requestCraft(actor, recipeId);
+      const recipe = KnowledgeItemService.recipeForActor(actor, recipeId);
+      const ingredientSelection = this.#collectIngredientSelection(root, CraftingService.prepareRecipeForActor(actor, recipe));
+      return CraftingService.requestCraft(actor, recipeId, ingredientSelection);
     });
     this.#bindAsync(root, app, "start-project", async actor => {
       const recipeId = this.#selection.get(app.id ?? actor.id);
       if (!recipeId) return;
       if (!await this.#ensureFreshSelection(app, actor, recipeId)) return { cancelled: true };
-      return CraftingService.requestStartProject(actor, recipeId);
+      const recipe = KnowledgeItemService.recipeForActor(actor, recipeId);
+      const ingredientSelection = this.#collectIngredientSelection(root, CraftingService.prepareRecipeForActor(actor, recipe));
+      return CraftingService.requestStartProject(actor, recipeId, ingredientSelection);
     });
     this.#bindAsync(root, app, "work-project", actor => CraftingService.requestWorkOnProject(actor));
     this.#bindAsync(root, app, "extra-effort", actor => CraftingService.requestExtraEffort(actor));
@@ -279,6 +283,33 @@ export class CharacterSheetService {
       icon: "fa-solid fa-arrows-rotate"
     });
     return false;
+  }
+
+  static #collectIngredientSelection(root, preparedRecipe) {
+    if (!preparedRecipe?.hasFlexibleIngredients) return null;
+    const selection = {};
+    for (const slot of preparedRecipe.ingredientRows ?? []) {
+      if (slot.mode === "fixed") continue;
+      if (slot.mode === "or") {
+        const checked = [...root.querySelectorAll('.crafting-core-tab input[data-cc-or-slot]')]
+          .find(input => input.dataset.ccOrSlot === slot.slotId && input.checked);
+        if (!checked) throw new Error(`Choose one material for ${slot.label || slot.options.map(option => option.name).join(" / ")}.`);
+        selection[slot.slotId] = { optionId: String(checked.value) };
+        continue;
+      }
+      const quantities = {};
+      let total = 0;
+      [...root.querySelectorAll('.crafting-core-tab input[data-cc-pool-slot]')]
+        .filter(input => input.dataset.ccPoolSlot === slot.slotId)
+        .forEach(input => {
+          const quantity = Math.max(0, Math.floor(Number(input.value) || 0));
+          quantities[String(input.dataset.optionId || "")] = quantity;
+          total += quantity;
+        });
+      if (total !== Math.max(1, Number(slot.quantity) || 1)) throw new Error(`Select exactly ${slot.quantity} total units for ${slot.label || "this ingredient pool"}.`);
+      selection[slot.slotId] = { quantities };
+    }
+    return selection;
   }
 
   static async #confirmUnlearn(recipe) {

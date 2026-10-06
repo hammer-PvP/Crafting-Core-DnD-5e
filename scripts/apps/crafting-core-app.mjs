@@ -59,6 +59,17 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const selectedPublished = this.selectedPublishedRecipeId ? publishedById.get(this.selectedPublishedRecipeId) ?? null : null;
     const selectedPublishedDraft = selectedPublished ? RecipeService.get(selectedPublished.recipeId) : null;
     const selectedPublishedDraftPending = Boolean(selectedPublishedDraft && !KnowledgeItemService.sameRecipeDefinition(selectedPublishedDraft, selectedPublished.recipe));
+    const selectedPublishedIngredientRows = selectedPublished
+      ? RecipeService.ingredientSlots(selectedPublished.recipe?.ingredients ?? []).map(slot => ({
+        img: slot.options[0]?.img || "icons/svg/item-bag.svg",
+        label: slot.label || (slot.mode === "pool"
+          ? slot.options.map(option => option.name).join(" / ")
+          : slot.mode === "or"
+            ? slot.options.map(option => `${option.quantity} ${option.name}`).join(" OR ")
+            : slot.options[0]?.name || "Ingredient"),
+        modeLabel: slot.mode === "pool" ? "Mix / Pool" : slot.mode === "or" ? "Choose One" : "Fixed",
+        quantityLabel: slot.mode === "pool" ? `${slot.quantity} total` : (slot.mode === "fixed" ? `×${slot.options[0]?.quantity ?? 1}` : "")
+      })) : [];
 
     const rarity = String(primaryRarity(this.draft?.result?.snapshot?.system));
     const rarityLabel = rarity ? (CONFIG.DND5E?.itemRarity?.[rarity] ?? rarity) : "No rarity";
@@ -78,6 +89,16 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const proficiencyValues = (this.draft?.craftingResolution?.proficiencies ?? []).map(row => `${row.type}:${row.id}`);
     const progressCheckValue = `${this.draft?.project?.progressCheck?.type ?? "tool"}:${this.draft?.project?.progressCheck?.id ?? ""}`;
     const extraEffortCheckValue = `${this.draft?.project?.extraEffort?.type ?? "ability"}:${this.draft?.project?.extraEffort?.id ?? ""}`;
+    const ingredientEditorRows = (this.draft?.ingredients ?? []).map((row, index) => {
+      const slot = RecipeService.ingredientSlot(row, index);
+      const storedAsSlot = Boolean(Array.isArray(row?.options) || row?.slotId || ["fixed", "or", "pool"].includes(String(row?.mode)));
+      return {
+        index, slotId: slot?.slotId ?? `legacy-${index + 1}`, label: slot?.label ?? "",
+        mode: slot?.mode ?? "fixed", poolQuantity: slot?.quantity ?? 1, storedAsSlot,
+        hasAlternatives: (slot?.options?.length ?? 0) > 1,
+        options: (slot?.options ?? []).map((option, optionIndex) => ({ ...option, optionIndex }))
+      };
+    });
     return {
       activeView: this.activeView,
       recipeCount: recipes.length,
@@ -126,7 +147,9 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
         draftActionLabel: selectedPublishedDraft ? "Continue Editing" : "Edit as Draft",
         draftStatus: !selectedPublishedDraft ? "No Builder draft" : (selectedPublishedDraftPending ? "Unpublished changes" : "Draft synchronized")
       } : null,
+      selectedPublishedIngredientRows,
       draft: foundry.utils.deepClone(this.draft),
+      ingredientEditorRows,
       editingExisting: Boolean(this.selectedId),
       published: Boolean(currentSource),
       draftMatchesPublished,
@@ -210,13 +233,47 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       this.draft.ingredients.splice(Number(button.dataset.index), 1);
       this.#rerenderPreservingScroll();
     }));
+    root.querySelectorAll('[data-action="remove-ingredient-option"]').forEach(button => button.addEventListener("click", event => {
+      event.preventDefault(); this.#syncDraftFromForm();
+      const slotIndex = Number(button.dataset.slotIndex);
+      const optionIndex = Number(button.dataset.optionIndex);
+      const row = this.draft.ingredients[slotIndex];
+      if (!row) return;
+      const slot = RecipeService.ingredientSlot(row, slotIndex);
+      slot.options.splice(optionIndex, 1);
+      if (!slot.options.length) this.draft.ingredients.splice(slotIndex, 1);
+      else if (slot.options.length === 1 && slot.mode === "or") {
+        const only = { ...slot.options[0], quantity: Math.max(1, Number(slot.options[0].quantity) || 1) };
+        delete only.optionId;
+        this.draft.ingredients[slotIndex] = only;
+      } else this.draft.ingredients[slotIndex] = slot;
+      this.#rerenderPreservingScroll();
+    }));
+    root.querySelectorAll('[data-ingredient-mode]').forEach(select => select.addEventListener("change", event => {
+      event.preventDefault(); this.#syncDraftFromForm();
+      const index = Number(select.dataset.ingredientMode);
+      const row = this.draft.ingredients[index];
+      if (!row) return;
+      const slot = RecipeService.ingredientSlot(row, index);
+      const requested = String(select.value || "fixed");
+      if (requested === "fixed" && slot.options.length > 1) ui.notifications.warn("A Fixed slot can contain only one Item. Remove alternatives first.");
+      else {
+        slot.mode = requested;
+        if (requested === "fixed" && slot.options.length === 1) {
+          const flat = { ...slot.options[0], quantity: Math.max(1, Number(slot.options[0].quantity) || 1) };
+          delete flat.optionId;
+          this.draft.ingredients[index] = flat;
+        } else this.draft.ingredients[index] = slot;
+      }
+      this.#rerenderPreservingScroll();
+    }));
     root.querySelector('[data-action="clear-result"]')?.addEventListener("click", event => {
       event.preventDefault(); this.#syncDraftFromForm(); this.draft.result = null; this.#rerenderPreservingScroll();
     });
     root.querySelectorAll('[data-drop-kind]').forEach(zone => {
       zone.addEventListener("dragover", event => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; zone.classList.add("drag-over"); });
       zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
-      zone.addEventListener("drop", event => this.#onDrop(event, zone.dataset.dropKind));
+      zone.addEventListener("drop", event => this.#onDrop(event, zone.dataset.dropKind, zone.dataset.slotIndex));
     });
     root.querySelectorAll('[data-action="browse-image"]').forEach(button => button.addEventListener("click", event => this.#browseImage(event, button.dataset.target)));
     root.querySelector('[name="knowledgeLabel"]')?.addEventListener("change", event => {
@@ -487,11 +544,32 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       const index = Number(input.dataset.ingredientQuantity);
       if (this.draft.ingredients[index]) this.draft.ingredients[index].quantity = Math.max(1, Math.floor(Number(input.value) || 1));
     });
+    root.querySelectorAll('[data-ingredient-option-quantity]').forEach(input => {
+      const slotIndex = Number(input.dataset.slotIndex), optionIndex = Number(input.dataset.optionIndex);
+      const row = this.draft.ingredients[slotIndex]; if (!row) return;
+      const slot = RecipeService.ingredientSlot(row, slotIndex);
+      if (slot.options[optionIndex]) slot.options[optionIndex].quantity = Math.max(1, Math.floor(Number(input.value) || 1));
+      this.draft.ingredients[slotIndex] = slot;
+    });
+    root.querySelectorAll('[data-ingredient-pool-quantity]').forEach(input => {
+      const slotIndex = Number(input.dataset.ingredientPoolQuantity);
+      const row = this.draft.ingredients[slotIndex]; if (!row) return;
+      const slot = RecipeService.ingredientSlot(row, slotIndex);
+      slot.quantity = Math.max(1, Math.floor(Number(input.value) || 1));
+      this.draft.ingredients[slotIndex] = slot;
+    });
+    root.querySelectorAll('[data-ingredient-slot-label]').forEach(input => {
+      const slotIndex = Number(input.dataset.ingredientSlotLabel);
+      const row = this.draft.ingredients[slotIndex]; if (!row) return;
+      const slot = RecipeService.ingredientSlot(row, slotIndex);
+      slot.label = String(input.value || "").trim();
+      this.draft.ingredients[slotIndex] = slot;
+    });
     const resultQty = root.querySelector('[name="resultQuantity"]');
     if (this.draft.result && resultQty) this.draft.result.quantity = Math.max(1, Math.floor(Number(resultQty.value) || 1));
   }
 
-  async #onDrop(event, kind) {
+  async #onDrop(event, kind, slotIndexValue=null) {
     event.preventDefault();
     event.currentTarget.classList.remove("drag-over");
     this.#syncDraftFromForm();
@@ -510,7 +588,23 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
         ? await ProductSourceService.referenceForItem(item, 1)
         : RecipeService.itemReference(item, 1, { ingredient: true });
       if (kind === "result") this.draft.result = ref;
-      else {
+      else if (kind === "ingredient-slot") {
+        const slotIndex = Number(slotIndexValue);
+        const current = this.draft.ingredients[slotIndex];
+        if (!current) throw new Error("The target Ingredient Slot no longer exists.");
+        const slot = RecipeService.ingredientSlot(current, slotIndex);
+        const existing = slot.options.find(option => RecipeService.referencesEquivalent(option, ref));
+        if (existing) {
+          if (slot.mode === "pool") ui.notifications.info(`${ref.name} is already allowed in this Mix Pool.`);
+          else existing.quantity = Math.max(1, Number(existing.quantity) || 1) + 1;
+        } else {
+          ref.optionId = `option-${foundry.utils.randomID(8)}`;
+          slot.options.push(ref);
+          if (slot.mode === "fixed") slot.mode = "or";
+        }
+        if (!String(slot.slotId || "").startsWith("slot-")) slot.slotId = `slot-${foundry.utils.randomID(10)}`;
+        this.draft.ingredients[slotIndex] = slot;
+      } else {
         const existing = this.draft.ingredients.find(row => RecipeService.referencesEquivalent(row, ref));
         if (existing) existing.quantity += 1;
         else this.draft.ingredients.push(ref);

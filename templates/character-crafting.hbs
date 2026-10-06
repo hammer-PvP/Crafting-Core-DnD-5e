@@ -98,7 +98,20 @@
         {{#if playerVisibility.ingredients}}
         <section class="cc-profession-block"><h3>Ingredients</h3><div class="cc-sheet-ingredients">
           {{#each ingredientRows}}
-          <div class="cc-sheet-ingredient {{#unless sufficient}}missing{{/unless}} {{#unless ../playerVisibility.ingredientQuantities}}quantities-hidden{{/unless}}"><img src="{{img}}" alt=""><span>{{name}}</span><strong>{{#if ../playerVisibility.ingredientQuantities}}{{available}} / {{quantity}}{{else}}{{#if sufficient}}Available{{else}}Missing{{/if}}{{/if}}</strong><i class="fa-solid {{#if sufficient}}fa-check{{else}}fa-xmark{{/if}}"></i></div>
+            {{#if (eq mode "fixed")}}
+            <div class="cc-sheet-ingredient {{#unless sufficient}}missing{{/unless}} {{#unless ../playerVisibility.ingredientQuantities}}quantities-hidden{{/unless}}"><img src="{{img}}" alt=""><span>{{name}}</span><strong>{{#if ../playerVisibility.ingredientQuantities}}{{available}} / {{quantity}}{{else}}{{#if sufficient}}Available{{else}}Missing{{/if}}{{/if}}</strong><i class="fa-solid {{#if sufficient}}fa-check{{else}}fa-xmark{{/if}}"></i></div>
+            {{else}}
+            <div class="cc-sheet-ingredient-slot {{mode}} {{#unless sufficient}}missing{{/unless}}">
+              <div class="cc-sheet-ingredient-slot-heading"><span><strong>{{label}}</strong> · {{modeLabel}}{{#if (eq mode "pool")}} · choose {{quantity}} total{{/if}}</span><i class="fa-solid {{#if sufficient}}fa-check{{else}}fa-xmark{{/if}}"></i></div>
+              {{#each options}}
+                {{#if (eq ../mode "or")}}
+                <label class="cc-sheet-ingredient-option {{#unless sufficient}}missing{{/unless}}"><input type="radio" name="cc-or-{{../slotId}}" data-cc-or-slot="{{../slotId}}" value="{{optionId}}" {{#unless sufficient}}disabled{{/unless}}><img src="{{img}}" alt=""><span>{{name}}</span><strong>{{#if ../../playerVisibility.ingredientQuantities}}{{available}} / {{quantity}}{{else}}{{#if sufficient}}Available{{else}}Missing{{/if}}{{/if}}</strong></label>
+                {{else}}
+                <label class="cc-sheet-ingredient-option"><img src="{{img}}" alt=""><span>{{name}}</span><strong>{{#if ../../playerVisibility.ingredientQuantities}}Available {{available}}{{else}}{{#if available}}Available{{else}}Missing{{/if}}{{/if}}</strong><input class="cc-pool-quantity" type="number" min="0" max="{{available}}" step="1" value="0" data-cc-pool-slot="{{../slotId}}" data-option-id="{{optionId}}"></label>
+                {{/if}}
+              {{/each}}
+            </div>
+            {{/if}}
           {{/each}}
         </div></section>
         {{/if}}

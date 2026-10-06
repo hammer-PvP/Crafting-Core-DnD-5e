@@ -307,7 +307,7 @@ export class KnowledgeItemService {
       // the same authoritative Item in place without pulling it out of that curated hierarchy.
       if (item?.getFlag(MODULE_ID, FLAGS.CURATED)) {
         const curatedKind = String(item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) ?? "");
-        if (["culinary-recipe", "alchemy-recipe"].includes(curatedKind)) data.folder = item.folder?.id ?? item.folder ?? data.folder ?? null;
+        if (["culinary-recipe", "alchemy-recipe", "equipment-recipe"].includes(curatedKind)) data.folder = item.folder?.id ?? item.folder ?? data.folder ?? null;
       }
 
       const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
@@ -583,9 +583,23 @@ export class KnowledgeItemService {
     }
 
     if (visibility.ingredients && Array.isArray(recipe?.ingredients) && recipe.ingredients.length) {
-      const ingredients = recipe.ingredients.map(row => {
-        const qty = visibility.ingredientQuantities ? ` ×${Math.max(1, Number(row.quantity) || 1)}` : "";
-        return `<li>${escape(row.name || "Item")}${qty}</li>`;
+      const ingredients = RecipeService.ingredientSlots(recipe.ingredients).map(slot => {
+        if (slot.mode === "pool") {
+          const names = slot.options.map(option => escape(option.name || "Item")).join(" / ");
+          const qty = visibility.ingredientQuantities ? ` — choose ${slot.quantity} total` : "";
+          return `<li><strong>${escape(slot.label || "Mix")}</strong>: ${names}${qty}</li>`;
+        }
+        if (slot.mode === "or") {
+          const alternatives = slot.options.map(option => {
+            const qty = visibility.ingredientQuantities ? `${Math.max(1, Number(option.quantity) || 1)} × ` : "";
+            return `${qty}${escape(option.name || "Item")}`;
+          }).join(" <strong>OR</strong> ");
+          const label = slot.label ? `<strong>${escape(slot.label)}</strong>: ` : "";
+          return `<li>${label}${alternatives}</li>`;
+        }
+        const option = slot.options[0] ?? {};
+        const qty = visibility.ingredientQuantities ? ` ×${Math.max(1, Number(option.quantity) || 1)}` : "";
+        return `<li>${escape(option.name || "Item")}${qty}</li>`;
       }).join("");
       lines.push(`<section class="crafting-core-knowledge-ingredients"><h3>Ingredients</h3><ul>${ingredients}</ul></section>`);
     }

@@ -2,6 +2,7 @@ import { MODULE_ID } from "../constants.mjs";
 import { MaterialCatalogService } from "../services/material-catalog-service.mjs";
 import { CuratedContentService } from "../services/curated-content-service.mjs";
 import { CuratedAlchemyService } from "../services/curated-alchemy-service.mjs";
+import { CuratedEquipmentService } from "../services/curated-equipment-service.mjs";
 import { ProductSourceService } from "../services/product-source-service.mjs";
 import { MaterialEditorApp } from "./material-editor-app.mjs";
 import { OperationProgressApp } from "../ui/operation-progress.mjs";
@@ -36,9 +37,10 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     const natures = [...new Set(entries.map(entry => entry.nature).filter(Boolean))].sort((a,b) => a.localeCompare(b, game.i18n.lang));
     const culinary = await CuratedContentService.culinaryCatalogContext();
     const alchemy = await CuratedAlchemyService.catalogContext();
+    const equipment = await CuratedEquipmentService.catalogContext();
     const linkedProducts = await ProductSourceService.catalogContext();
-    const productCatalogTotal = Number(culinary.total ?? 0) + (alchemy.enabled ? Number(alchemy.productTotal ?? 0) : 0);
-    const productCatalogCount = Number(culinary.count ?? 0) + (alchemy.enabled ? Number(alchemy.productCount ?? 0) : 0);
+    const productCatalogTotal = Number(culinary.total ?? 0) + (alchemy.enabled ? Number(alchemy.productTotal ?? 0) : 0) + (equipment.enabled ? Number(equipment.productTotal ?? 0) : 0);
+    const productCatalogCount = Number(culinary.count ?? 0) + (alchemy.enabled ? Number(alchemy.productCount ?? 0) : 0) + (equipment.enabled ? Number(equipment.productCount ?? 0) : 0);
     return {
       summary,
       groups: MaterialCatalogService.groupedEntries(filtered),
@@ -53,6 +55,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       isProducts: this.catalogView === "products",
       culinary,
       alchemy,
+      equipment,
       linkedProducts,
       natureOptions: natures.map(value => ({ value, label: value.replace(/[-_]+/g," ").replace(/\b\w/g,c=>c.toUpperCase()), selected: this.filters.nature === value })),
       familyOptions: [
@@ -75,6 +78,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     }));
     root.querySelector('[data-action="restore-curated-culinary"]')?.addEventListener("click", event => this.#restoreCuratedCulinary(event));
     root.querySelector('[data-action="restore-curated-alchemy"]')?.addEventListener("click", event => this.#restoreCuratedAlchemy(event));
+    root.querySelector('[data-action="restore-curated-equipment"]')?.addEventListener("click", event => this.#restoreCuratedEquipment(event));
     root.querySelector('[data-action="sync-product-sources"]')?.addEventListener("click", event => this.#syncProductSources(event));
     root.querySelector('[data-action="open-alchemy-products"]')?.addEventListener("click", event => {
       event.preventDefault();
@@ -134,6 +138,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       '[data-action="reset-curated-defaults"]',
       '[data-action="restore-curated-culinary"]',
       '[data-action="restore-curated-alchemy"]',
+      '[data-action="restore-curated-equipment"]',
       '[data-action="sync-product-sources"]'
     ];
     this.element?.querySelectorAll?.(selectors.join(","))?.forEach(button => { button.disabled = Boolean(disabled); });
@@ -424,6 +429,43 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     } catch (error) {
       console.error(`${MODULE_ID} | Curated Alchemy & Inscription restore failed.`, error);
       ui.notifications.error(error.message ?? "Crafting Core could not restore Alchemy & Inscription.");
+    } finally {
+      this.#setMaintenanceButtonsDisabled(false);
+    }
+  }
+
+  async #restoreCuratedEquipment(event) {
+    event.preventDefault();
+    const confirmed = await foundry.applications.api.DialogV2.confirm({
+      window: { title: "Install / Restore Equipment Crafting" },
+      content: "<p>Install or repair the <strong>Curated Equipment</strong> library from the installed D&D5e <strong>SRD 5.2 Equipment</strong> pack?</p><p>Each mundane weapon, armor, shield, and ammunition entry receives +0, +1, +2, and +3 Products and Blueprint Recipes. Ammunition crafts in batches of 10. Recipes use flexible Ingredient Slots, Long-Rest Projects, Constitution Extra Effort, and the configured equipment proficiency rules.</p>",
+      yes: { label: "Install / Restore", icon: "fa-solid fa-shield-halved" },
+      no: { label: "Cancel" }
+    });
+    if (!confirmed) return;
+    if (OperationProgressApp.busy) return ui.notifications.warn("Crafting Core is already running another maintenance operation.");
+    this.#setMaintenanceButtonsDisabled(true);
+    try {
+      const result = await OperationProgressApp.run({
+        title: "Crafting Core — Restore Equipment",
+        initial: { phase: "Scanning SRD Equipment", label: "Resolving mundane SRD 5.2 equipment…", overallCurrent: 0, overallTotal: 1 },
+        task: report => CuratedEquipmentService.restoreAll({ onProgress: report }),
+        summarize: result => ({
+          message: "Equipment crafting library restored successfully.",
+          summary: [
+            { label: "SRD Base Items", value: result.baseItems ?? 0 },
+            { label: "Products", value: `${result.products?.created ?? 0} created · ${result.products?.updated ?? 0} updated` },
+            { label: "Blueprints", value: `${result.recipes?.created ?? 0} created · ${result.recipes?.updated ?? 0} updated` },
+            { label: "Total Variants", value: result.total ?? 0 }
+          ]
+        })
+      });
+      if (!result) return;
+      ui.notifications.info(`Equipment Crafting: ${result.baseItems ?? 0} SRD base Items, ${result.total ?? 0} Product/Blueprint variants restored.`);
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Curated Equipment restore failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not restore Equipment Crafting.");
     } finally {
       this.#setMaintenanceButtonsDisabled(false);
     }

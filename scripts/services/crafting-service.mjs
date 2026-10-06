@@ -58,11 +58,11 @@ export class CraftingService {
     return Boolean(job && ["active", "finalizing"].includes(job.status));
   }
 
-  static async requestCraft(actor, recipeId) {
+  static async requestCraft(actor, recipeId, ingredientSelection=null) {
     const recipe = KnowledgeItemService.recipeForActor(actor, String(recipeId));
     if (!recipe) throw new Error(`${actor?.name ?? "This character"} has not learned this recipe.`);
-    if (recipe.craftingMode === "project") return this.requestStartProject(actor, recipeId);
-    return this.#requestTimedCraft(actor, recipeId);
+    if (recipe.craftingMode === "project") return this.requestStartProject(actor, recipeId, ingredientSelection);
+    return this.#requestTimedCraft(actor, recipeId, ingredientSelection);
   }
 
   static #finalCheckChoices(recipe) {
@@ -121,12 +121,12 @@ export class CraftingService {
     return this.#resolveFinalCheck(recipe, { type, id });
   }
 
-  static async requestStartProject(actor, recipeId) {
+  static async requestStartProject(actor, recipeId, ingredientSelection=null) {
     this.#assertCharacter(actor);
     const gm = this.#requireActiveGM();
     const recipe = KnowledgeItemService.recipeForActor(actor, String(recipeId));
     if (!recipe) throw new Error(`${actor.name} has not learned this recipe.`);
-    if (recipe.craftingMode !== "project") return this.#requestTimedCraft(actor, recipeId);
+    if (recipe.craftingMode !== "project") return this.#requestTimedCraft(actor, recipeId, ingredientSelection);
     if (this.isBusy(actor)) throw new Error(`${actor.name} already has an active crafting project.`);
 
     const evaluation = this.evaluateResolution(actor, recipe);
@@ -140,6 +140,9 @@ export class CraftingService {
     const checkApplies = this.#progressCheckApplies(previewProject, projectConfig);
 
     const payload = this.#baseRequest(REQUEST_PROJECT_START, actor, recipeId);
+    payload.ingredientSelection = ingredientSelection && typeof ingredientSelection === "object"
+      ? foundry.utils.deepClone(ingredientSelection)
+      : null;
     payload.finalCheck = finalCheck;
     payload.rollMessageId = null;
     if (checkApplies) {
@@ -244,18 +247,35 @@ export class CraftingService {
   }
 
   static prepareRecipeForActor(actor, recipe) {
-    const rows = (recipe.ingredients ?? []).map(reference => {
-      const matches = actor.items.filter(item => RecipeService.itemMatchesReference(item, reference));
-      const available = matches.reduce((sum, item) => sum + this.#itemQuantity(item), 0);
+    const slots = RecipeService.ingredientSlots(recipe.ingredients ?? []);
+    const rows = slots.map(slot => {
+      const options = slot.options.map(option => {
+        const matches = actor.items.filter(item => RecipeService.itemMatchesReference(item, option));
+        const available = matches.reduce((sum, item) => sum + this.#itemQuantity(item), 0);
+        const required = slot.mode === "pool" ? 0 : Math.max(1, Number(option.quantity) || 1);
+        return { ...option, available, required, sufficient: slot.mode === "pool" ? available > 0 : available >= required, matches: matches.map(item => item.id) };
+      });
+      const poolAvailable = options.reduce((sum, option) => sum + option.available, 0);
+      const sufficient = slot.mode === "pool" ? poolAvailable >= slot.quantity
+        : slot.mode === "or" ? options.some(option => option.sufficient)
+          : Boolean(options[0]?.sufficient);
+      const primary = options[0] ?? {};
+      const defaultName = slot.mode === "pool" ? "Ingredient Pool" : slot.mode === "or" ? "Alternative Ingredient" : primary.name;
       return {
-        ...reference,
-        available,
-        sufficient: available >= reference.quantity,
-        matches: matches.map(item => item.id)
+        slotId: slot.slotId, label: slot.label || defaultName, mode: slot.mode,
+        modeLabel: slot.mode === "pool" ? "Mix / Pool" : slot.mode === "or" ? "Choose One" : "Fixed",
+        quantity: slot.mode === "pool" ? slot.quantity : Math.max(1, Number(primary.quantity) || 1),
+        name: slot.label || defaultName, img: primary.img,
+        available: slot.mode === "pool" ? poolAvailable : primary.available,
+        sufficient, flexible: slot.mode !== "fixed", options
       };
     });
     const craftCount = rows.length
-      ? Math.max(0, Math.min(...rows.map(row => Math.floor(row.available / Math.max(1, Number(row.quantity) || 1)))))
+      ? Math.max(0, Math.min(...rows.map(row => {
+        if (row.mode === "pool") return Math.floor(row.available / Math.max(1, Number(row.quantity) || 1));
+        if (row.mode === "or") return Math.max(0, ...row.options.map(option => Math.floor(option.available / Math.max(1, Number(option.quantity) || 1))));
+        return Math.floor(row.available / Math.max(1, Number(row.quantity) || 1));
+      })))
       : 0;
     const resolution = this.evaluateResolution(actor, recipe);
     const project = RecipeService.normalizeProject(recipe.project);
@@ -265,6 +285,7 @@ export class CraftingService {
       playerVisibility: visibility,
       project,
       ingredientRows: rows,
+      hasFlexibleIngredients: rows.some(row => row.flexible),
       craftCount,
       resolution,
       projectDisplay: {
@@ -383,7 +404,7 @@ export class CraftingService {
     }
   }
 
-  static async #requestTimedCraft(actor, recipeId) {
+  static async #requestTimedCraft(actor, recipeId, ingredientSelection=null) {
     this.#assertCharacter(actor);
     const gm = this.#requireActiveGM();
     const recipe = KnowledgeItemService.recipeForActor(actor, String(recipeId));
@@ -395,6 +416,9 @@ export class CraftingService {
       : this.#resolveFinalCheck(recipe, null);
     if (evaluation.rollRequired && !finalCheck) throw new Error("The Final Crafting Check selection was cancelled.");
     const payload = this.#baseRequest(REQUEST_TIMED, actor, recipeId);
+    payload.ingredientSelection = ingredientSelection && typeof ingredientSelection === "object"
+      ? foundry.utils.deepClone(ingredientSelection)
+      : null;
     payload.finalCheck = finalCheck;
     payload.rollMessageId = null;
     if (evaluation.rollRequired) {
@@ -496,6 +520,9 @@ export class CraftingService {
       : "Required crafting materials are missing.");
     if (!prepared.resolution.eligible) throw new Error(prepared.resolution.publicBlockReason);
 
+    const selectedRequirements = this.#resolveIngredientRequirements(actor, recipe.ingredients, request.ingredientSelection, {
+      revealNames: prepared.playerVisibility?.ingredients
+    });
     const finalCheck = this.#resolveFinalCheck(recipe, request.finalCheck ?? null);
     const rollResult = prepared.resolution.rollRequired
       ? await this.#validateRoll(actor, recipe, requester, request, finalCheck, "final")
@@ -504,7 +531,7 @@ export class CraftingService {
     if (!rollResult.success) {
       const failure = prepared.resolution.failure;
       const lossPercent = failure.loseMaterials ? failure.lossPercent : 0;
-      const lostRequirements = this.#scaledRequirements(recipe.ingredients, lossPercent);
+      const lostRequirements = this.#scaledRequirements(selectedRequirements, lossPercent);
       if (lostRequirements.length) await this.#consumeIngredients(actor, lostRequirements, { revealNames: prepared.playerVisibility?.ingredients });
       await this.#postTimedOutcome(actor, recipe, { success: false, total: rollResult.total, dc: prepared.resolution.check.dc, lossPercent });
       return { actorId: actor.id, recipeId: recipe.id, outcome: "failure", total: rollResult.total, dc: prepared.resolution.check.dc, lossPercent };
@@ -515,7 +542,7 @@ export class CraftingService {
     // into this timed job so a later source update cannot mutate an in-progress craft.
     const frozenResult = await ProductSourceService.freezeResult(recipe.result);
     const resultData = frozenResult.data;
-    await this.#consumeIngredients(actor, recipe.ingredients, { revealNames: prepared.playerVisibility?.ingredients });
+    await this.#consumeIngredients(actor, selectedRequirements, { revealNames: prepared.playerVisibility?.ingredients });
     const startedAt = this.serverTime();
     const endsAt = startedAt + Math.max(0, Number(recipe.craftingTime) || 0) * 1000;
     const job = {
@@ -543,6 +570,9 @@ export class CraftingService {
       : "Required crafting materials are missing.");
     if (!prepared.resolution.eligible) throw new Error(prepared.resolution.publicBlockReason);
 
+    const selectedRequirements = this.#resolveIngredientRequirements(actor, recipe.ingredients, request.ingredientSelection, {
+      revealNames: prepared.playerVisibility?.ingredients
+    });
     const finalCheck = this.#resolveFinalCheck(recipe, request.finalCheck ?? null);
     const config = RecipeService.normalizeProject(recipe.project);
     const checkApplies = this.#progressCheckApplies({ completedWork: 0, midpointPassed: false }, config);
@@ -550,7 +580,7 @@ export class CraftingService {
       ? await this.#validateRoll(actor, recipe, requester, request, config.progressCheck, "progress")
       : { success: true, total: null, message: null };
 
-    const reservedMaterials = await this.#reserveIngredients(actor, recipe.ingredients, { revealNames: prepared.playerVisibility?.ingredients });
+    const reservedMaterials = await this.#reserveIngredients(actor, selectedRequirements, { revealNames: prepared.playerVisibility?.ingredients });
     const snapshot = RecipeService.snapshot(recipe);
     // Projects intentionally freeze the Product definition when the Project begins. This keeps
     // existing/in-progress Projects stable while future Projects use the newest synchronized source.
@@ -562,7 +592,8 @@ export class CraftingService {
       requiredWork: config.requiredWork, completedWork: 0, cadence: config.cadence,
       midpointPassed: false, workAvailable: false, finalAvailable: false,
       extraEffortAvailable: false, extraEffortUsedThisPeriod: false,
-      reservedMaterials, requesterId: requester.id, startedAt: this.serverTime(), updatedAt: this.serverTime(),
+      reservedMaterials, ingredientSelection: foundry.utils.deepClone(request.ingredientSelection ?? {}),
+      requesterId: requester.id, startedAt: this.serverTime(), updatedAt: this.serverTime(),
       finalCheck,
       finalPolicy: { automaticSuccess: prepared.resolution.automaticSuccess, rollRequired: prepared.resolution.rollRequired }
     };
@@ -1045,6 +1076,58 @@ export class CraftingService {
     return null;
   }
 
+  static #resolveIngredientRequirements(actor, ingredients, selection=null, { revealNames=true }={}) {
+    const slots = RecipeService.ingredientSlots(ingredients ?? []);
+    const chosen = selection && typeof selection === "object" ? selection : {};
+    const requirements = [];
+    for (const slot of slots) {
+      if (slot.mode === "fixed") {
+        const option = slot.options[0];
+        if (!option) throw new Error("A Fixed Ingredient Slot has no configured Item.");
+        requirements.push({ ...option, quantity: Math.max(1, Number(option.quantity) || Number(slot.quantity) || 1), slotId: slot.slotId, optionId: option.optionId });
+        continue;
+      }
+      const slotSelection = chosen?.[slot.slotId];
+      if (slot.mode === "or") {
+        const optionId = typeof slotSelection === "string" ? slotSelection : String(slotSelection?.optionId ?? "");
+        const option = slot.options.find(row => String(row.optionId) === optionId);
+        if (!option) throw new Error(revealNames
+          ? `Choose one ingredient option for ${slot.label || slot.options.map(row => row.name).join(" / ")}.`
+          : "Choose one valid ingredient option before crafting.");
+        requirements.push({ ...option, quantity: Math.max(1, Number(option.quantity) || 1), slotId: slot.slotId, optionId: option.optionId });
+        continue;
+      }
+      const quantities = slotSelection?.quantities && typeof slotSelection.quantities === "object"
+        ? slotSelection.quantities : (slotSelection && typeof slotSelection === "object" ? slotSelection : {});
+      let selectedTotal = 0;
+      for (const option of slot.options) {
+        const quantity = Math.max(0, Math.floor(Number(quantities?.[option.optionId]) || 0));
+        if (!quantity) continue;
+        selectedTotal += quantity;
+        requirements.push({ ...option, quantity, slotId: slot.slotId, optionId: option.optionId });
+      }
+      if (selectedTotal !== Math.max(1, Number(slot.quantity) || 1)) throw new Error(revealNames
+        ? `Choose exactly ${slot.quantity} total units for ${slot.label || "this ingredient pool"}.`
+        : "Complete the required ingredient pool before crafting.");
+    }
+
+    // Server-authoritative dry allocation prevents both forged client quantities and reuse
+    // of the same Actor stack across multiple slots.
+    const state = new Map(actor.items.map(item => [item.id, { item, remaining: this.#itemQuantity(item) }]));
+    for (const requirement of requirements) {
+      let need = Math.max(1, Number(requirement.quantity) || 1);
+      const candidates = [...state.values()].filter(row => row.remaining > 0 && RecipeService.itemMatchesReference(row.item, requirement));
+      for (const row of candidates) {
+        if (need <= 0) break;
+        const used = Math.min(row.remaining, need);
+        row.remaining -= used;
+        need -= used;
+      }
+      if (need > 0) throw new Error(revealNames ? `Not enough ${requirement.name}.` : "Not enough required crafting materials.");
+    }
+    return requirements;
+  }
+
   static async #reserveIngredients(actor, requirements, { revealNames=true }={}) {
     const state = new Map(actor.items.map(item => [item.id, {
       item, quantity: this.#itemQuantity(item), remaining: this.#itemQuantity(item), used: 0
@@ -1217,6 +1300,19 @@ export class CraftingService {
     delete data._id; delete data.folder; delete data.ownership;
     data.flags ??= {}; data.flags[MODULE_ID] ??= {}; data.flags[MODULE_ID][FLAGS.SOURCE_UUID] = sourceUuid;
     if (foundry.utils.hasProperty(data, "system.quantity")) {
+      // Finished stackable Products (not only crafting Materials) may safely join an
+      // existing stack when they came from the exact same Product definition. This is
+      // especially important for Curated ammunition, which is produced in batches of 10.
+      const container = String(data.system?.container ?? "");
+      const existing = actor.items.find(item => String(item.getFlag?.(MODULE_ID, FLAGS.SOURCE_UUID) ?? "") === String(sourceUuid || "")
+        && String(item.type ?? "") === String(data.type ?? "")
+        && String(item.system?.container ?? "") === container
+        && foundry.utils.hasProperty(item, "system.quantity"));
+      if (existing && sourceUuid) {
+        const next = Math.max(0, Number(existing.system?.quantity) || 0) + Math.max(1, Math.floor(Number(quantity) || 1));
+        await existing.update({ "system.quantity": next });
+        return;
+      }
       await MaterialStackService.createOrStack(actor, data, quantity);
       return;
     }

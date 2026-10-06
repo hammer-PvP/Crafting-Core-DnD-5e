@@ -52,6 +52,21 @@ export class RecipeService {
     return normalized;
   }
 
+  static async saveMany(recipeList=[]) {
+    if (!game.user.isGM) throw new Error("Only a GM can create or edit Crafting Core recipes.");
+    const recipes = this.all();
+    const saved = [];
+    for (const recipe of recipeList ?? []) {
+      const normalized = this.normalize(recipe);
+      recipes[normalized.id] = normalized;
+      saved.push(normalized);
+    }
+    if (!saved.length) return [];
+    await game.settings.set(MODULE_ID, SETTINGS.RECIPES, recipes);
+    Hooks.callAll(`${MODULE_ID}.recipesChanged`, saved.map(recipe => recipe.id));
+    return saved;
+  }
+
   static async delete(id) {
     if (!game.user.isGM) throw new Error("Only a GM can delete Crafting Core recipes.");
     const recipes = this.all();
@@ -82,19 +97,8 @@ export class RecipeService {
       learning: { access: learningAccess },
       playerVisibility: this.normalizePlayerVisibility(recipe.playerVisibility),
       ingredients: ingredients
-        .filter(row => row?.uuid)
-        .map(row => ({
-          uuid: String(row.uuid),
-          sourceUuid: String(row.sourceUuid || row.uuid),
-          name: String(row.name || "Item"),
-          img: String(row.img || "icons/svg/item-bag.svg"),
-          type: String(row.type || ""),
-          identifier: String(row.identifier || ""),
-          matchMode: ["baseItem", "exact", "legacy"].includes(String(row.matchMode)) ? String(row.matchMode) : "legacy",
-          baseItemIdentifier: String(row.baseItemIdentifier || ""),
-          exactSignature: String(row.exactSignature || ""),
-          quantity: Math.max(1, Math.floor(Number(row.quantity) || 1))
-        })),
+        .map((row, index) => this.normalizeIngredientEntry(row, index))
+        .filter(Boolean),
       result: (recipe.result?.uuid || recipe.result?.sourceUuid || recipe.result?.fallbackUuid || recipe.result?.snapshot) ? {
         uuid: String(recipe.result.uuid || recipe.result.sourceUuid || recipe.result.fallbackUuid || ""),
         sourceUuid: String(recipe.result.sourceUuid || recipe.result.uuid || recipe.result.fallbackUuid || ""),
@@ -134,6 +138,67 @@ export class RecipeService {
       createdAt: Number(recipe.createdAt) || Date.now(),
       updatedAt: Date.now()
     };
+  }
+
+  static normalizeIngredientReference(row={}) {
+    if (!row?.uuid) return null;
+    return {
+      ...(row.optionId ? { optionId: String(row.optionId) } : {}),
+      uuid: String(row.uuid),
+      sourceUuid: String(row.sourceUuid || row.uuid),
+      name: String(row.name || "Item"),
+      img: String(row.img || "icons/svg/item-bag.svg"),
+      type: String(row.type || ""),
+      identifier: String(row.identifier || ""),
+      matchMode: ["baseItem", "exact", "legacy"].includes(String(row.matchMode)) ? String(row.matchMode) : "legacy",
+      baseItemIdentifier: String(row.baseItemIdentifier || ""),
+      exactSignature: String(row.exactSignature || ""),
+      quantity: Math.max(1, Math.floor(Number(row.quantity) || 1))
+    };
+  }
+
+  static normalizeIngredientEntry(row={}, index=0) {
+    const hasSlotShape = Array.isArray(row?.options) || Boolean(row?.slotId) || ["fixed", "or", "pool"].includes(String(row?.mode));
+    if (!hasSlotShape) return this.normalizeIngredientReference(row);
+    const options = (Array.isArray(row.options) ? row.options : [])
+      .map((option, optionIndex) => {
+        const normalized = this.normalizeIngredientReference(option);
+        if (!normalized) return null;
+        normalized.optionId = String(option.optionId || `option-${optionIndex + 1}`);
+        return normalized;
+      })
+      .filter(Boolean);
+    if (!options.length) return null;
+    let mode = ["fixed", "or", "pool"].includes(String(row.mode)) ? String(row.mode) : (options.length > 1 ? "or" : "fixed");
+    if (mode === "fixed" && options.length > 1) mode = "or";
+    return {
+      slotId: String(row.slotId || `slot-${index + 1}`),
+      label: String(row.label || ""),
+      mode,
+      quantity: Math.max(1, Math.floor(Number(row.quantity) || Number(options[0]?.quantity) || 1)),
+      options
+    };
+  }
+
+  static ingredientSlot(row={}, index=0) {
+    if (Array.isArray(row?.options) || row?.slotId || ["fixed", "or", "pool"].includes(String(row?.mode))) {
+      return this.normalizeIngredientEntry(row, index);
+    }
+    const reference = this.normalizeIngredientReference(row);
+    if (!reference) return null;
+    reference.optionId = String(reference.optionId || "option-1");
+    return {
+      slotId: `legacy-${index + 1}`,
+      label: "",
+      mode: "fixed",
+      quantity: Math.max(1, Number(reference.quantity) || 1),
+      options: [reference],
+      legacy: true
+    };
+  }
+
+  static ingredientSlots(ingredients=[]) {
+    return (Array.isArray(ingredients) ? ingredients : []).map((row, index) => this.ingredientSlot(row, index)).filter(Boolean);
   }
 
   static normalizeCraftingResolution(value={}) {

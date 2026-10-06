@@ -13,13 +13,20 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.5.8b
+- **Crafting Core:** v0.5.9
 - **Foundry VTT:** minimum 14.367, verified 14.367
 - **D&D 5e:** 6.0.0-6.0.999, verified 6.0.1
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
 - **DnD 5e Item Creator:** optional for the core module; **0.7.1+ is required for the official persistent Curated Food and Alcohol Products**
 
-Crafting Core v0.5.8b includes the v0.5.8 Product source/fallback architecture plus an in-place migration hotfix for legacy Knowledge Source Recipe snapshots. Recipe outputs can now follow a current mother Item from any compatible Compendium while retaining a stable mirror in **Crafting Core — Products**. Source synchronization uses fingerprints and the states **Synced**, **Updated**, **Source Missing**, and **Needs Review**; broken links are never guessed or reconnected by name. Existing Recipe IDs, published Knowledge, learned Characters, Curated Product identity, and active Crafting Projects are preserved during migration.
+Crafting Core v0.5.9 builds on the validated v0.5.8 Product source/fallback and Knowledge migration line. Recipe outputs can follow a current mother Item from any compatible Compendium while retaining a stable mirror in **Crafting Core — Products**, and v0.5.9 adds backward-compatible Ingredient Slots plus the optional SRD 5.2 Equipment Crafting library. Existing Recipe IDs, published Knowledge, learned Characters, Curated Product identity, and active Crafting Projects remain preserved.
+
+### v0.5.9 — Ingredient Slots & Equipment Crafting
+
+Recipes can now model ingredient requirements as **Fixed**, **OR**, or **Mix / Pool** slots. OR alternatives may require different quantities; Mix / Pool slots let the crafter allocate any combination of the listed equivalent Materials to the required total. Project start freezes the actual allocation selected by the crafter.
+
+The optional **Equipment Crafting** library discovers mundane Weapons, Armor, Shields, and Ammunition directly from the installed D&D5e SRD 5.2 `equipment24` Compendium and creates +0 / +1 / +2 / +3 Products and Blueprint Recipes. Equipment Projects use 2 / 4 / 6 / 8 Long-Rest Work Periods, Constitution DC 12 Extra Effort (+1 additional progress on success), two relevant alternative tool proficiencies, and DC 13 retry-only finalization for non-proficient crafters. Ammunition is produced in batches of 10.
+
 
 ### Product source synchronization
 
@@ -33,6 +40,7 @@ The reusable progress UI covers maintenance actions that can take several second
 - Reset Curated Material defaults;
 - Restore the 58 Curated Culinary Products and Recipes;
 - Install / Restore the optional Alchemy & Inscription library;
+- Install / Restore the optional SRD 5.2 Equipment Crafting library;
 - Resync Material Sources;
 - Synchronize Product Sources.
 

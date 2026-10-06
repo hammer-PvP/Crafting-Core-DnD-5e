@@ -147,6 +147,15 @@
       </section>
 
       <section class="cc-form-card">
+        <span class="cc-kicker">SRD 5.2 Equipment Crafting</span>
+        <h3>Weapons, Armor, Shields &amp; Ammunition</h3>
+        <p class="cc-note"><strong>{{equipment.statusLabel}}</strong> · {{equipment.productCount}} / {{equipment.productTotal}} Products · {{equipment.recipeCount}} / {{equipment.recipeTotal}} Blueprints.</p>
+        <p class="cc-note">Discovers mundane equipment directly from <strong>dnd5e.equipment24</strong> and builds +0 / +1 / +2 / +3 crafting variants. Ammunition is crafted in batches of 10. Equipment Recipes use Long-Rest Projects, flexible Ingredient Slots, and two relevant tool proficiencies.</p>
+        <p class="cc-note"><strong>Workload:</strong> mundane 2 Long Rests; +1 = 4; +2 = 6; +3 = 8. Extra Effort is Constitution DC 12 and can add +1 additional progress after normal work.</p>
+        <button type="button" class="cc-primary-action cc-wide" data-action="restore-curated-equipment" {{#unless equipment.sourceAvailable}}disabled{{/unless}}><i class="fa-solid fa-shield-halved"></i> Install / Restore Equipment Crafting</button>
+      </section>
+
+      <section class="cc-form-card">
         <span class="cc-kicker">Runtime Integration</span>
         <h3>DnD 5e Item Creator</h3>
         {{#if culinary.compatible}}
@@ -167,7 +176,7 @@
     <main class="cc-material-catalog cc-product-catalog">
       <div class="cc-catalog-summary">
         <div><span class="cc-kicker">Active Curated Content</span><h2>{{productCatalogCount}} / {{productCatalogTotal}} Curated Products</h2></div>
-        <p>The catalog combines the 58 official Culinary Products with the optional SRD-only Alchemy &amp; Inscription library when installed. Culinary Products keep their icon curation controls; Alchemy and Inscription Products preserve their SRD mechanics and managed presentation.</p>
+        <p>The catalog combines Culinary Products, optional SRD-only Alchemy &amp; Inscription, and the SRD 5.2 Equipment crafting library when installed. Equipment variants preserve the native base Item while adding only their +1 / +2 / +3 magical bonus.</p>
       </div>
 
       {{#unless culinary.compatible}}
@@ -233,6 +242,23 @@
       </section>
       {{else}}
       <div class="cc-curated-unavailable"><i class="fa-solid fa-flask-vial"></i><strong>Alchemy &amp; Inscription is optional</strong><p>Use <strong>Install / Restore Alchemy &amp; Inscription</strong> to add its 23 Materials, 82 Products, and 97 Recipes to this World. Install it before the first Creature Scanner pass if you want the new harvest materials included immediately.</p></div>
+      {{/if}}
+
+      {{#if equipment.enabled}}
+      <section class="cc-curated-product-section">
+        <div class="cc-curated-product-section-title"><strong>Equipment Crafting</strong><small>{{equipment.productCount}} / {{equipment.productTotal}} products</small></div>
+        <details class="cc-material-group" open>
+          <summary><span>SRD 5.2 Equipment Variants</span><small>{{equipment.baseCount}} base items · 4 variants each</small></summary>
+          <div class="cc-product-table">
+            <div class="cc-product-table-head"><span>Family</span><span>SRD Base Items</span><span>+0 / +1 / +2 / +3</span><span>Workload</span><span>Extra Effort</span><span>Finalization</span></div>
+            {{#each equipment.groups}}
+            <div class="cc-product-table-row"><span><strong>{{label}}</strong></span><span>{{baseCount}}</span><span>{{variantCount}} variants</span><span>2 / 4 / 6 / 8 Long Rests</span><span>CON DC 12 · +1 extra</span><span>Proficient auto · otherwise DC 13</span></div>
+            {{/each}}
+          </div>
+        </details>
+      </section>
+      {{else}}
+      <div class="cc-curated-unavailable"><i class="fa-solid fa-shield-halved"></i><strong>Equipment Crafting is optional</strong><p>Use <strong>Install / Restore Equipment Crafting</strong> to generate the +0 / +1 / +2 / +3 Product and Blueprint library from the installed SRD 5.2 Equipment pack.</p></div>
       {{/if}}
 
       {{#if linkedProducts.count}}

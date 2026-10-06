@@ -67,7 +67,14 @@ export class RecipeTransferApp extends HandlebarsApplicationMixin(ApplicationV2)
       resultName: result.name || "No Result Item",
       type: result.type || "",
       quantity: Math.max(1, Number(result.quantity) || 1),
-      ingredients: (recipe.ingredients ?? []).map(row => ({ name: row.name, quantity: row.quantity })),
+      ingredients: RecipeService.ingredientSlots(recipe.ingredients ?? []).map(slot => ({
+        name: slot.label || (slot.mode === "pool"
+          ? slot.options.map(option => option.name).join(" / ")
+          : slot.mode === "or"
+            ? slot.options.map(option => `${option.quantity} ${option.name}`).join(" OR ")
+            : slot.options[0]?.name || "Item"),
+        quantity: slot.mode === "pool" ? slot.quantity : (slot.options[0]?.quantity ?? 1)
+      })),
       craftingTime: recipe.craftingMode === "project" ? "Crafting Project" : `${recipe.craftingTime ?? 0}s`,
       selected: this.selected.has(String(recipe.id)),
       inspected: this.inspectKey === String(recipe.id),

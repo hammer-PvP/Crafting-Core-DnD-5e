@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.9 - Ingredient Slots & SRD 5.2 Equipment Crafting
+
+- Added backward-compatible **Ingredient Slots**. Existing flat ingredient rows remain Fixed requirements; Recipes can now author **OR** alternatives with independent quantities or **Mix / Pool** requirements whose total may be filled with any combination of economically equivalent Materials.
+- Character crafting now requires the crafter to choose the exact OR option or Mix allocation before starting. The GM-side execution validates the selection against the Actor inventory, and Crafting Projects reserve/freeze that exact allocation for refunds, cancellation, and completion.
+- Recipe Knowledge descriptions, the Recipe Builder, published-source inspection, and portable Recipe Export/Import schema v3 preserve flexible Ingredient Slots. Transfer schemas v1/v2 remain accepted.
+- Added optional **SRD 5.2 Equipment Crafting**, sourced at runtime from `dnd5e.equipment24` instead of redistributing SRD Items. Mundane Weapons, Armor, Shields, and Ammunition receive managed +0 / +1 / +2 / +3 Product and Blueprint variants.
+- Equipment construction is curated by physical profile: blades emphasize metal, polearms emphasize shafts, bows/crossbows emphasize wood/binding, leather armor emphasizes leather/textiles, heavy armor emphasizes structural metal with padding/fittings, and ammunition uses its appropriate construction family. Material alternatives use OR or Mix semantics according to economic equivalence.
+- Equipment workload is **2 / 4 / 6 / 8 Long-Rest Work Periods** for +0 / +1 / +2 / +3. Every Equipment Blueprint allows **Constitution DC 12 Extra Effort** after normal work; success adds only **+1 additional progress** (maximum +2 total progress for that period), while failure keeps the normal +1 and adds no setback.
+- Every Equipment Blueprint carries two relevant tool proficiencies with OR semantics. A crafter proficient in either receives automatic final success; a crafter proficient in neither makes a **DC 13 Final Crafting Check**. Failure loses no progress or Materials and simply waits for the next Long Rest before retrying.
+- Ammunition crafts in **batches of 10** using the normal D&D5e ammunition Item. Pricing treats the SRD/magical value as the batch value rather than multiplying that value by ten individual projectiles.
+- Equipment upgrade material targets use the current Crafting Core Material economy: +1 uses Rare-tier enhancement Materials, +2 Very Rare-tier Materials, and +3 Legendary-tier Materials, while retaining the mundane structural composition underneath. If GM price overrides make alternatives economically unequal, generated slots fall back from Mix to quantity-adjusted OR choices instead of creating a value exploit.
+
 ## 0.5.8b - Character Sheet Refresh Hotfix
 
 - Fixed maintenance and Knowledge synchronization opening Character sheets that were closed.
