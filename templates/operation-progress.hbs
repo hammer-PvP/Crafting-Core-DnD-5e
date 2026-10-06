@@ -18,24 +18,26 @@
     <span>Elapsed <strong data-role="elapsed">{{elapsed}}</strong></span>
   </div>
 
-  <p class="cc-operation-progress-detail" data-role="detail">{{detail}}</p>
-  <p class="cc-operation-progress-message" data-role="message">{{message}}</p>
+  <div class="cc-operation-progress-body">
+    <p class="cc-operation-progress-detail" data-role="detail">{{detail}}</p>
+    <p class="cc-operation-progress-message" data-role="message">{{message}}</p>
 
-  <div class="cc-operation-progress-stats" data-role="stats" {{#unless statRows.length}}hidden{{/unless}}>
-    {{#each statRows}}
-    <div><span>{{label}}</span><strong>{{value}}</strong></div>
-    {{/each}}
-  </div>
+    <div class="cc-operation-progress-stats" data-role="stats" {{#unless statRows.length}}hidden{{/unless}}>
+      {{#each statRows}}
+      <div><span>{{label}}</span><strong>{{value}}</strong></div>
+      {{/each}}
+    </div>
 
-  <div class="cc-operation-progress-summary" data-role="summary" {{#unless summaryRows.length}}hidden{{/unless}}>
-    {{#each summaryRows}}
-    <div><span>{{label}}</span><strong>{{value}}</strong></div>
-    {{/each}}
+    <div class="cc-operation-progress-summary" data-role="summary" {{#unless summaryRows.length}}hidden{{/unless}}>
+      {{#each summaryRows}}
+      <div><span>{{label}}</span><strong>{{value}}</strong></div>
+      {{/each}}
+    </div>
   </div>
 
   <footer class="cc-operation-progress-footer">
     <button type="button" data-action="close-progress" {{#if running}}disabled{{/if}}>
-      <i class="fa-solid fa-check"></i> Close
+      <i data-role="close-icon" class="fa-solid {{#if running}}fa-spinner fa-spin{{else}}fa-check{{/if}}"></i> <span data-role="close-label">{{#if running}}Working…{{else}}Close{{/if}}</span>
     </button>
   </footer>
 </section>

@@ -1153,14 +1153,14 @@ export class KnowledgeItemService {
           if (!result.authoritativeIds.includes(recipeId)) {
             Hooks.callAll(`${MODULE_ID}.knowledgeUnpublished`, recipeId, item.uuid);
             Hooks.callAll(`${MODULE_ID}.knowledgeSourcesChanged`, recipeId);
-            const suffix = result.failed.length ? " Some reconciliation work is still pending and will retry at the next GM startup." : "";
+            const suffix = result.failed.length ? " Some reconciliation work is still pending; run Materials & Products → Synchronize Product Sources to retry." : "";
             ui.notifications.warn(`${sourceName} was unpublished. Characters who knew that Recipe have forgotten it; active Projects keep their frozen snapshot.${suffix}`);
           } else if (result.failed.length) {
             ui.notifications.warn(`${sourceName} changed publication state, but some Character knowledge reconciliation is still pending.`);
           }
         } catch (error) {
           console.error(`${MODULE_ID} | Published Knowledge deletion reconciliation failed.`, error);
-          ui.notifications.error("The Knowledge Source was deleted, but Crafting Core could not finish knowledge reconciliation. It will retry at the next GM startup.");
+          ui.notifications.error("The Knowledge Source was deleted, but Crafting Core could not finish knowledge reconciliation. Run Materials & Products → Synchronize Product Sources to retry the reconciliation.");
         }
       })();
     });

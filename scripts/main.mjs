@@ -113,7 +113,8 @@ Hooks.once("init", () => {
   runInitStep("Crafting material auto-stacking", () => MaterialStackService.installHooks());
   runInitStep("Curated content hooks", () => CuratedContentService.installHooks());
   runInitStep("Curated alchemy hooks", () => CuratedAlchemyService.installHooks());
-  runInitStep("Material Source hooks", () => MaterialSourceService.installHooks());
+  // v0.5.10+: Material Source rebuilds are GM-invoked maintenance only.
+  // Do not attach automatic rebuild hooks that can recreate optional Materials behind the GM.
 
   console.info(`${MODULE_TITLE} | Initialized.`);
 });
@@ -125,9 +126,20 @@ Hooks.once("ready", async () => {
   try { CraftingService.ready(); }
   catch (error) { console.error(`${MODULE_TITLE} | Crafting runtime failed to become ready.`, error); }
 
-  // One GM upgrades v0.0.1/v0.0.2 Character knowledge to self-contained recipe snapshots.
+  // Startup is deliberately light in v0.5.10+. Curated libraries, Product Source
+  // synchronization and catalog restores are GM-invoked maintenance operations.
+  // Opening a World must never recreate deleted Curated content or repopulate Builder drafts.
   const activeGM = game.users?.activeGM ?? game.users?.contents?.find(user => user.active && user.isGM);
   if (game.user?.isGM && (!activeGM || activeGM.id === game.user.id)) {
+    try {
+      const purge = await RecipeService.purgeLegacyDraftsOnce(1);
+      if (purge.migrated) console.info(`${MODULE_TITLE} | v0.5.10 Draft cleanup complete: ${purge.purged} Recipe Builder draft${purge.purged === 1 ? "" : "s"} removed.`);
+    } catch (error) {
+      console.error(`${MODULE_TITLE} | One-time Recipe Builder Draft cleanup failed.`, error);
+    }
+
+    // Technical data migrations may still run automatically because they do not install
+    // optional Curated libraries or resurrect deleted Compendium content.
     try {
       const migrated = await KnowledgeItemService.migrateLegacyKnowledge();
       if (migrated.actors || migrated.items) console.info(`${MODULE_TITLE} | Migrated legacy knowledge:`, migrated);
@@ -135,65 +147,11 @@ Hooks.once("ready", async () => {
       console.error(`${MODULE_TITLE} | Legacy knowledge migration failed.`, error);
     }
     try {
-      const knowledge = await KnowledgeItemService.reconcilePublishedKnowledge();
-      if (knowledge.refreshed || knowledge.forgotten || knowledge.draftsUpdated || knowledge.indexChanged) {
-        console.info(`${MODULE_TITLE} | Reconciled published knowledge lifecycle:`, knowledge);
-      }
-    } catch (error) {
-      console.error(`${MODULE_TITLE} | Published knowledge reconciliation failed.`, error);
-    }
-    try {
-      const materialMigration = await MaterialCatalogService.migrateCuratedCatalogIfNeeded();
-      if (materialMigration.migrated) console.info(`${MODULE_TITLE} | Applied curated material catalog migration.`, materialMigration);
-    } catch (error) {
-      console.error(`${MODULE_TITLE} | Curated material icon migration failed.`, error);
-    }
-    try {
       const harvestMigration = await HarvestProfileService.migrateStoredProfilesToPools();
-      if (harvestMigration.migrated) console.info(`${MODULE_TITLE} | Migrated legacy Harvest Profile slots to v0.0.19d rarity pools.`, harvestMigration);
+      if (harvestMigration.migrated) console.info(`${MODULE_TITLE} | Migrated legacy Harvest Profile slots to rarity pools.`, harvestMigration);
     } catch (error) {
       console.error(`${MODULE_TITLE} | Harvest Profile rarity-pool migration failed.`, error);
     }
-    try {
-      const curated = await CuratedContentService.syncIfNeeded();
-      if (!curated?.skipped) console.info(`${MODULE_TITLE} | Curated Product library synchronized:`, curated);
-    } catch (error) {
-      console.error(`${MODULE_TITLE} | Curated Product synchronization failed.`, error);
-      ui.notifications?.error?.("Crafting Core could not synchronize the Curated Product library. Check the console for details.");
-    }
-    try {
-      const alchemy = await CuratedAlchemyService.syncIfNeeded();
-      if (!alchemy?.skipped) {
-        if (alchemy.complete === false) {
-          console.warn(`${MODULE_TITLE} | Curated Alchemy & Inscription synchronized with partial failures:`, alchemy);
-          ui.notifications?.warn?.("Crafting Core repaired the optional Alchemy & Inscription library as far as possible. Check the console if the catalog is not complete.");
-        } else console.info(`${MODULE_TITLE} | Curated Alchemy & Inscription library synchronized:`, alchemy);
-      }
-    } catch (error) {
-      console.error(`${MODULE_TITLE} | Curated Alchemy & Inscription synchronization failed.`, error);
-      ui.notifications?.error?.("Crafting Core could not synchronize the optional Alchemy & Inscription library. Check the console for details.");
-    }
-    try {
-      const materialSources = await MaterialSourceService.rebuild();
-      console.info(`${MODULE_TITLE} | Material Sources resynchronized:`, materialSources);
-    } catch (error) {
-      console.error(`${MODULE_TITLE} | Material Source resync failed.`, error);
-    }
-
-    // Product-source migration/sync is deliberately detached from the blocking ready sequence.
-    // The world is usable immediately while the active GM reconciles Recipe links and fallbacks.
-    setTimeout(() => {
-      const currentGM = game.users?.activeGM ?? game.users?.contents?.find(user => user.active && user.isGM);
-      if (!game.user?.isGM || (currentGM && currentGM.id !== game.user.id)) return;
-      void ProductSourceService.syncAll().then(result => {
-        console.info(`${MODULE_TITLE} | Product Sources synchronized:`, result);
-        if (Number(result?.needsReview ?? 0) > 0) {
-          ui.notifications?.warn?.(`Crafting Core found ${result.needsReview} Product source link${result.needsReview === 1 ? "" : "s"} that need review. Open Materials & Products → Products → Product Source Sync.`);
-        }
-      }).catch(error => {
-        console.error(`${MODULE_TITLE} | Product Source synchronization failed.`, error);
-      });
-    }, 0);
   }
 });
 

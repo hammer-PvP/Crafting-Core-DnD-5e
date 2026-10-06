@@ -346,6 +346,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       },
       ingredients: [],
       result: null,
+      artisanSignature: { enabled: false },
       knowledge: { label: "Recipe", name: "", img: KNOWLEDGE_ICONS.Recipe }
     });
   }
@@ -423,7 +424,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       if (result.reconciliation?.failed?.length) {
         await ResultDialog.show({
           title: "Unpublished — Reconciliation Pending",
-          message: `${source.item.name} was removed from Learn Sources, but some derived knowledge cleanup is still pending. Crafting Core will retry at the next GM startup.`,
+          message: `${source.item.name} was removed from Learn Sources, but some derived knowledge cleanup is still pending. Use Materials & Products → Synchronize Product Sources to retry the reconciliation.`,
           facts: result.reconciliation.failed.map(row => row.actorName || row.recipeName || row.scope || row.error).filter(Boolean),
           tone: "warning",
           icon: "fa-solid fa-triangle-exclamation"
@@ -521,6 +522,8 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     resolution.failure.loseMaterials = Boolean(root.querySelector('[name="loseMaterialsOnFailure"]')?.checked);
     resolution.failure.lossPercent = Math.clamp(Math.round(Number(root.querySelector('[name="failureLossPercent"]')?.value) || 0), 0, 100);
     this.draft.craftingResolution = RecipeService.normalizeCraftingResolution(resolution);
+    const artisanSignatureInput = root.querySelector('[name="allowArtisanSignature"]');
+    this.draft.artisanSignature = { enabled: artisanSignatureInput ? Boolean(artisanSignatureInput.checked) : Boolean(this.draft.artisanSignature?.enabled) };
     this.draft.learning = {
       access: root.querySelector('[name="learningAccess"]')?.value ?? this.draft.learning?.access ?? "followCraftingEligibility"
     };
@@ -685,7 +688,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       if (syncPending) {
         await ResultDialog.show({
           title: "Published — Sync Pending",
-          message: `${item.name} was successfully saved to Learn Sources, but part of the Knowledge synchronization is still pending. Crafting Core will retry reconciliation on the next GM startup.`,
+          message: `${item.name} was successfully saved to Learn Sources, but part of the Knowledge synchronization is still pending. Use Materials & Products → Synchronize Product Sources to retry the reconciliation.`,
           facts: syncIssues,
           tone: "warning",
           icon: "fa-solid fa-triangle-exclamation"

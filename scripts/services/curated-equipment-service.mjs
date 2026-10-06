@@ -8,7 +8,7 @@ import { normalizeItemSourceForDnd5e6, rarityArray } from "../utils/dnd5e-data.m
 import { forcedDeletionMap } from "../utils/foundry-data.mjs";
 
 const SOURCE_PACK_ID = "dnd5e.equipment24";
-const VERSION = 1;
+const VERSION = 2;
 const WEAPON_TYPES = new Set(["simpleM", "simpleR", "martialM", "martialR"]);
 const ARMOR_TYPES = new Set(["light", "medium", "heavy", "shield"]);
 const MAGIC_COST = Object.freeze({ standard: { 1: 200, 2: 2000, 3: 20000 }, armor: { 1: 2000, 2: 20000, 3: 100000 } });
@@ -397,6 +397,7 @@ export class CuratedEquipmentService {
     return RecipeService.snapshot({
       id: this.#recipeId(base, bonus), name: bonus ? `${base.name} +${bonus}` : base.name, img: product.img,
       description: `Curated equipment project for ${bonus ? `${base.name} +${bonus}` : base.name}. Ingredient Slots represent valid construction alternatives; Mix / Pool slots may be filled with any combination of their listed materials.`,
+      artisanSignature: { enabled: category !== "ammunition" },
       craftingMode: "project", craftingTime: 0,
       project: {
         requiredWork, cadence: "long",
@@ -444,7 +445,6 @@ export class CuratedEquipmentService {
       const docs = await pack.getDocuments();
       const byId = new Map(docs.map(item => [String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? ""), item]).filter(([id]) => id));
       const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
-      const drafts = [];
       for (const entry of entries) {
         const productId = this.#productId(entry.base, entry.bonus);
         const product = productDocs.get(productId);
@@ -471,16 +471,9 @@ export class CuratedEquipmentService {
           existing = made; created += 1;
         } else { await this.#updateKnowledge(existing, data); updated += 1; }
         if (!existing) throw new Error(`Could not persist Equipment Blueprint ${recipe.name}.`);
-        // Keep the GM Builder draft synchronized with the authoritative Curated definition.
-        const draft = RecipeService.normalize({ ...recipe, publication: {
-          uuid: existing.uuid, pack: pack.collection, sourceType: "Blueprint",
-          publishedAt: Number(existing.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED_AT)) || Date.now(), updatedAt: Date.now()
-        }});
-        drafts.push(draft);
         current += 1;
         onProgress?.({ phase: "Restoring Equipment Blueprints", label: recipe.name, current, total: entries.length, overallCurrent: overallBase + current, overallTotal, stats: { recipes: current, created, updated } });
       }
-      await RecipeService.saveMany(drafts);
       return { pack, created, updated };
     } finally { if (wasLocked) await pack.configure({ locked: true }); }
   }
@@ -516,7 +509,9 @@ export class CuratedEquipmentService {
         { label: "Shields", baseCount: categoryCounts.shield ?? 0, variantCount: (categoryCounts.shield ?? 0) * 4 },
         { label: "Ammunition", baseCount: categoryCounts.ammunition ?? 0, variantCount: (categoryCounts.ammunition ?? 0) * 4 }
       ],
-      statusLabel: !this.sourcePack() ? "SRD 5.2 Equipment pack unavailable" : state.enabled ? "Installed" : "Not installed"
+      statusLabel: !this.sourcePack() ? "SRD 5.2 Equipment pack unavailable"
+        : !state.enabled ? "Not installed"
+          : state.version >= VERSION ? "Installed" : "Update available"
     };
   }
 
@@ -526,11 +521,15 @@ export class CuratedEquipmentService {
     if (!bases.length) throw new Error("No mundane weapons, armor, shields, or ammunition were found in dnd5e.equipment24.");
     const materialDocs = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
     const entries = bases.flatMap(base => [0, 1, 2, 3].map(bonus => ({ base, bonus, category: this.#category(base) })));
-    const overallTotal = entries.length * 2;
+    const contentTotal = entries.length * 2;
+    const overallTotal = contentTotal + 3;
     const products = await this.#syncProducts(entries, { onProgress, overallBase: 0, overallTotal });
     const recipes = await this.#syncRecipes(entries, products.documents, materialDocs, { onProgress, overallBase: entries.length, overallTotal });
+    onProgress?.({ phase: "Saving Equipment State", label: "Recording the installed Curated Equipment version…", current: 1, total: 1, overallCurrent: contentTotal + 1, overallTotal, stats: { products: entries.length, recipes: entries.length, created: products.created + recipes.created, updated: products.updated + recipes.updated } });
     await game.settings.set(MODULE_ID, SETTINGS.CURATED_EQUIPMENT_STATE, { enabled: true, version: VERSION, restoredAt: Date.now() });
+    onProgress?.({ phase: "Rebuilding Knowledge Authority", label: "Refreshing the published Blueprint index…", current: 1, total: 1, overallCurrent: contentTotal + 2, overallTotal, stats: { products: entries.length, recipes: entries.length, created: products.created + recipes.created, updated: products.updated + recipes.updated } });
     await KnowledgeItemService.rebuildAuthorityCache();
+    onProgress?.({ phase: "Reconciling Learned Recipes", label: "Refreshing Characters that already know these Blueprints…", current: 0, total: 1, overallCurrent: contentTotal + 2, overallTotal, stats: { products: entries.length, recipes: entries.length, created: products.created + recipes.created, updated: products.updated + recipes.updated } });
     const reconciliation = await KnowledgeItemService.reconcilePublishedKnowledge();
     onProgress?.({ phase: "Equipment Complete", label: "Products and Blueprints are restored.", current: 1, total: 1, overallCurrent: overallTotal, overallTotal, stats: { products: entries.length, recipes: entries.length, created: products.created + recipes.created, updated: products.updated + recipes.updated } });
     return { baseItems: bases.length, products, recipes, reconciliation, total: entries.length };

@@ -318,16 +318,9 @@ export class CuratedContentService {
     Hooks.on(`${MODULE_ID}.knowledgePublished`, recipeId => {
       const id = String(recipeId ?? "");
       if (!CURATED_BY_RECIPE_ID.has(id)) return;
-      // Republishing an intentionally/unintentionally missing official source makes it live
-      // again. Clear stale suppression so a later GM startup cannot treat it as absent by design.
-      // Then repair its official metadata/folder after the normal publish transaction finishes.
+      // Publication only clears an explicit suppression marker. Curated repair is opt-in: the
+      // GM must use Install / Restore / Synchronize from Materials & Products.
       void this.#unsuppress("recipe", id);
-      setTimeout(() => {
-        if (!game.user?.isGM || !this.itemCreatorCompatible()) return;
-        void this.sync({ restore: false }).catch(error => {
-          console.warn(`${MODULE_ID} | Could not post-repair Curated Recipe ${id} after publication.`, error);
-        });
-      }, 0);
     });
 
     // Track Curated Food temporary HP around native D&D5e consumption. Persistent Food and
@@ -667,8 +660,8 @@ export class CuratedContentService {
     const overallTotal = productTotal + recipeTotal + 2;
     onProgress?.({ phase: "Resolving Materials", label: "Preparing Curated Culinary dependencies…", current: 0, total: productTotal, overallCurrent: 0, overallTotal, stats: { products: 0, recipes: 0 } });
     const materialDocs = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
-    const products = await this.#syncProducts(state, materialDocs, { onProgress, overallBase: 0, overallTotal, phaseTotal: productTotal });
-    const recipes = await this.#syncRecipes(state, materialDocs, products.documentsByProductId, { onProgress, overallBase: productTotal, overallTotal, phaseTotal: recipeTotal });
+    const products = await this.#syncProducts(state, materialDocs, { restore, onProgress, overallBase: 0, overallTotal, phaseTotal: productTotal });
+    const recipes = await this.#syncRecipes(state, materialDocs, products.documentsByProductId, { restore, onProgress, overallBase: productTotal, overallTotal, phaseTotal: recipeTotal });
     state.culinaryVersion = CURATED_CONTENT_VERSION;
     state.productBaselines = products.baselines;
     state.recipeBaselines = recipes.baselines;
@@ -1089,7 +1082,7 @@ export class CuratedContentService {
     return item;
   }
 
-  static async #syncProducts(state, materialDocs, { onProgress=null, overallBase=0, overallTotal=0, phaseTotal=0 }={}) {
+  static async #syncProducts(state, materialDocs, { restore=false, onProgress=null, overallBase=0, overallTotal=0, phaseTotal=0 }={}) {
     const pack = await this.ensureProductsPack();
     const wasLocked = Boolean(pack.locked);
     if (wasLocked) await pack.configure({ locked: false });
@@ -1123,7 +1116,9 @@ export class CuratedContentService {
           continue;
         }
 
-        const merged = mergeProductPresentation(existing.toObject(false), official, state.productBaselines?.[entry.productId], entry);
+        const merged = restore
+          ? preserveExternalFlags(existing.toObject(false), clone(official))
+          : mergeProductPresentation(existing.toObject(false), official, state.productBaselines?.[entry.productId], entry);
         merged.folder = folder?.id ?? null;
         this.#validateItemSource(merged, `Curated Product ${entry.name}`);
         const hadLegacyNullDuration = [...(existing.effects ?? [])].some(effect => effect.duration?.value === null);
@@ -1211,7 +1206,7 @@ export class CuratedContentService {
     return item;
   }
 
-  static async #syncRecipes(state, materialDocs, productDocs, { onProgress=null, overallBase=0, overallTotal=0, phaseTotal=0 }={}) {
+  static async #syncRecipes(state, materialDocs, productDocs, { restore=false, onProgress=null, overallBase=0, overallTotal=0, phaseTotal=0 }={}) {
     const pack = await KnowledgeItemService.ensurePack();
     const wasLocked = Boolean(pack.locked);
     if (wasLocked) await pack.configure({ locked: false });
@@ -1242,7 +1237,7 @@ export class CuratedContentService {
         const expectedIngredientNames = entry.ingredients.map(row => materialDocs.get(row.materialId)?.name ?? "");
         const currentRecipe = existing?.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT) ?? null;
         const recipe = existing
-          ? mergeRecipeDefinition(currentRecipe, officialRecipe, state.recipeBaselines?.[entry.recipeId], entry, expectedIngredientNames)
+          ? (restore ? RecipeService.snapshot(officialRecipe) : mergeRecipeDefinition(currentRecipe, officialRecipe, state.recipeBaselines?.[entry.recipeId], entry, expectedIngredientNames))
           : officialRecipe;
         if (existing) {
           recipe.publication = {

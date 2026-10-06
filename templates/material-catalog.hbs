@@ -122,14 +122,14 @@
         <h3>Crafting Core — Products</h3>
         <p class="cc-note">The 58 official Curated Products include Meals, Alcoholic Drinks, and Non-Alcoholic Drinks. They are normal D&D5e consumables that can be sold, looted, supplied to vendors, or used as ingredients in another Recipe.</p>
         <p class="cc-note"><strong>Canonical economy:</strong> each Recipe produces a batch of servings. The total batch value targets roughly 2× ingredient cost while each Product remains priced and sold per individual serving.</p>
-        <button type="button" class="cc-primary-action cc-wide" data-action="restore-curated-culinary" {{#unless culinary.compatible}}disabled{{/unless}}><i class="fa-solid fa-utensils"></i> Restore Curated Product Defaults</button>
+        <button type="button" class="cc-primary-action cc-wide" data-action="restore-curated-culinary" {{#unless culinary.compatible}}disabled{{/unless}}><i class="fa-solid fa-utensils"></i> Install / Restore Curated Products</button>
         <button type="button" class="cc-secondary-action cc-wide" data-action="open-products" {{#unless culinary.packExists}}disabled{{/unless}}><i class="fa-solid fa-book-open"></i> Open Products Compendium</button>
       </section>
 
       <section class="cc-form-card">
         <span class="cc-kicker">Source Integrity</span>
         <h3>Product Source Sync</h3>
-        <p class="cc-note">Recipes resolve their Product from the current mother Item first and keep a stable fallback mirror in <strong>Crafting Core — Products</strong>. Normal source changes synchronize automatically; identity changes are held for review instead of being reconnected by name.</p>
+        <p class="cc-note">Recipes resolve their Product from the current mother Item first and keep a stable fallback mirror in <strong>Crafting Core — Products</strong>. Source changes synchronize only when the GM runs a maintenance action; identity changes are held for review instead of being reconnected by name.</p>
         <p class="cc-note"><strong>{{linkedProducts.count}}</strong> external Product mirror(s) currently managed in addition to the Curated libraries.</p>
         <button type="button" class="cc-secondary-action cc-wide" data-action="sync-product-sources"><i class="fa-solid fa-rotate"></i> Synchronize Product Sources</button>
       </section>

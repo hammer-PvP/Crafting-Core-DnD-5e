@@ -441,7 +441,8 @@ export class ProductSourceService {
     const rewriteLegacyKnowledgeSnapshots = previousState.version < PRODUCT_SOURCE_VERSION;
     const drafts = RecipeService.list();
     const published = await KnowledgeItemService.publishedSources();
-    const total = drafts.length + published.length;
+    const contentTotal = drafts.length + published.length;
+    const overallTotal = contentTotal + 3;
     const stats = { synced: 0, updated: 0, sourceMissing: 0, needsReview: 0, draftsUpdated: 0, publishedUpdated: 0 };
     let current = 0;
 
@@ -454,7 +455,7 @@ export class ProductSourceService {
 
     for (const recipe of drafts) {
       current += 1;
-      onProgress?.({ phase: "Synchronizing Product Sources", label: recipe.name, current, total, overallCurrent: current, overallTotal: total, stats });
+      onProgress?.({ phase: "Synchronizing Product Sources", label: recipe.name, current, total: contentTotal, overallCurrent: current, overallTotal, stats });
       if (!recipe.result) continue;
       const synced = await this.synchronizeResult(recipe.result, { createFallback: true });
       countStatus(synced.status);
@@ -468,7 +469,7 @@ export class ProductSourceService {
 
     for (const record of published) {
       current += 1;
-      onProgress?.({ phase: "Synchronizing Published Products", label: record.recipe?.name ?? record.item?.name ?? "Recipe", current, total, overallCurrent: current, overallTotal: total, stats });
+      onProgress?.({ phase: "Synchronizing Published Products", label: record.recipe?.name ?? record.item?.name ?? "Recipe", current, total: contentTotal, overallCurrent: current, overallTotal, stats });
       const recipe = RecipeService.snapshot(record.recipe);
       if (!recipe.result) continue;
       const synced = await this.synchronizeResult(recipe.result, { createFallback: true });
@@ -480,13 +481,17 @@ export class ProductSourceService {
       }
     }
 
+    onProgress?.({ phase: "Rebuilding Product Authority", label: "Refreshing the published Recipe authority index…", current: 1, total: 1, overallCurrent: contentTotal + 1, overallTotal, stats });
     if (published.length) await KnowledgeItemService.rebuildAuthorityCache();
+
     let reconciliation = null;
+    onProgress?.({ phase: "Reconciling Product Knowledge", label: reconcile ? "Refreshing learned Recipe snapshots…" : "Knowledge reconciliation skipped for this operation.", current: reconcile ? 0 : 1, total: 1, overallCurrent: contentTotal + 2, overallTotal, stats });
     if (reconcile) reconciliation = await KnowledgeItemService.reconcilePublishedKnowledge();
 
+    onProgress?.({ phase: "Saving Product Source State", label: "Recording synchronization state…", current: 1, total: 1, overallCurrent: contentTotal + 3, overallTotal, stats });
     await game.settings.set(MODULE_ID, SETTINGS.PRODUCT_SOURCE_STATE, { version: PRODUCT_SOURCE_VERSION, lastSync: Date.now() });
-    onProgress?.({ phase: "Product Sources Complete", label: "Product source links and fallbacks are synchronized.", current: total, total, overallCurrent: total, overallTotal: total, stats });
-    return { ...stats, total, reconciliation, migrated: previousState.version < PRODUCT_SOURCE_VERSION };
+    onProgress?.({ phase: "Product Sources Complete", label: "Product source links and fallbacks are synchronized.", current: contentTotal, total: contentTotal, overallCurrent: overallTotal, overallTotal, stats });
+    return { ...stats, total: contentTotal, reconciliation, migrated: previousState.version < PRODUCT_SOURCE_VERSION };
   }
 
   static async catalogContext() {

@@ -1,6 +1,6 @@
 export const MODULE_ID = "dnd5e-crafting-core";
 export const MODULE_TITLE = "Crafting Core (DnD 5e)";
-export const MODULE_VERSION = "0.5.9";
+export const MODULE_VERSION = "0.5.10";
 
 export const SETTINGS = Object.freeze({
   RECIPES: "recipes",
@@ -13,7 +13,8 @@ export const SETTINGS = Object.freeze({
   CURATED_CONTENT_STATE: "curatedContentState",
   CURATED_ALCHEMY_STATE: "curatedAlchemyState",
   CURATED_EQUIPMENT_STATE: "curatedEquipmentState",
-  PRODUCT_SOURCE_STATE: "productSourceState"
+  PRODUCT_SOURCE_STATE: "productSourceState",
+  MAINTENANCE_STATE: "maintenanceState"
 });
 
 export const FLAGS = Object.freeze({
@@ -74,7 +75,10 @@ export const FLAGS = Object.freeze({
   PRODUCT_IDENTITY_FINGERPRINT: "productIdentityFingerprint",
   PRODUCT_SYNC_STATUS: "productSyncStatus",
   PRODUCT_SYNCED_AT: "productSyncedAt",
-  CURATED_FOOD_STATE: "curatedFoodState"
+  CURATED_FOOD_STATE: "curatedFoodState",
+  ARTISAN_SIGNATURE: "artisanSignature",
+  ARTISAN_SIGNATURE_POSITION: "artisanSignaturePosition",
+  ARTISAN_BASE_NAME: "artisanBaseName"
 });
 
 export const DEFAULT_MATERIAL_ICON = "icons/containers/bags/coinpouch-simple-leather-silver-brown.webp";

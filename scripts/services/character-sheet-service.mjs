@@ -7,6 +7,8 @@ import { ResultDialog } from "../ui/result-dialog.mjs";
 export class CharacterSheetService {
   static #selection = new Map();
   static #selectionSnapshots = new Map();
+  static #ingredientSelections = new Map();
+  static #artisanSignatures = new Map();
   static #patched = false;
 
   static patchDnd5eSheet() {
@@ -120,6 +122,10 @@ export class CharacterSheetService {
       timedJob = { ...job, progress };
     }
 
+    if (prepared && selected && !selectedIsActiveProject) {
+      prepared = this.#applyTransientCraftState(prepared, this.#craftStateKey(key, selected));
+    }
+
     const busy = Boolean(job && ["active", "finalizing"].includes(job.status));
     const list = preparedRecipes.map(recipe => ({
       ...recipe,
@@ -176,21 +182,37 @@ export class CharacterSheetService {
       });
     });
 
+    this.#bindTransientCraftInputs(root, app);
+
     this.#bindAsync(root, app, "craft", async actor => {
-      const recipeId = this.#selection.get(app.id ?? actor.id);
+      const sheetKey = app.id ?? actor.id;
+      const recipeId = this.#selection.get(sheetKey);
       if (!recipeId) return;
       if (!await this.#ensureFreshSelection(app, actor, recipeId)) return { cancelled: true };
       const recipe = KnowledgeItemService.recipeForActor(actor, recipeId);
-      const ingredientSelection = this.#collectIngredientSelection(root, CraftingService.prepareRecipeForActor(actor, recipe));
-      return CraftingService.requestCraft(actor, recipeId, ingredientSelection);
+      const prepared = CraftingService.prepareRecipeForActor(actor, recipe);
+      const stateKey = this.#craftStateKey(sheetKey, recipeId);
+      this.#captureTransientCraftInputs(root, stateKey);
+      const ingredientSelection = this.#collectIngredientSelection(prepared, stateKey);
+      const artisanSignature = this.#artisanSignatureFor(prepared, stateKey);
+      const result = await CraftingService.requestCraft(actor, recipeId, ingredientSelection, { artisanSignature });
+      this.#clearTransientCraftState(stateKey);
+      return result;
     });
     this.#bindAsync(root, app, "start-project", async actor => {
-      const recipeId = this.#selection.get(app.id ?? actor.id);
+      const sheetKey = app.id ?? actor.id;
+      const recipeId = this.#selection.get(sheetKey);
       if (!recipeId) return;
       if (!await this.#ensureFreshSelection(app, actor, recipeId)) return { cancelled: true };
       const recipe = KnowledgeItemService.recipeForActor(actor, recipeId);
-      const ingredientSelection = this.#collectIngredientSelection(root, CraftingService.prepareRecipeForActor(actor, recipe));
-      return CraftingService.requestStartProject(actor, recipeId, ingredientSelection);
+      const prepared = CraftingService.prepareRecipeForActor(actor, recipe);
+      const stateKey = this.#craftStateKey(sheetKey, recipeId);
+      this.#captureTransientCraftInputs(root, stateKey);
+      const ingredientSelection = this.#collectIngredientSelection(prepared, stateKey);
+      const artisanSignature = this.#artisanSignatureFor(prepared, stateKey);
+      const result = await CraftingService.requestStartProject(actor, recipeId, ingredientSelection, { artisanSignature });
+      this.#clearTransientCraftState(stateKey);
+      return result;
     });
     this.#bindAsync(root, app, "work-project", actor => CraftingService.requestWorkOnProject(actor));
     this.#bindAsync(root, app, "extra-effort", actor => CraftingService.requestExtraEffort(actor));
@@ -214,6 +236,7 @@ export class CharacterSheetService {
           const forgotten = await KnowledgeItemService.unlearn(actor, recipeId);
           if (!forgotten) return;
           this.#selectionSnapshots.delete(key);
+          this.#clearTransientCraftState(this.#craftStateKey(key, recipeId));
           this.#selection.delete(key);
           await app.render({ force: true });
           await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -276,6 +299,7 @@ export class CharacterSheetService {
     if (KnowledgeItemService.sameRecipeDefinition(cached.recipe, current)) return true;
 
     this.#selectionSnapshots.set(key, { recipeId, recipe: RecipeService.snapshot(current) });
+    this.#clearTransientCraftState(this.#craftStateKey(key, recipeId));
     await ResultDialog.show({
       title: "Recipe Updated",
       message: "A newer published revision is available. The current Recipe view has been refreshed. Review it, then click Craft or Start Project again. No materials, rolls, progress, or reservations were changed.",
@@ -285,31 +309,160 @@ export class CharacterSheetService {
     return false;
   }
 
-  static #collectIngredientSelection(root, preparedRecipe) {
+  static #craftStateKey(sheetKey, recipeId) {
+    return `${String(sheetKey ?? "")}:${String(recipeId ?? "")}`;
+  }
+
+  static #applyTransientCraftState(preparedRecipe, stateKey) {
+    const prepared = preparedRecipe;
+    const selection = this.#ingredientSelections.get(stateKey) ?? {};
+    for (const slot of prepared.ingredientRows ?? []) {
+      const slotSelection = selection?.[slot.slotId] ?? null;
+      if (slot.mode === "or") {
+        const optionId = String(slotSelection?.optionId ?? "");
+        for (const option of slot.options ?? []) option.selected = option.sufficient && String(option.optionId) === optionId;
+      } else if (slot.mode === "pool") {
+        const quantities = slotSelection?.quantities ?? {};
+        for (const option of slot.options ?? []) {
+          const wanted = Math.max(0, Math.floor(Number(quantities?.[option.optionId]) || 0));
+          option.selectedQuantity = Math.min(Math.max(0, Number(option.available) || 0), wanted);
+        }
+      }
+    }
+
+    const rawSignature = this.#artisanSignatures.get(stateKey) ?? { text: "", position: "before" };
+    const text = String(rawSignature.text ?? "").slice(0, 10);
+    const position = rawSignature.position === "after" ? "after" : "before";
+    const baseName = String(prepared.result?.name ?? prepared.name ?? "Item");
+    prepared.artisanSignature = {
+      enabled: Boolean(prepared.artisanSignature?.enabled),
+      text, position,
+      preview: text ? (position === "after" ? `${baseName} ${text}` : `${text} ${baseName}`) : baseName
+    };
+    return prepared;
+  }
+
+  static #bindTransientCraftInputs(root, app) {
+    const actor = app.actor ?? app.document;
+    const sheetKey = app.id ?? actor?.id;
+    const recipeId = this.#selection.get(sheetKey);
+    if (!recipeId) return;
+    const stateKey = this.#craftStateKey(sheetKey, recipeId);
+
+    root.querySelectorAll('.crafting-core-tab input[data-cc-or-slot]').forEach(input => {
+      if (input.dataset.ccStateBound) return;
+      input.dataset.ccStateBound = "true";
+      input.addEventListener("change", () => {
+        if (!input.checked) return;
+        const state = foundry.utils.deepClone(this.#ingredientSelections.get(stateKey) ?? {});
+        state[input.dataset.ccOrSlot] = { optionId: String(input.value ?? "") };
+        this.#ingredientSelections.set(stateKey, state);
+      });
+    });
+
+    root.querySelectorAll('.crafting-core-tab input[data-cc-pool-slot]').forEach(input => {
+      if (input.dataset.ccStateBound) return;
+      input.dataset.ccStateBound = "true";
+      const update = () => {
+        const state = foundry.utils.deepClone(this.#ingredientSelections.get(stateKey) ?? {});
+        const slotId = String(input.dataset.ccPoolSlot ?? "");
+        const slot = state[slotId] ?? { quantities: {} };
+        slot.quantities ??= {};
+        slot.quantities[String(input.dataset.optionId ?? "")] = Math.max(0, Math.floor(Number(input.value) || 0));
+        state[slotId] = slot;
+        this.#ingredientSelections.set(stateKey, state);
+      };
+      input.addEventListener("input", update);
+      input.addEventListener("change", update);
+    });
+
+    const signature = root.querySelector('.crafting-core-tab input[data-cc-artisan-signature]');
+    const positions = [...root.querySelectorAll('.crafting-core-tab input[data-cc-artisan-position]')];
+    const updateSignature = () => {
+      if (!signature) return;
+      signature.value = String(signature.value ?? "").slice(0, 10);
+      const checked = positions.find(input => input.checked);
+      const next = { text: signature.value, position: checked?.value === "after" ? "after" : "before" };
+      this.#artisanSignatures.set(stateKey, next);
+      const preview = root.querySelector('.crafting-core-tab [data-cc-artisan-preview]');
+      if (preview) {
+        const baseName = String(preview.dataset.baseName ?? "Item");
+        preview.textContent = next.text ? (next.position === "after" ? `${baseName} ${next.text}` : `${next.text} ${baseName}`) : baseName;
+      }
+    };
+    if (signature && !signature.dataset.ccStateBound) {
+      signature.dataset.ccStateBound = "true";
+      signature.addEventListener("input", updateSignature);
+      signature.addEventListener("change", updateSignature);
+    }
+    for (const input of positions) {
+      if (input.dataset.ccStateBound) continue;
+      input.dataset.ccStateBound = "true";
+      input.addEventListener("change", updateSignature);
+    }
+  }
+
+  static #captureTransientCraftInputs(root, stateKey) {
+    const selection = foundry.utils.deepClone(this.#ingredientSelections.get(stateKey) ?? {});
+    for (const input of root.querySelectorAll('.crafting-core-tab input[data-cc-or-slot]:checked')) {
+      selection[String(input.dataset.ccOrSlot ?? "")] = { optionId: String(input.value ?? "") };
+    }
+    for (const input of root.querySelectorAll('.crafting-core-tab input[data-cc-pool-slot]')) {
+      const slotId = String(input.dataset.ccPoolSlot ?? "");
+      const slot = selection[slotId] ?? { quantities: {} };
+      slot.quantities ??= {};
+      slot.quantities[String(input.dataset.optionId ?? "")] = Math.max(0, Math.floor(Number(input.value) || 0));
+      selection[slotId] = slot;
+    }
+    this.#ingredientSelections.set(stateKey, selection);
+
+    const signature = root.querySelector('.crafting-core-tab input[data-cc-artisan-signature]');
+    if (signature) {
+      const position = root.querySelector('.crafting-core-tab input[data-cc-artisan-position]:checked')?.value === "after" ? "after" : "before";
+      this.#artisanSignatures.set(stateKey, { text: String(signature.value ?? "").slice(0, 10), position });
+    }
+  }
+
+  static #collectIngredientSelection(preparedRecipe, stateKey) {
     if (!preparedRecipe?.hasFlexibleIngredients) return null;
+    const stored = this.#ingredientSelections.get(stateKey) ?? {};
     const selection = {};
     for (const slot of preparedRecipe.ingredientRows ?? []) {
       if (slot.mode === "fixed") continue;
+      const slotSelection = stored?.[slot.slotId] ?? null;
       if (slot.mode === "or") {
-        const checked = [...root.querySelectorAll('.crafting-core-tab input[data-cc-or-slot]')]
-          .find(input => input.dataset.ccOrSlot === slot.slotId && input.checked);
-        if (!checked) throw new Error(`Choose one material for ${slot.label || slot.options.map(option => option.name).join(" / ")}.`);
-        selection[slot.slotId] = { optionId: String(checked.value) };
+        const optionId = String(slotSelection?.optionId ?? "");
+        if (!slot.options.some(option => String(option.optionId) === optionId && option.sufficient)) {
+          throw new Error(`Choose one material for ${slot.label || slot.options.map(option => option.name).join(" / ")}.`);
+        }
+        selection[slot.slotId] = { optionId };
         continue;
       }
       const quantities = {};
       let total = 0;
-      [...root.querySelectorAll('.crafting-core-tab input[data-cc-pool-slot]')]
-        .filter(input => input.dataset.ccPoolSlot === slot.slotId)
-        .forEach(input => {
-          const quantity = Math.max(0, Math.floor(Number(input.value) || 0));
-          quantities[String(input.dataset.optionId || "")] = quantity;
-          total += quantity;
-        });
+      for (const option of slot.options ?? []) {
+        const quantity = Math.max(0, Math.floor(Number(slotSelection?.quantities?.[option.optionId]) || 0));
+        if (quantity > Math.max(0, Number(option.available) || 0)) throw new Error(`Not enough ${option.name}.`);
+        quantities[String(option.optionId)] = quantity;
+        total += quantity;
+      }
       if (total !== Math.max(1, Number(slot.quantity) || 1)) throw new Error(`Select exactly ${slot.quantity} total units for ${slot.label || "this ingredient pool"}.`);
       selection[slot.slotId] = { quantities };
     }
     return selection;
+  }
+
+  static #artisanSignatureFor(preparedRecipe, stateKey) {
+    if (!preparedRecipe?.artisanSignature?.enabled) return null;
+    const stored = this.#artisanSignatures.get(stateKey) ?? {};
+    const text = String(stored.text ?? "").trim().slice(0, 10);
+    if (!text) return null;
+    return { text, position: stored.position === "after" ? "after" : "before" };
+  }
+
+  static #clearTransientCraftState(stateKey) {
+    this.#ingredientSelections.delete(stateKey);
+    this.#artisanSignatures.delete(stateKey);
   }
 
   static async #confirmUnlearn(recipe) {

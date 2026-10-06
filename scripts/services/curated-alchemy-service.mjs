@@ -93,11 +93,9 @@ export class CuratedAlchemyService {
     Hooks.on(`${MODULE_ID}.knowledgePublished`, recipeId => {
       const id = String(recipeId ?? "");
       if (!CURATED_ALCHEMY_RECIPES_BY_ID.has(id)) return;
+      // Do not repair/reinject Curated content in the background. Publishing merely clears
+      // suppression; the GM remains in control of the next explicit maintenance operation.
       void this.#unsuppress("recipe", id);
-      setTimeout(() => {
-        if (!game.user?.isGM || !this.state().enabled) return;
-        void this.sync({ restore: false }).catch(error => console.warn(`${MODULE_ID} | Could not post-repair Curated Alchemy Recipe ${id}.`, error));
-      }, 0);
     });
 
     // Potion of Resistance is the one SRD template that must be materialized into a

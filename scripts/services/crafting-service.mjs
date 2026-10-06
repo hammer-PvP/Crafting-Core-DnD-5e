@@ -58,11 +58,11 @@ export class CraftingService {
     return Boolean(job && ["active", "finalizing"].includes(job.status));
   }
 
-  static async requestCraft(actor, recipeId, ingredientSelection=null) {
+  static async requestCraft(actor, recipeId, ingredientSelection=null, customization={}) {
     const recipe = KnowledgeItemService.recipeForActor(actor, String(recipeId));
     if (!recipe) throw new Error(`${actor?.name ?? "This character"} has not learned this recipe.`);
-    if (recipe.craftingMode === "project") return this.requestStartProject(actor, recipeId, ingredientSelection);
-    return this.#requestTimedCraft(actor, recipeId, ingredientSelection);
+    if (recipe.craftingMode === "project") return this.requestStartProject(actor, recipeId, ingredientSelection, customization);
+    return this.#requestTimedCraft(actor, recipeId, ingredientSelection, customization);
   }
 
   static #finalCheckChoices(recipe) {
@@ -121,12 +121,12 @@ export class CraftingService {
     return this.#resolveFinalCheck(recipe, { type, id });
   }
 
-  static async requestStartProject(actor, recipeId, ingredientSelection=null) {
+  static async requestStartProject(actor, recipeId, ingredientSelection=null, customization={}) {
     this.#assertCharacter(actor);
     const gm = this.#requireActiveGM();
     const recipe = KnowledgeItemService.recipeForActor(actor, String(recipeId));
     if (!recipe) throw new Error(`${actor.name} has not learned this recipe.`);
-    if (recipe.craftingMode !== "project") return this.#requestTimedCraft(actor, recipeId, ingredientSelection);
+    if (recipe.craftingMode !== "project") return this.#requestTimedCraft(actor, recipeId, ingredientSelection, customization);
     if (this.isBusy(actor)) throw new Error(`${actor.name} already has an active crafting project.`);
 
     const evaluation = this.evaluateResolution(actor, recipe);
@@ -143,6 +143,7 @@ export class CraftingService {
     payload.ingredientSelection = ingredientSelection && typeof ingredientSelection === "object"
       ? foundry.utils.deepClone(ingredientSelection)
       : null;
+    payload.artisanSignature = this.#normalizeArtisanSignature(recipe, customization?.artisanSignature);
     payload.finalCheck = finalCheck;
     payload.rollMessageId = null;
     if (checkApplies) {
@@ -262,10 +263,13 @@ export class CraftingService {
       const primary = options[0] ?? {};
       const defaultName = slot.mode === "pool" ? "Ingredient Pool" : slot.mode === "or" ? "Alternative Ingredient" : primary.name;
       return {
-        slotId: slot.slotId, label: slot.label || defaultName, mode: slot.mode,
+        slotId: slot.slotId, label: slot.label || defaultName, roleLabel: slot.mode === "fixed" ? String(slot.label || "") : "", mode: slot.mode,
         modeLabel: slot.mode === "pool" ? "Mix / Pool" : slot.mode === "or" ? "Choose One" : "Fixed",
         quantity: slot.mode === "pool" ? slot.quantity : Math.max(1, Number(primary.quantity) || 1),
-        name: slot.label || defaultName, img: primary.img,
+        // Fixed slots always display the actual consumed Item. The slot label remains
+        // available as construction context (e.g. Leatherwork -> Leather Piece).
+        name: slot.mode === "fixed" ? String(primary.name || defaultName) : (slot.label || defaultName),
+        img: primary.img,
         available: slot.mode === "pool" ? poolAvailable : primary.available,
         sufficient, flexible: slot.mode !== "fixed", options
       };
@@ -404,7 +408,7 @@ export class CraftingService {
     }
   }
 
-  static async #requestTimedCraft(actor, recipeId, ingredientSelection=null) {
+  static async #requestTimedCraft(actor, recipeId, ingredientSelection=null, customization={}) {
     this.#assertCharacter(actor);
     const gm = this.#requireActiveGM();
     const recipe = KnowledgeItemService.recipeForActor(actor, String(recipeId));
@@ -419,6 +423,7 @@ export class CraftingService {
     payload.ingredientSelection = ingredientSelection && typeof ingredientSelection === "object"
       ? foundry.utils.deepClone(ingredientSelection)
       : null;
+    payload.artisanSignature = this.#normalizeArtisanSignature(recipe, customization?.artisanSignature);
     payload.finalCheck = finalCheck;
     payload.rollMessageId = null;
     if (evaluation.rollRequired) {
@@ -550,6 +555,7 @@ export class CraftingService {
       id: foundry.utils.randomID(20), recipeId: recipe.id, recipeName: recipe.name,
       resultUuid: recipe.result.sourceUuid || frozenResult.sourceUuid || recipe.result.fallbackUuid || recipe.result.uuid, resultQuantity: recipe.result.quantity,
       resultData, startedAt, endsAt, status: "active", requesterId: requester.id,
+      artisanSignature: this.#normalizeArtisanSignature(recipe, request.artisanSignature),
       resolution: { automaticSuccess: prepared.resolution.automaticSuccess, checkLabel: RecipeService.checkLabel(finalCheck, actor), dc: finalCheck.dc, total: rollResult.total }
     };
     await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, job);
@@ -591,8 +597,9 @@ export class CraftingService {
       recipeId: recipe.id, recipeName: recipe.name, recipe: snapshot,
       requiredWork: config.requiredWork, completedWork: 0, cadence: config.cadence,
       midpointPassed: false, workAvailable: false, finalAvailable: false,
-      extraEffortAvailable: false, extraEffortUsedThisPeriod: false,
+      extraEffortAvailable: false, extraEffortUsedThisPeriod: false, normalProgressThisPeriod: 0,
       reservedMaterials, ingredientSelection: foundry.utils.deepClone(request.ingredientSelection ?? {}),
+      artisanSignature: this.#normalizeArtisanSignature(recipe, request.artisanSignature),
       requesterId: requester.id, startedAt: this.serverTime(), updatedAt: this.serverTime(),
       finalCheck,
       finalPolicy: { automaticSuccess: prepared.resolution.automaticSuccess, rollRequired: prepared.resolution.rollRequired }
@@ -642,6 +649,8 @@ export class CraftingService {
         : `Extra Effort Check result: ${rollResult.total}`);
     }
 
+    const normalProgress = Math.max(0, Math.floor(Number(project.normalProgressThisPeriod) || 0));
+
     if (!rollResult.success) {
       const failure = config.extraEffort.failure;
       if (failure.mode === "regress") {
@@ -651,17 +660,22 @@ export class CraftingService {
       await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
       if (visibility.extraEffortFailure) facts.push(failure.mode === "regress"
         ? `Progress lost: ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}`
-        : "No progress was gained or lost.");
+        : "Extra progress: +0");
+      if (visibility.extraEffort) {
+        facts.push(`Normal Work: +${normalProgress}`);
+        facts.push("Extra Effort: +0");
+        facts.push(`Total this Work Period: +${normalProgress}`);
+      }
       if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork}`);
       await this.#postProjectMessage(actor, recipe, "Extra Effort Failed", failure.mode === "regress"
         ? `The Project regressed by ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}.`
-        : "The additional effort produced no progress.");
+        : "The additional effort produced no extra progress.");
       return {
         outcome: "extra-failure",
         project: this.prepareProjectForActor(actor, project),
         feedback: this.#feedback("Extra Effort Failed",
           visibility.extraEffortFailure
-            ? (failure.mode === "regress" ? "The additional effort caused a setback." : "The additional effort did not produce progress.")
+            ? (failure.mode === "regress" ? "The additional effort caused a setback." : "The additional effort did not add progress beyond the normal work already completed this period.")
             : "The Extra Effort attempt was unsuccessful.",
           facts, failure.mode === "regress" && visibility.extraEffortFailure ? "warning" : "info", "fa-solid fa-person-running")
       };
@@ -674,7 +688,12 @@ export class CraftingService {
       if (before < midpoint && project.completedWork >= midpoint) project.midpointPassed = true;
     }
     project.lastAttempt = { stage: "extra", success: true, total: rollResult.total, dc: config.extraEffort.dc, at: this.serverTime() };
-    if (visibility.extraEffort) facts.push(`Extra progress: +${project.completedWork - before}`);
+    if (visibility.extraEffort) {
+      const extraProgress = project.completedWork - before;
+      facts.push(`Normal Work: +${normalProgress}`);
+      facts.push(`Extra Effort: +${extraProgress}`);
+      facts.push(`Total this Work Period: +${normalProgress + extraProgress}`);
+    }
     if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork}`);
 
     if (project.completedWork >= project.requiredWork) {
@@ -752,6 +771,7 @@ export class CraftingService {
       project.extraEffortAvailable = Boolean(config.extraEffort.enabled);
       project.extraEffortUsedThisPeriod = false;
       project.updatedAt = this.serverTime();
+      project.normalProgressThisPeriod = 0;
       project.lastAttempt = { stage: "progress", success: false, total: rollResult.total, dc: config.progressCheck.dc, at: this.serverTime(), initial };
       await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
       const detail = visibility.progressFailure
@@ -781,6 +801,7 @@ export class CraftingService {
     project.workAvailable = false;
     project.extraEffortAvailable = Boolean(config.extraEffort.enabled && project.completedWork < project.requiredWork);
     project.extraEffortUsedThisPeriod = false;
+    project.normalProgressThisPeriod = 1;
     project.updatedAt = this.serverTime();
     project.lastAttempt = { stage: "progress", success: true, total: rollResult.total, dc: checkApplies ? config.progressCheck.dc : null, at: this.serverTime(), initial };
     if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork}`);
@@ -921,8 +942,9 @@ export class CraftingService {
     const finalizing = { ...project, status: "finalizing", updatedAt: this.serverTime() };
     await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, finalizing);
     const outputQuantity = Math.max(1, Number(result?.quantity) || 1);
+    let createdResult = null;
     try {
-      await this.#createResult(actor, resultData, outputQuantity, sourceUuid);
+      createdResult = await this.#createResult(actor, resultData, outputQuantity, sourceUuid, project?.artisanSignature ?? null);
     } catch (error) {
       await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, {
         ...project,
@@ -938,6 +960,7 @@ export class CraftingService {
       throw error;
     }
     await actor.unsetFlag(MODULE_ID, FLAGS.CRAFTING_JOB);
+    const finalResultName = String(createdResult?.name || resultData?.name || result?.name || "Item");
     await this.#postProjectMessage(actor, recipe, "Crafting Successful", "The Project was completed successfully.");
     const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
     const facts = [...(feedbackFacts ?? [])];
@@ -947,14 +970,14 @@ export class CraftingService {
         ? `Final Crafting Check: ${rollResult.total} vs DC ${finalCheck.dc}`
         : `Final Crafting Check result: ${rollResult.total}`);
     }
-    if (visibility.output) facts.push(`Created: ${result?.name || resultData?.name || "Item"} ×${outputQuantity}`);
+    if (visibility.output) facts.push(`Created: ${finalResultName} ×${outputQuantity}`);
     facts.push("Crafted result added to the character inventory.");
     return {
       outcome: "success", actorId: actor.id, recipeId: recipe.id, total: rollResult?.total ?? null,
-      resultName: result?.name || resultData?.name || "Item", resultQuantity: outputQuantity,
+      resultName: finalResultName, resultQuantity: outputQuantity,
       feedback: this.#feedback("Crafting Complete",
         visibility.output
-          ? `${result?.name || resultData?.name || "The crafted item"} ×${outputQuantity} was completed successfully.`
+          ? `${finalResultName} ×${outputQuantity} was completed successfully.`
           : "The Project was completed successfully.",
         facts, "success", "fa-solid fa-circle-check")
     };
@@ -1289,34 +1312,57 @@ export class CraftingService {
       if (!(source instanceof Item)) throw new Error(`Result Item not found: ${sourceUuid}`);
       resultData = source.toObject(); sourceUuid = source.uuid;
     }
-    await this.#createResult(actor, resultData, quantity, sourceUuid);
+    const createdResult = await this.#createResult(actor, resultData, quantity, sourceUuid, current.artisanSignature ?? null);
     await actor.unsetFlag(MODULE_ID, FLAGS.CRAFTING_JOB);
-    ui.notifications.info(`${actor.name} completed ${recipe?.name ?? current.recipeName ?? "crafting"}.`);
+    ui.notifications.info(`${actor.name} completed ${createdResult?.name ?? recipe?.name ?? current.recipeName ?? "crafting"}.`);
     return true;
   }
 
-  static async #createResult(actor, sourceData, quantity, sourceUuid) {
+  static #normalizeArtisanSignature(recipe, value) {
+    if (!recipe?.artisanSignature?.enabled || !value || typeof value !== "object") return null;
+    const text = String(value.text ?? "").trim().slice(0, 10);
+    if (!text) return null;
+    return { text, position: value.position === "after" ? "after" : "before" };
+  }
+
+  static async #createResult(actor, sourceData, quantity, sourceUuid, artisanSignature=null) {
     const data = normalizeItemSourceForDnd5e6(foundry.utils.deepClone(sourceData));
     delete data._id; delete data.folder; delete data.ownership;
-    data.flags ??= {}; data.flags[MODULE_ID] ??= {}; data.flags[MODULE_ID][FLAGS.SOURCE_UUID] = sourceUuid;
+    data.flags ??= {};
+    data.flags[MODULE_ID] ??= {};
+    data.flags[MODULE_ID][FLAGS.SOURCE_UUID] = sourceUuid;
+
+    const signature = artisanSignature && typeof artisanSignature === "object"
+      ? { text: String(artisanSignature.text ?? "").trim().slice(0, 10), position: artisanSignature.position === "after" ? "after" : "before" }
+      : null;
+    const baseName = String(data.name || "Item");
+    if (signature?.text) {
+      data.name = signature.position === "after" ? `${baseName} ${signature.text}` : `${signature.text} ${baseName}`;
+      data.flags[MODULE_ID][FLAGS.ARTISAN_SIGNATURE] = signature.text;
+      data.flags[MODULE_ID][FLAGS.ARTISAN_SIGNATURE_POSITION] = signature.position;
+      data.flags[MODULE_ID][FLAGS.ARTISAN_BASE_NAME] = baseName;
+    }
+
     if (foundry.utils.hasProperty(data, "system.quantity")) {
-      // Finished stackable Products (not only crafting Materials) may safely join an
-      // existing stack when they came from the exact same Product definition. This is
-      // especially important for Curated ammunition, which is produced in batches of 10.
       const container = String(data.system?.container ?? "");
+      const wantedSignature = String(data.flags?.[MODULE_ID]?.[FLAGS.ARTISAN_SIGNATURE] ?? "");
+      const wantedPosition = String(data.flags?.[MODULE_ID]?.[FLAGS.ARTISAN_SIGNATURE_POSITION] ?? "");
       const existing = actor.items.find(item => String(item.getFlag?.(MODULE_ID, FLAGS.SOURCE_UUID) ?? "") === String(sourceUuid || "")
         && String(item.type ?? "") === String(data.type ?? "")
         && String(item.system?.container ?? "") === container
+        && String(item.getFlag?.(MODULE_ID, FLAGS.ARTISAN_SIGNATURE) ?? "") === wantedSignature
+        && String(item.getFlag?.(MODULE_ID, FLAGS.ARTISAN_SIGNATURE_POSITION) ?? "") === wantedPosition
         && foundry.utils.hasProperty(item, "system.quantity"));
       if (existing && sourceUuid) {
         const next = Math.max(0, Number(existing.system?.quantity) || 0) + Math.max(1, Math.floor(Number(quantity) || 1));
         await existing.update({ "system.quantity": next });
-        return;
+        return existing;
       }
       await MaterialStackService.createOrStack(actor, data, quantity);
-      return;
+      return { name: data.name };
     }
-    await actor.createEmbeddedDocuments("Item", Array.from({ length: quantity }, () => foundry.utils.deepClone(data)));
+    const created = await actor.createEmbeddedDocuments("Item", Array.from({ length: quantity }, () => foundry.utils.deepClone(data)));
+    return created?.[0] ?? { name: data.name };
   }
 
   static #feedback(title, message, facts=[], tone="info", icon="fa-solid fa-hammer") {

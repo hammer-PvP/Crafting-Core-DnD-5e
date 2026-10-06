@@ -276,6 +276,7 @@
         {{else}}
         <div class="cc-drop-zone result" data-drop-kind="result"><i class="fa-solid fa-box-open"></i><strong>Drop the final Item here</strong></div>
         {{/if}}
+        <label class="cc-visibility-toggle cc-artisan-authoring-toggle"><input type="checkbox" name="allowArtisanSignature" {{#if draft.artisanSignature.enabled}}checked{{/if}}><span><strong>Allow Artisan Signature</strong><small>Let the crafter add an optional literal signature of up to 10 characters before or after the crafted Item name. Best for durable equipment; leave disabled for stackable consumables.</small></span></label>
       </section>
 
       <section class="cc-form-card">

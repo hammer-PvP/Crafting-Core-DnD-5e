@@ -13,38 +13,49 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.5.9
+- **Crafting Core:** v0.5.10
 - **Foundry VTT:** minimum 14.367, verified 14.367
 - **D&D 5e:** 6.0.0-6.0.999, verified 6.0.1
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
 - **DnD 5e Item Creator:** optional for the core module; **0.7.1+ is required for the official persistent Curated Food and Alcohol Products**
 
-Crafting Core v0.5.9 builds on the validated v0.5.8 Product source/fallback and Knowledge migration line. Recipe outputs can follow a current mother Item from any compatible Compendium while retaining a stable mirror in **Crafting Core — Products**, and v0.5.9 adds backward-compatible Ingredient Slots plus the optional SRD 5.2 Equipment Crafting library. Existing Recipe IDs, published Knowledge, learned Characters, Curated Product identity, and active Crafting Projects remain preserved.
+Crafting Core v0.5.10 consolidates the v0.5.9 Equipment/Ingredient Slot line for established production Worlds. Curated libraries are now installed and maintained only by explicit GM actions, legacy Builder Draft leakage is cleaned once, flexible ingredient choices survive sheet rerenders, and the crafting workflow receives stable result dialogs, responsive long-operation progress, and optional Artisan Signatures for durable equipment.
 
-### v0.5.9 — Ingredient Slots & Equipment Crafting
+### v0.5.10 — Curated Control & Crafting UX
 
-Recipes can now model ingredient requirements as **Fixed**, **OR**, or **Mix / Pool** slots. OR alternatives may require different quantities; Mix / Pool slots let the crafter allocate any combination of the listed equivalent Materials to the required total. Project start freezes the actual allocation selected by the crafter.
+Curated content is **opt-in**. Opening a World no longer restores optional libraries, recreates deleted Curated content, or runs Product Source/Material Source maintenance behind the GM. Use **Materials & Products** to install, restore, or synchronize Materials, Culinary, Alchemy & Inscription, Equipment, and Product Sources when you actually want the operation to run.
+
+A one-time v0.5.10 maintenance step clears the old Recipe Builder Draft store. Curated installers publish directly to Compendiums and never create Builder Draft copies. After migration, Drafts exist only through deliberate GM authoring actions such as New Recipe, Import, Save Draft, or Edit as Draft.
+
+Flexible Ingredient Slots now keep OR/Pool selections in transient sheet state rather than relying on HTML input values. Fixed slots display the real consumed Item, while optional slot labels remain secondary construction context.
+
+Recipes may optionally allow an **Artisan Signature**: literal text up to 10 characters, placed before or after the Item name with a live preview. Projects freeze the choice at start. Curated Weapons, Armor, and Shields enable this by default; Ammunition and other stackable consumables do not.
+
+Crafting result dialogs are queued one at a time and stay above ordinary sheets until acknowledged without blocking the rest of Foundry. Long-operation windows keep their Close footer visible through a viewport-bounded scrolling body and now report final synchronization/reconciliation phases before reaching 100%.
+
+### Ingredient Slots & Equipment Crafting
+
+Recipes can model ingredient requirements as **Fixed**, **OR**, or **Mix / Pool** slots. OR alternatives may require different quantities; Mix / Pool slots let the crafter allocate any combination of the listed equivalent Materials to the required total. Project start freezes the actual allocation selected by the crafter.
 
 The optional **Equipment Crafting** library discovers mundane Weapons, Armor, Shields, and Ammunition directly from the installed D&D5e SRD 5.2 `equipment24` Compendium and creates +0 / +1 / +2 / +3 Products and Blueprint Recipes. Equipment Projects use 2 / 4 / 6 / 8 Long-Rest Work Periods, Constitution DC 12 Extra Effort (+1 additional progress on success), two relevant alternative tool proficiencies, and DC 13 retry-only finalization for non-proficient crafters. Ammunition is produced in batches of 10.
 
-
 ### Product source synchronization
 
-The Products view includes **Synchronize Product Sources**. Normal updates to the same mother Item synchronize its fallback mirror and Recipe definitions. If the mother source disappears, crafting uses the fallback. If its identity fingerprint changes, the link enters **Needs Review** instead of silently adopting the replacement. Product-source migration also runs non-blocking for the active GM after startup.
+The Products view includes **Synchronize Product Sources**. Synchronization is manual: when the GM runs it, normal updates to the same mother Item update the fallback mirror and Recipe definitions. If the mother source disappears, crafting uses the fallback. If its identity fingerprint changes, the link enters **Needs Review** instead of silently adopting the replacement.
 
 ### Long-operation progress
 
-The reusable progress UI covers maintenance actions that can take several seconds on established Worlds and v0.5.8 brings the completed result window back to the foreground:
+The reusable progress UI covers maintenance actions that can take several seconds on established Worlds:
 
 - Synchronize Materials;
 - Reset Curated Material defaults;
-- Restore the 58 Curated Culinary Products and Recipes;
+- Install / Restore the 58 Curated Culinary Products and Recipes;
 - Install / Restore the optional Alchemy & Inscription library;
 - Install / Restore the optional SRD 5.2 Equipment Crafting library;
 - Resync Material Sources;
 - Synchronize Product Sources.
 
-The window reports the current phase, current Product/Recipe/Material, X/Y progress when available, elapsed time, live counters, and a persistent completion summary. A maintenance lock prevents a second long operation from starting while one is already running. The operation itself is not cancellable mid-write, avoiding intentionally half-applied restore states.
+The window reports the current phase, current Product/Recipe/Material, X/Y progress when available, elapsed time, live counters, and a persistent completion summary. Its body scrolls within the viewport while the Close footer remains visible. A maintenance lock prevents a second long operation from starting while one is already running. Operations are not cancellable during write phases, avoiding intentionally half-applied restore states.
 
 ### D&D 5e 6.0.x normalization
 
@@ -246,7 +257,7 @@ Any D&D 5e Item can still be used directly in a Recipe even if it is not registe
 
 ## Curated Products and Batch Crafting
 
-With **DnD 5e Item Creator 0.7.1+** active, Crafting Core maintains an official vendor-ready library of **58 Curated Products** and **58 matching Recipe Knowledge Sources**. Products remain ordinary D&D 5e consumable Items in **Crafting Core - Products**, while their learnable Recipes live in **Crafting Core - Learn Sources**.
+With **DnD 5e Item Creator 0.7.1+** active, Crafting Core can install an official vendor-ready library of **58 Curated Products** and **58 matching Recipe Knowledge Sources** when the GM explicitly requests it from **Materials & Products**. Products remain ordinary D&D 5e consumable Items in **Crafting Core - Products**, while their learnable Recipes live in **Crafting Core - Learn Sources**.
 
 The library is divided into three families.
 
@@ -300,7 +311,7 @@ The unit price is therefore:
 
 This lets crafted meals and drinks be produced in sensible quantities while taverns, vendors, loot, and Supplier-style inventories continue to buy, sell, and store individual Product units.
 
-All official Curated Product Recipes use **10 seconds** of crafting time. Each Product offers three curated icon candidates through the Materials & Products interface, mixing bundled Crafting Core artwork with compatible Foundry/D&D5e-native assets while preserving GM-selected icons. **Restore Curated Product Defaults** repairs missing official Products and matching Recipe Sources while preserving unrelated GM content and supported presentation customizations.
+All official Curated Product Recipes use **10 seconds** of crafting time. Each Product offers three curated icon candidates through the Materials & Products interface, mixing bundled Crafting Core artwork with compatible Foundry/D&D5e-native assets while preserving GM-selected icons. **Restore Curated Product Defaults** repairs missing official Products and matching Recipe Sources while preserving unrelated GM content. The restore is authoritative for Crafting Core-managed Curated definitions; duplicate/fork a Recipe to a new identity before restoring if you want to keep a permanent custom variant.
 
 ## Creature Scanner and Harvest Profiles
 

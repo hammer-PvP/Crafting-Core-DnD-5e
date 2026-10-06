@@ -25,6 +25,13 @@ export class RecipeService {
       type: Object,
       default: {}
     });
+    game.settings.register(MODULE_ID, SETTINGS.MAINTENANCE_STATE, {
+      name: "Crafting Core Maintenance State",
+      scope: "world",
+      config: false,
+      type: Object,
+      default: { draftPurgeVersion: 0 }
+    });
   }
 
   static all() {
@@ -77,6 +84,27 @@ export class RecipeService {
     return true;
   }
 
+  static async clearAllDrafts() {
+    if (!game.user?.isGM) throw new Error("Only a GM can clear Crafting Core Recipe Builder drafts.");
+    const count = Object.keys(this.all()).length;
+    if (!count) return 0;
+    await game.settings.set(MODULE_ID, SETTINGS.RECIPES, {});
+    Hooks.callAll(`${MODULE_ID}.recipesChanged`, []);
+    return count;
+  }
+
+  static async purgeLegacyDraftsOnce(version=1) {
+    if (!game.user?.isGM) return { purged: 0, migrated: false };
+    const stored = game.settings.get(MODULE_ID, SETTINGS.MAINTENANCE_STATE);
+    const state = stored && typeof stored === "object" && !Array.isArray(stored) ? foundry.utils.deepClone(stored) : {};
+    if (Number(state.draftPurgeVersion ?? 0) >= Number(version)) return { purged: 0, migrated: false };
+    const purged = await this.clearAllDrafts();
+    state.draftPurgeVersion = Number(version);
+    state.draftPurgedAt = Date.now();
+    await game.settings.set(MODULE_ID, SETTINGS.MAINTENANCE_STATE, state);
+    return { purged, migrated: true };
+  }
+
   static normalize(recipe={}) {
     const id = String(recipe.id || foundry.utils.randomID(20));
     const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
@@ -90,6 +118,7 @@ export class RecipeService {
       name: String(recipe.name || "New Recipe").trim() || "New Recipe",
       img: String(recipe.img || recipe.result?.img || "icons/svg/item-bag.svg"),
       description: String(recipe.description || ""),
+      artisanSignature: { enabled: Boolean(recipe.artisanSignature?.enabled) },
       craftingMode: recipe.craftingMode === "project" ? "project" : "timed",
       craftingTime: Math.max(0, Math.floor(Number(recipe.craftingTime) || 0)),
       project: this.normalizeProject(recipe.project),

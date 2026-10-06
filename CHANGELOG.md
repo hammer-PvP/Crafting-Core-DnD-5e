@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.10 - Curated Control, Stable Ingredient Selection & Crafting UX
+
+- Changed Curated library maintenance to **GM opt-in only**. World startup no longer restores Culinary, Alchemy & Inscription, Equipment, Material Sources, or Product Sources in the background. Deleted optional content stays deleted until the GM explicitly installs/restores/synchronizes it.
+- Curated Culinary and Alchemy/Inscription restore operations no longer launch a global Product Source synchronization afterward. Product Source synchronization is now its own explicit GM operation, keeping each maintenance action independent and avoiding hundreds of unrelated source checks during a library restore.
+- Added a one-time v0.5.10 maintenance migration that removes **all existing Recipe Builder Drafts**, as authorized for this development line. Curated installers no longer create Draft copies; Drafts now exist only when the GM explicitly creates, imports, saves, or opens a published Recipe as a Draft.
+- Equipment installation now writes Products and published Blueprint Knowledge directly to their Compendiums and no longer performs the v0.5.9 bulk `saveMany(drafts)` pass. This removes the 233-Draft leak and the long hidden final save phase observed during live testing.
+- Explicit **Restore Curated** operations are authoritative. Culinary Restore now returns managed Product/Recipe definitions to current Crafting Core defaults; permanent GM variants should be duplicated/forked to a new Recipe identity before restoring.
+- Fixed Character-sheet **Mix / Pool** selection state so allocations survive sheet rerenders and recipe switching. The DOM is no longer the authority; transient selections are kept by sheet + Recipe + Slot and are revalidated by the GM before consumption/reservation.
+- Fixed Fixed Ingredient Slot presentation so the actual consumed Item is shown (for example **Leather Piece**) while an optional construction-role label such as `Leatherwork` remains secondary context.
+- Added optional **Artisan Signature** support to Recipes. Signatures are literal text up to 10 characters, may be placed before or after the base Product name, are previewed before crafting, and are frozen into Projects. Curated Weapons, Armor, and Shields enable signatures; Ammunition does not.
+- Crafted signed Items retain Crafting Core flags for signature text, position, and original base name without modifying the Product source, Recipe, or Product Source identity.
+- Crafting result dialogs are now queued one at a time and remain visually above ordinary sheets until acknowledged without using a blocking modal. This prevents multiple hidden OK dialogs from accumulating behind the Character sheet.
+- Extra Effort feedback now reports the normal Work progress, additional Extra Effort progress, and total progress for the Work Period. Equipment Extra Effort remains Constitution DC 12 and can add only +1 on top of the normal +1.
+- Reworked long-operation progress layout with a viewport-bounded scrolling body and persistent footer so **Close** remains visible when result/stat rows expand. Long operations now expose their real final phases instead of reaching 100% before reconciliation/state writes finish.
+- While a maintenance operation is still writing, the disabled footer explicitly shows **Working…** rather than presenting a misleading Close action.
+- Removed obsolete text that promised automatic reconciliation on the next GM startup; maintenance retry is now an explicit GM action through **Synchronize Product Sources**.
+
 ## 0.5.9 - Ingredient Slots & SRD 5.2 Equipment Crafting
 
 - Added backward-compatible **Ingredient Slots**. Existing flat ingredient rows remain Fixed requirements; Recipes can now author **OR** alternatives with independent quantities or **Mix / Pool** requirements whose total may be filled with any combination of economically equivalent Materials.

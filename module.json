@@ -2,7 +2,7 @@
   "id": "dnd5e-crafting-core",
   "title": "Crafting Core (DnD 5e)",
   "description": "A D&D5e crafting, harvesting, materials, Recipe Knowledge, curated consumables, flexible Ingredient Slots, and SRD 5.2 equipment-crafting framework for Foundry VTT 14. Includes core Materials, Curated Culinary content, optional Alchemy & Inscription, and +0/+1/+2/+3 Weapons, Armor, Shields, and Ammunition Blueprints generated from the installed SRD 5.2 Equipment pack. Complete manual: https://github.com/hammer-PvP/Crafting-Core-DnD-5e/blob/main/docs/Crafting-Core-Complete-Manual.pdf",
-  "version": "0.5.9",
+  "version": "0.5.10",
   "authors": [
     {
       "name": "Raphael Andrade"
@@ -48,6 +48,6 @@
   "readme": "README.md",
   "url": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e",
   "manifest": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e/releases/latest/download/module.json",
-  "download": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e/releases/download/v0.5.9/dnd5e-crafting-core.zip",
+  "download": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e/releases/download/v0.5.10/dnd5e-crafting-core.zip",
   "socket": true
 }

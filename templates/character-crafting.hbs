@@ -43,6 +43,7 @@
           <div class="cc-profession-block-heading"><div><span class="cc-kicker">Project Status</span><h3>{{stateLabel}}</h3></div><strong>{{#if visibility.projectProgress}}{{completedWork}} / {{requiredWork}}{{else}}In Progress{{/if}}</strong></div>
           {{#if visibility.projectProgress}}<div class="cc-project-progress-track"><span style="width: {{progressPercent}}%"></span></div>{{/if}}
           {{#if visibility.craftingTime}}<div class="cc-inline-fact"><span>Work Cadence</span><strong>{{cadenceLabel}}</strong></div>{{/if}}
+          {{#if artisanSignature.text}}<div class="cc-inline-fact"><span>Artisan Signature</span><strong>{{artisanSignature.text}} · {{#if (eq artisanSignature.position "after")}}After{{else}}Before{{/if}}</strong></div>{{/if}}
         </section>
 
         {{#if visibility.ingredients}}
@@ -99,15 +100,15 @@
         <section class="cc-profession-block"><h3>Ingredients</h3><div class="cc-sheet-ingredients">
           {{#each ingredientRows}}
             {{#if (eq mode "fixed")}}
-            <div class="cc-sheet-ingredient {{#unless sufficient}}missing{{/unless}} {{#unless ../playerVisibility.ingredientQuantities}}quantities-hidden{{/unless}}"><img src="{{img}}" alt=""><span>{{name}}</span><strong>{{#if ../playerVisibility.ingredientQuantities}}{{available}} / {{quantity}}{{else}}{{#if sufficient}}Available{{else}}Missing{{/if}}{{/if}}</strong><i class="fa-solid {{#if sufficient}}fa-check{{else}}fa-xmark{{/if}}"></i></div>
+            <div class="cc-sheet-ingredient {{#unless sufficient}}missing{{/unless}} {{#unless ../playerVisibility.ingredientQuantities}}quantities-hidden{{/unless}}"><img src="{{img}}" alt=""><span class="cc-sheet-ingredient-copy"><strong>{{name}}</strong>{{#if roleLabel}}<small>{{roleLabel}}</small>{{/if}}</span><strong>{{#if ../playerVisibility.ingredientQuantities}}{{available}} / {{quantity}}{{else}}{{#if sufficient}}Available{{else}}Missing{{/if}}{{/if}}</strong><i class="fa-solid {{#if sufficient}}fa-check{{else}}fa-xmark{{/if}}"></i></div>
             {{else}}
             <div class="cc-sheet-ingredient-slot {{mode}} {{#unless sufficient}}missing{{/unless}}">
               <div class="cc-sheet-ingredient-slot-heading"><span><strong>{{label}}</strong> · {{modeLabel}}{{#if (eq mode "pool")}} · choose {{quantity}} total{{/if}}</span><i class="fa-solid {{#if sufficient}}fa-check{{else}}fa-xmark{{/if}}"></i></div>
               {{#each options}}
                 {{#if (eq ../mode "or")}}
-                <label class="cc-sheet-ingredient-option {{#unless sufficient}}missing{{/unless}}"><input type="radio" name="cc-or-{{../slotId}}" data-cc-or-slot="{{../slotId}}" value="{{optionId}}" {{#unless sufficient}}disabled{{/unless}}><img src="{{img}}" alt=""><span>{{name}}</span><strong>{{#if ../../playerVisibility.ingredientQuantities}}{{available}} / {{quantity}}{{else}}{{#if sufficient}}Available{{else}}Missing{{/if}}{{/if}}</strong></label>
+                <label class="cc-sheet-ingredient-option {{#unless sufficient}}missing{{/unless}}"><input type="radio" name="cc-or-{{../slotId}}" data-cc-or-slot="{{../slotId}}" value="{{optionId}}" {{#if selected}}checked{{/if}} {{#unless sufficient}}disabled{{/unless}}><img src="{{img}}" alt=""><span>{{name}}</span><strong>{{#if ../../playerVisibility.ingredientQuantities}}{{available}} / {{quantity}}{{else}}{{#if sufficient}}Available{{else}}Missing{{/if}}{{/if}}</strong></label>
                 {{else}}
-                <label class="cc-sheet-ingredient-option"><img src="{{img}}" alt=""><span>{{name}}</span><strong>{{#if ../../playerVisibility.ingredientQuantities}}Available {{available}}{{else}}{{#if available}}Available{{else}}Missing{{/if}}{{/if}}</strong><input class="cc-pool-quantity" type="number" min="0" max="{{available}}" step="1" value="0" data-cc-pool-slot="{{../slotId}}" data-option-id="{{optionId}}"></label>
+                <label class="cc-sheet-ingredient-option"><img src="{{img}}" alt=""><span>{{name}}</span><strong>{{#if ../../playerVisibility.ingredientQuantities}}Available {{available}}{{else}}{{#if available}}Available{{else}}Missing{{/if}}{{/if}}</strong><input class="cc-pool-quantity" type="number" min="0" max="{{available}}" step="1" value="{{selectedQuantity}}" data-cc-pool-slot="{{../slotId}}" data-option-id="{{optionId}}"></label>
                 {{/if}}
               {{/each}}
             </div>
@@ -132,6 +133,20 @@
         {{#if playerVisibility.extraEffort}}{{#if project.extraEffort.enabled}}<section class="cc-profession-block cc-extra-effort-block"><h3>Extra Effort</h3>{{#if playerVisibility.extraEffortCheck}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-person-running"></i><span>Check</span><strong>{{projectDisplay.extraEffortCheckLabel}}{{#if playerVisibility.extraEffortDC}} · DC {{project.extraEffort.dc}}{{/if}}</strong></div>{{/if}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-forward"></i><span>Success</span><strong>+{{project.extraEffort.progressGain}} Work Progress</strong></div>{{#if playerVisibility.extraEffortFailure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{projectDisplay.extraEffortFailureLabel}}</strong></div>{{/if}}</section>{{/if}}{{/if}}
 
         {{#if playerVisibility.craftingCheck}}{{#if resolution.check.required}}<section class="cc-profession-block"><h3>Final Crafting Check</h3><div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>Check</span><strong>{{#if resolution.automaticSuccess}}Automatic Success{{else}}{{resolution.checkLabel}}{{#if playerVisibility.craftingDC}} · DC {{resolution.check.dc}}{{/if}}{{/if}}</strong></div>{{#if playerVisibility.failure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{projectDisplay.finalFailureLabel}}</strong></div>{{/if}}</section>{{/if}}{{/if}}
+
+        {{#if artisanSignature.enabled}}
+        <section class="cc-profession-block cc-artisan-signature-block">
+          <h3>Artisan Signature</h3>
+          <div class="cc-artisan-signature-controls">
+            <label><span>Signature <small>max. 10 characters</small></span><input type="text" maxlength="10" value="{{artisanSignature.text}}" data-cc-artisan-signature placeholder="Orin's"></label>
+            <div class="cc-artisan-position">
+              <label><input type="radio" name="cc-artisan-position" value="before" data-cc-artisan-position {{#unless (eq artisanSignature.position "after")}}checked{{/unless}}> Before</label>
+              <label><input type="radio" name="cc-artisan-position" value="after" data-cc-artisan-position {{#if (eq artisanSignature.position "after")}}checked{{/if}}> After</label>
+            </div>
+          </div>
+          <div class="cc-inline-fact cc-artisan-preview-row"><span>Preview</span><strong data-cc-artisan-preview data-base-name="{{result.name}}">{{artisanSignature.preview}}</strong></div>
+        </section>
+        {{/if}}
 
         {{#if ../craftingCore.selectedBlockedByOtherProject}}
           <div class="cc-project-lock-note"><i class="fa-solid fa-lock"></i><span>Finish or cancel <strong>{{../craftingCore.activeProject.recipeName}}</strong> before starting another Project. You can still inspect this Recipe for planning.</span></div>

@@ -332,7 +332,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     event.preventDefault();
     const confirmed = await foundry.applications.api.DialogV2.confirm({
       window: { title: "Restore Curated Product Library" },
-      content: "<p>Repair and restore the <strong>58 official Curated Products and Recipe Learn Sources</strong>?</p><p>This includes 15 Meals, 28 Alcoholic Drinks, and 15 Non-Alcoholic Drinks. Missing official content is recreated. Fields that still match older Crafting Core defaults are upgraded. GM-customized presentation fields are preserved.</p>",
+      content: "<p>Repair and restore the <strong>58 official Curated Products and Recipe Learn Sources</strong>?</p><p>This includes 15 Meals, 28 Alcoholic Drinks, and 15 Non-Alcoholic Drinks. Missing official content is recreated and existing Curated definitions are restored to the current Crafting Core defaults. Duplicate or fork a Recipe first if you want to preserve a custom version.</p>",
       yes: { label: "Restore Curated Defaults", icon: "fa-solid fa-utensils" },
       no: { label: "Cancel" }
     });
@@ -343,11 +343,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       const result = await OperationProgressApp.run({
         title: "Crafting Core — Restore Curated Products",
         initial: { phase: "Preparing Curated Culinary", label: "Resolving Materials and Product definitions…" },
-        task: async report => {
-          const restored = await CuratedContentService.restoreAll({ onProgress: report });
-          const productSources = await ProductSourceService.syncAll({ onProgress: report, reconcile: true });
-          return { ...restored, productSources };
-        },
+        task: report => CuratedContentService.restoreAll({ onProgress: report }),
         summarize: result => {
           const products = result.products ?? {};
           const recipes = result.recipes ?? {};
@@ -390,15 +386,13 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     try {
       const result = await OperationProgressApp.run({
         title: "Crafting Core — Restore Alchemy & Inscription",
-        initial: { phase: "Checking SRD Sources", label: "Validating native D&D5e source Items…", overallCurrent: 0, overallTotal: 1 },
+        initial: { phase: "Checking SRD Sources", label: "Validating native D&D5e source Items…" },
         task: async report => {
-          report({ phase: "Checking SRD Sources", label: "Validating native D&D5e source Items…", current: 0, total: 1, overallCurrent: 0, overallTotal: 1 });
+          report({ phase: "Checking SRD Sources", label: "Validating native D&D5e source Items…", current: 0, total: 0, overallCurrent: 0, overallTotal: 0 });
           const audit = await CuratedAlchemyService.auditSrdSources();
           if (!audit.ok) throw new Error(`Missing SRD sources: ${audit.missing.map(row => row.key).join(", ")}`);
-          report({ phase: "SRD Sources Ready", label: "All required native source Items were resolved.", current: 1, total: 1, overallCurrent: 1, overallTotal: 1 });
-          const restored = await CuratedAlchemyService.restoreAll({ onProgress: report });
-          const productSources = await ProductSourceService.syncAll({ onProgress: report, reconcile: true });
-          return { ...restored, productSources };
+          report({ phase: "SRD Sources Ready", label: "All required native source Items were resolved. Starting curated restore…", current: 0, total: 0, overallCurrent: 0, overallTotal: 0 });
+          return CuratedAlchemyService.restoreAll({ onProgress: report });
         },
         summarize: result => {
           const products = result.products ?? {};

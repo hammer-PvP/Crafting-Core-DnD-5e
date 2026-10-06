@@ -17,8 +17,8 @@ export class OperationProgressApp extends HandlebarsApplicationMixin(Application
     id: "crafting-core-operation-progress",
     classes: ["crafting-core", "crafting-core-operation-progress"],
     tag: "section",
-    position: { width: 520, height: 390 },
-    window: { title: "Crafting Core — Working", resizable: false, minimizable: false }
+    position: { width: 560, height: 500 },
+    window: { title: "Crafting Core — Working", resizable: true, minimizable: false }
   };
 
   static PARTS = {
@@ -238,6 +238,9 @@ export class OperationProgressApp extends HandlebarsApplicationMixin(Application
 
     const close = root.querySelector('[data-action="close-progress"]');
     if (close) close.disabled = context.running;
+    setText('[data-role="close-label"]', context.running ? "Working…" : "Close");
+    const closeIcon = root.querySelector('[data-role="close-icon"]');
+    if (closeIcon) closeIcon.className = context.running ? "fa-solid fa-spinner fa-spin" : "fa-solid fa-check";
   }
 
   #paintElapsed() {
