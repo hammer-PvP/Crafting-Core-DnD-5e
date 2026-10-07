@@ -274,13 +274,16 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
             { label: "Updated", value: result.updated ?? 0 },
             { label: "Source Missing", value: result.sourceMissing ?? 0 },
             { label: "Needs Review", value: result.needsReview ?? 0 },
-            { label: "Recipes Updated", value: (result.draftsUpdated ?? 0) + (result.publishedUpdated ?? 0) }
+            { label: "Recipes Updated", value: (result.draftsUpdated ?? 0) + (result.publishedUpdated ?? 0) },
+            { label: "Legacy Knowledge Preserved", value: result.reconciliation?.legacyPreserved ?? 0 },
+            { label: "Legacy Knowledge Relinked", value: result.reconciliation?.relinked ?? 0 }
           ]
         })
       });
       if (!result) return;
-      const warning = Number(result.sourceMissing ?? 0) + Number(result.needsReview ?? 0);
-      const text = `Product Sources: ${result.synced ?? 0} synced, ${result.updated ?? 0} updated, ${result.sourceMissing ?? 0} source missing, ${result.needsReview ?? 0} need review.`;
+      const legacyPreserved = Number(result.reconciliation?.legacyPreserved ?? 0);
+      const warning = Number(result.sourceMissing ?? 0) + Number(result.needsReview ?? 0) + legacyPreserved;
+      const text = `Product Sources: ${result.synced ?? 0} synced, ${result.updated ?? 0} updated, ${result.sourceMissing ?? 0} source missing, ${result.needsReview ?? 0} need review${legacyPreserved ? `; ${legacyPreserved} learned Recipe entr${legacyPreserved === 1 ? "y" : "ies"} preserved as Legacy Knowledge` : ""}.`;
       if (warning) ui.notifications.warn(text);
       else ui.notifications.info(text);
       this.render({ force: true });
@@ -430,9 +433,22 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
 
   async #restoreCuratedEquipment(event) {
     event.preventDefault();
+    let cleanupPreview = null;
+    try {
+      cleanupPreview = await CuratedEquipmentService.cleanupPreview();
+    } catch (error) {
+      console.warn(`${MODULE_ID} | Could not preflight Equipment cleanup. Restore can still continue.`, error);
+    }
+    const obsoleteProducts = Number(cleanupPreview?.obsoleteProducts ?? 0);
+    const obsoleteRecipes = Number(cleanupPreview?.obsoleteRecipes ?? 0);
+    const affectedActors = Number(cleanupPreview?.affectedActors ?? 0);
+    const knownObsoleteRecipes = Number(cleanupPreview?.knownObsoleteRecipes ?? 0);
+    const cleanupNotice = obsoleteProducts || obsoleteRecipes
+      ? `<p><strong>Cleanup:</strong> ${obsoleteProducts} obsolete Equipment Product${obsoleteProducts === 1 ? "" : "s"} and ${obsoleteRecipes} obsolete Blueprint${obsoleteRecipes === 1 ? "" : "s"} were detected. Obsolete managed entries will be retired. ${affectedActors ? `<strong>${affectedActors} Character${affectedActors === 1 ? "" : "s"}</strong> currently know ${knownObsoleteRecipes} of those Blueprint${knownObsoleteRecipes === 1 ? "" : "s"}; their learned Recipes will be preserved as <strong>Legacy Knowledge</strong> and active Projects will not be changed.` : "No Character knowledge is affected."}</p>`
+      : "";
     const confirmed = await foundry.applications.api.DialogV2.confirm({
       window: { title: "Install / Restore Equipment Crafting" },
-      content: "<p>Install or repair the <strong>Curated Equipment</strong> library from the installed D&D5e <strong>SRD 5.2 Equipment</strong> pack?</p><p>Each mundane weapon, armor, shield, and ammunition entry receives +0, +1, +2, and +3 Products and Blueprint Recipes. Ammunition crafts in batches of 10. Recipes use flexible Ingredient Slots, Long-Rest Projects, Constitution Extra Effort, and the configured equipment proficiency rules.</p>",
+      content: `<p>Install or repair the <strong>Curated Equipment</strong> library from the installed D&D5e <strong>SRD 5.2 Equipment</strong> pack?</p><p>Each mundane weapon, armor, shield, and ammunition entry receives +0, +1, +2, and +3 Products and Blueprint Recipes. Ammunition crafts in batches of 10. Recipes use flexible Ingredient Slots, Long-Rest Projects, Constitution Extra Effort, and the configured equipment proficiency rules.</p>${cleanupNotice}`,
       yes: { label: "Install / Restore", icon: "fa-solid fa-shield-halved" },
       no: { label: "Cancel" }
     });
@@ -450,12 +466,16 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
             { label: "SRD Base Items", value: result.baseItems ?? 0 },
             { label: "Products", value: `${result.products?.created ?? 0} created · ${result.products?.updated ?? 0} updated` },
             { label: "Blueprints", value: `${result.recipes?.created ?? 0} created · ${result.recipes?.updated ?? 0} updated` },
+            { label: "Retired Obsolete", value: `${result.cleanup?.productsRemoved ?? 0} Products · ${result.cleanup?.recipesRemoved ?? 0} Blueprints` },
+            { label: "Legacy Knowledge Preserved", value: result.cleanup?.legacy?.entries ?? 0 },
             { label: "Total Variants", value: result.total ?? 0 }
           ]
         })
       });
       if (!result) return;
-      ui.notifications.info(`Equipment Crafting: ${result.baseItems ?? 0} SRD base Items, ${result.total ?? 0} Product/Blueprint variants restored.`);
+      const legacy = Number(result.cleanup?.legacy?.entries ?? 0);
+      const retired = Number(result.cleanup?.productsRemoved ?? 0) + Number(result.cleanup?.recipesRemoved ?? 0);
+      ui.notifications.info(`Equipment Crafting: ${result.baseItems ?? 0} SRD base Items, ${result.total ?? 0} Product/Blueprint variants restored${retired ? `; ${retired} obsolete managed entries retired` : ""}${legacy ? `; ${legacy} learned Recipe entr${legacy === 1 ? "y" : "ies"} preserved as Legacy Knowledge` : ""}.`);
       this.render({ force: true });
     } catch (error) {
       console.error(`${MODULE_ID} | Curated Equipment restore failed.`, error);

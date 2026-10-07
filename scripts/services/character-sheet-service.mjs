@@ -78,6 +78,7 @@ export class CharacterSheetService {
 
   static #prepareContext(actor, sheet) {
     const recipes = KnowledgeItemService.knownRecipes(actor);
+    const learnedStore = KnowledgeItemService.learnedStore(actor);
     const preparedRecipes = recipes.map(recipe => CraftingService.prepareRecipeForActor(actor, recipe));
     const job = CraftingService.job(actor);
     const activeProject = job?.mode === "project" ? CraftingService.prepareProjectForActor(actor, job) : null;
@@ -131,7 +132,7 @@ export class CharacterSheetService {
       ...recipe,
       selected: recipe.id === selected,
       active: Boolean(activeProject && activeProject.recipeId === recipe.id),
-      knowledgeUnavailable: false,
+      knowledgeUnavailable: Boolean(learnedStore?.[recipe.id]?.sourceMissing),
       modeLabel: recipe.craftingMode === "project" ? "Project" : "Timed"
     }));
 
@@ -155,6 +156,7 @@ export class CharacterSheetService {
         activeProject,
         selectedKnown,
         selectedStale,
+        selectedKnowledgeUnavailable: Boolean(selectedKnownRecipe && learnedStore?.[selectedKnownRecipe.id]?.sourceMissing),
         selectedIsActiveProject,
         timedJob,
         hasActiveProject: Boolean(activeProject),

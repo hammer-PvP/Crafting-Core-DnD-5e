@@ -34,6 +34,9 @@
       {{#if ../craftingCore.selectedStale}}
       <div class="cc-recipe-stale-note"><i class="fa-solid fa-arrows-rotate"></i><span>A newer published revision exists. This view is intentionally holding the version you were reading; Craft or Start Project will reload it before any transaction.</span></div>
       {{/if}}
+      {{#if ../craftingCore.selectedKnowledgeUnavailable}}
+      <div class="cc-recipe-stale-note"><i class="fa-solid fa-book-bookmark"></i><span>The published source is unavailable. This Character retains the learned Recipe as Legacy Knowledge and can continue crafting from the frozen learned definition.</span></div>
+      {{/if}}
 
       {{#if playerVisibility.description}}{{#if description}}<section class="cc-profession-block"><h3>Description</h3><p class="cc-sheet-description">{{description}}</p></section>{{/if}}{{/if}}
 

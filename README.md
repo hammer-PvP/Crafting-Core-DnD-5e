@@ -13,13 +13,21 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.5.10
-- **Foundry VTT:** minimum 14.367, verified 14.367
+- **Crafting Core:** v0.5.11
+- **Foundry VTT:** minimum 14.367, verified 14.368
 - **D&D 5e:** 6.0.0-6.0.999, verified 6.0.1
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
 - **DnD 5e Item Creator:** optional for the core module; **0.7.1+ is required for the official persistent Curated Food and Alcohol Products**
 
-Crafting Core v0.5.10 consolidates the v0.5.9 Equipment/Ingredient Slot line for established production Worlds. Curated libraries are now installed and maintained only by explicit GM actions, legacy Builder Draft leakage is cleaned once, flexible ingredient choices survive sheet rerenders, and the crafting workflow receives stable result dialogs, responsive long-operation progress, and optional Artisan Signatures for durable equipment.
+Crafting Core v0.5.11 hardens established production Worlds around **Knowledge safety**. Removing, retiring, or temporarily losing a published Knowledge Source no longer makes Characters forget a Recipe automatically. Learned snapshots are preserved as Legacy Knowledge, active Projects remain frozen, and Equipment restore can retire obsolete managed content without erasing player progression.
+
+### v0.5.11 — Knowledge Safety & Equipment Cleanup
+
+Published library state and Character knowledge are now intentionally separate. If a Knowledge Source disappears, learned Actor snapshots remain usable as **Legacy Knowledge** and are clearly marked as source-unavailable on the Character sheet. If the same Recipe ID is published again, reconciliation relinks and refreshes that learned knowledge automatically.
+
+Manual **Unpublish** preserves learned knowledge by default. A GM may explicitly choose the destructive option to remove learned knowledge from Characters; active Projects remain protected.
+
+Curated Equipment counting now uses only the currently expected managed Product/Blueprint IDs, so stale development residue cannot produce impossible displays such as `551 / 372`. Equipment Restore performs controlled retirement of obsolete managed entries, preserves any affected learned Recipes before removing old Blueprints, and protects obsolete Products that surviving custom content still references.
 
 ### v0.5.10 — Curated Control & Crafting UX
 
@@ -129,7 +137,7 @@ Distribute a published Knowledge Source through any normal Foundry workflow:
 
 The Item's **Learn Recipe** Activity teaches the stable Recipe identity to the Character. A Character cannot learn the same Recipe twice from different physical copies.
 
-Characters may **Unlearn** a Recipe from the Crafting tab. Unpublish is different: it removes the authoritative source globally and reconciles Character knowledge.
+Characters may **Unlearn** a Recipe from the Crafting tab. Unpublish is different: it removes the authoritative source globally but preserves existing learned snapshots as **Legacy Knowledge** by default. Only an explicit GM destructive choice removes learned knowledge from Characters.
 
 ### 5. Craft from the Character Sheet
 
@@ -386,7 +394,7 @@ The official Curated Recipe library is organized by Product family and culture u
 
 ### Crafting Core - Products
 
-Created and maintained when the Curated Product library is available. Contains the 58 ready-to-buy/use official Meals, Alcoholic Drinks, and Non-Alcoholic Drinks. When Curated Alchemy & Inscription is installed, the same Compendium also contains 82 optional Products (43 SRD-based consumables, 34 Inscription presentation variants, and 5 Inscription Inks), for 140 Curated Products total.
+Created and maintained when Curated libraries are installed by the GM. Culinary contributes 58 ready-to-buy/use Meals, Alcoholic Drinks, and Non-Alcoholic Drinks. Curated Alchemy & Inscription adds 82 optional Products (43 SRD-based consumables, 34 Inscription presentation variants, and 5 Inscription Inks). Equipment Crafting adds one +0 / +1 / +2 / +3 Product per eligible SRD 5.2 base equipment item; with the current 58 eligible `equipment24` base items this adds 232 Products, for 372 Curated Products when all three current libraries are installed.
 
 ## Game Settings
 

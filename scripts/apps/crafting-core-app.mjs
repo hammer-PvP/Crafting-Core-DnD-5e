@@ -401,7 +401,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const recipeName = foundry.utils.escapeHTML(String(source.recipe?.name || source.item?.name || "this Recipe"));
     const confirmation = await foundry.applications.api.DialogV2.input({
       window: { title: "Unpublish Knowledge Source" },
-      content: `<section class="cc-unpublish-dialog"><p>Unpublish <strong>${recipeName}</strong>?</p><p>This is a global action. It removes the authoritative source from <strong>Crafting Core — Learn Sources</strong> and Characters who learned it will forget it. Active Projects keep their frozen Recipe snapshot.</p><p>To confirm, type <strong>I AGREE</strong>.</p><input type="text" name="confirmation" autocomplete="off" autofocus placeholder="I AGREE"></section>`,
+      content: `<section class="cc-unpublish-dialog"><p>Unpublish <strong>${recipeName}</strong>?</p><p>This removes the authoritative source from <strong>Crafting Core — Learn Sources</strong>. By default, Characters who already learned it <strong>keep the Recipe as Legacy Knowledge</strong>, and active Projects remain unchanged.</p><label class="cc-confirm-check"><input type="checkbox" name="forgetActors"><span><strong>Also remove learned knowledge from Characters</strong><small>Destructive. Characters with an active Project using this Recipe are protected and may refuse the removal.</small></span></label><p>To confirm the unpublish action, type <strong>I AGREE</strong>.</p><input type="text" name="confirmation" autocomplete="off" autofocus placeholder="I AGREE"></section>`,
       ok: { label: "Unpublish", icon: "fa-solid fa-book-skull" },
       rejectClose: false,
       modal: true
@@ -419,7 +419,8 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     try {
-      const result = await KnowledgeItemService.unpublishRecipe(recipeId);
+      const forgetActors = confirmation.forgetActors === true || confirmation.forgetActors === "true" || confirmation.forgetActors === "on";
+      const result = await KnowledgeItemService.unpublishRecipe(recipeId, { preserveKnowledge: !forgetActors, forgetActors });
       this.selectedPublishedRecipeId = null;
       if (result.reconciliation?.failed?.length) {
         await ResultDialog.show({
@@ -429,8 +430,22 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
           tone: "warning",
           icon: "fa-solid fa-triangle-exclamation"
         });
+      } else if (result.forgotten?.failed?.length) {
+        await ResultDialog.show({
+          title: "Unpublished — Some Knowledge Protected",
+          message: `${source.item.name} was unpublished. Some Characters could not forget the Recipe, usually because an active Project is protecting its frozen state.`,
+          facts: result.forgotten.failed.map(row => row.actorName || row.error).filter(Boolean),
+          tone: "warning",
+          icon: "fa-solid fa-shield-halved"
+        });
       } else {
-        ui.notifications.warn(`${source.item.name} was unpublished from Learn Sources.`);
+        const preserved = Number(result.preserved?.entries ?? 0);
+        const forgotten = Number(result.forgotten?.changed ?? 0);
+        ui.notifications.warn(preserved
+          ? `${source.item.name} was unpublished. ${preserved} learned Recipe entr${preserved === 1 ? "y was" : "ies were"} preserved as Legacy Knowledge.`
+          : forgotten
+            ? `${source.item.name} was unpublished and ${forgotten} Character${forgotten === 1 ? "" : "s"} forgot the Recipe by explicit GM request.`
+            : `${source.item.name} was unpublished from Learn Sources.`);
       }
       this.render({ force: true });
     } catch (error) {

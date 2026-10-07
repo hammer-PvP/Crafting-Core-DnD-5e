@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.11 - Knowledge Safety & Equipment Cleanup
+
+- Changed Knowledge reconciliation so **missing/unpublished sources no longer make Characters forget learned Recipes**. Learned Actor snapshots are preserved as **Legacy Knowledge** and remain craftable from their frozen definition.
+- Added automatic relinking: if the same Recipe ID becomes authoritative again, preserved Legacy Knowledge is refreshed from the republished source and returns to normal published status.
+- Added a Legacy Knowledge indicator to the Character Crafting tab when a learned Recipe's published source is unavailable.
+- Changed manual **Unpublish** to preserve Character knowledge by default. The GM may explicitly opt into the destructive "also remove learned knowledge" path; Characters with an active Project remain protected if that removal cannot be performed safely.
+- Direct deletion of a published Learn Source now materializes/preserves its Recipe snapshot for affected Characters before reconciliation and warns that learned knowledge was retained rather than forgotten.
+- Hardened legacy migration so old `knownRecipes` IDs can materialize from the authoritative Learn Sources Compendium even when no Recipe Builder Draft exists.
+- Fixed Curated Equipment catalog counts to use only the current expected Product and Blueprint IDs. Stale managed entries can no longer inflate displays such as `551 / 372`.
+- Added controlled Curated Equipment cleanup during explicit Install / Restore. Obsolete managed Blueprints are retired only after affected Character knowledge is materialized as Legacy Knowledge; active Projects are never modified.
+- Obsolete managed Equipment Products are removed only when no surviving Draft, published Recipe, learned non-retired Recipe, or active Project still references them. Referenced Products are retained for safety.
+- Equipment Restore now preflights obsolete managed content and warns the GM when Characters know Blueprints that will be retired, explicitly stating that their learned Recipes will be preserved.
+- Equipment restore progress/results now report retired Products/Blueprints and the number of learned Recipe entries preserved as Legacy Knowledge.
+- Updated Foundry VTT verification target to **14.368**.
+
 ## 0.5.10 - Curated Control, Stable Ingredient Selection & Crafting UX
 
 - Changed Curated library maintenance to **GM opt-in only**. World startup no longer restores Culinary, Alchemy & Inscription, Equipment, Material Sources, or Product Sources in the background. Deleted optional content stays deleted until the GM explicitly installs/restores/synchronizes it.

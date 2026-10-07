@@ -448,30 +448,147 @@ export class KnowledgeItemService {
     return RecipeService.save(draft);
   }
 
-  static async unpublishRecipe(recipeId) {
-    if (!game.user?.isGM) throw new Error("Only a GM can unpublish Crafting Core knowledge sources.");
-    const source = await this.publishedSource(recipeId);
-    if (!source) return { removed: false, recipeId: String(recipeId || ""), reconciliation: null };
+  static async preserveRecipesAsLegacy(records, { reason="sourceRemoved" }={}) {
+    if (!game.user?.isGM) throw new Error("Only a GM can preserve Crafting Core legacy knowledge.");
+    const sources = new Map();
+    for (const record of records ?? []) {
+      const rawRecipe = record?.recipe ?? record;
+      if (!rawRecipe?.id) continue;
+      const recipe = RecipeService.snapshot(rawRecipe);
+      sources.set(String(recipe.id), {
+        recipe,
+        sourceName: String(record?.item?.name ?? record?.sourceName ?? recipe.knowledge?.name ?? recipe.name ?? ""),
+        sourceType: String(record?.sourceType ?? recipe.knowledge?.label ?? "Recipe"),
+        sourceUuid: String(record?.uuid ?? record?.item?.uuid ?? "")
+      });
+    }
+    if (!sources.size) return { actors: 0, entries: 0, materialized: 0, refreshed: 0 };
 
+    let actors = 0;
+    let entries = 0;
+    let materialized = 0;
+    let refreshed = 0;
+    const now = Date.now();
+
+    for (const actor of game.actors?.contents?.filter(a => a.type === "character") ?? []) {
+      const store = this.learnedStore(actor);
+      const legacyIds = new Set(this.legacyKnownRecipeIds(actor));
+      let changed = false;
+      let actorEntries = 0;
+
+      for (const [recipeId, source] of sources) {
+        const existing = store[recipeId] ?? null;
+        if (!existing && !legacyIds.has(recipeId)) continue;
+
+        const hadSnapshot = Boolean(existing?.recipe);
+        const recipe = RecipeService.snapshot(source.recipe);
+        const next = {
+          ...(existing ?? {}),
+          recipe,
+          learnedAt: Number(existing?.learnedAt) || 0,
+          sourceName: String(existing?.sourceName || source.sourceName || recipe.name || ""),
+          sourceType: String(existing?.sourceType || source.sourceType || "Recipe"),
+          sourceUuid: String(existing?.sourceUuid || source.sourceUuid || ""),
+          sourceMissing: true,
+          orphanedAt: Number(existing?.orphanedAt) || now,
+          orphanReason: String(reason || "sourceRemoved")
+        };
+
+        if (!existing || !this.sameRecipeDefinition(existing.recipe, recipe)
+          || !existing.sourceMissing || String(existing.orphanReason || "") !== next.orphanReason) {
+          store[recipeId] = next;
+          changed = true;
+          actorEntries += 1;
+          if (hadSnapshot) refreshed += 1;
+          else materialized += 1;
+        }
+      }
+
+      if (!changed) continue;
+      await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
+      actors += 1;
+      entries += actorEntries;
+    }
+
+    return { actors, entries, materialized, refreshed };
+  }
+
+  static actorsKnowingRecipeIds(recipeIds) {
+    const ids = new Set((recipeIds ?? []).map(String).filter(Boolean));
+    const rows = [];
+    if (!ids.size) return rows;
+    for (const actor of game.actors?.contents?.filter(a => a.type === "character") ?? []) {
+      const known = this.knownRecipeIds(actor).filter(id => ids.has(id));
+      if (known.length) rows.push({ actorId: actor.id, actorName: actor.name, recipeIds: known });
+    }
+    return rows;
+  }
+
+  static async removePublishedSources(recipeIds, { preserveKnowledge=true, forgetActors=false, reason="sourceRemoved", reconcile=true }={}) {
+    if (!game.user?.isGM) throw new Error("Only a GM can remove Crafting Core knowledge sources.");
+    const wanted = new Set((recipeIds ?? []).map(String).filter(Boolean));
+    if (!wanted.size) return { removed: 0, sources: [], preserved: null, forgotten: { changed: 0, failed: [] }, reconciliation: null };
+
+    const sources = (await this.publishedSources()).filter(record => wanted.has(String(record.recipeId)));
+    if (!sources.length) return { removed: 0, sources: [], preserved: null, forgotten: { changed: 0, failed: [] }, reconciliation: null };
+
+    const preserved = preserveKnowledge ? await this.preserveRecipesAsLegacy(sources, { reason }) : null;
     const pack = this.pack();
     if (!pack) throw new Error("Crafting Core — Learn Sources is unavailable.");
     const wasLocked = Boolean(pack.locked);
     if (wasLocked) await pack.configure({ locked: false });
-    this.#managedDeletionIds.add(source.item.id);
+
+    const ids = sources.map(source => source.item.id).filter(Boolean);
+    ids.forEach(id => this.#managedDeletionIds.add(id));
     try {
       const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
-      await ItemClass.deleteDocuments([source.item.id], { pack: pack.collection });
-      const remaining = await pack.getDocument(source.item.id);
-      if (remaining) throw new Error("Crafting Core could not verify that the Knowledge Source was removed from Learn Sources.");
+      await ItemClass.deleteDocuments(ids, { pack: pack.collection });
+      const remaining = await pack.getDocuments();
+      const remainingIds = new Set(remaining.map(item => item.id));
+      const failedIds = ids.filter(id => remainingIds.has(id));
+      if (failedIds.length) throw new Error(`Crafting Core could not verify removal of ${failedIds.length} Knowledge Source${failedIds.length === 1 ? "" : "s"}.`);
     } finally {
-      this.#managedDeletionIds.delete(source.item.id);
+      ids.forEach(id => this.#managedDeletionIds.delete(id));
       if (wasLocked) await pack.configure({ locked: true });
     }
 
-    const reconciliation = await this.reconcilePublishedKnowledge();
-    Hooks.callAll(`${MODULE_ID}.knowledgeUnpublished`, source.recipeId, source.uuid);
-    Hooks.callAll(`${MODULE_ID}.knowledgeSourcesChanged`, source.recipeId);
-    return { removed: true, recipeId: source.recipeId, sourceName: source.item.name, reconciliation };
+    const forgotten = { changed: 0, failed: [] };
+    if (forgetActors) {
+      for (const source of sources) {
+        const result = await this.forgetRecipeEverywhere(source.recipeId);
+        forgotten.changed += Number(result.changed) || 0;
+        forgotten.failed.push(...(result.failed ?? []));
+      }
+    }
+
+    const reconciliation = reconcile ? await this.reconcilePublishedKnowledge() : null;
+    for (const source of sources) {
+      Hooks.callAll(`${MODULE_ID}.knowledgeUnpublished`, source.recipeId, source.uuid, {
+        preservedKnowledge: preserveKnowledge && !forgetActors,
+        forgetActors: Boolean(forgetActors),
+        reason
+      });
+      Hooks.callAll(`${MODULE_ID}.knowledgeSourcesChanged`, source.recipeId);
+    }
+    return { removed: sources.length, sources, preserved, forgotten, reconciliation };
+  }
+
+  static async unpublishRecipe(recipeId, { preserveKnowledge=true, forgetActors=false }={}) {
+    const id = String(recipeId || "");
+    const result = await this.removePublishedSources([id], {
+      preserveKnowledge,
+      forgetActors,
+      reason: "unpublished"
+    });
+    const source = result.sources?.[0] ?? null;
+    return {
+      removed: result.removed > 0,
+      recipeId: source?.recipeId ?? id,
+      sourceName: source?.item?.name ?? "",
+      preserved: result.preserved,
+      forgotten: result.forgotten,
+      reconciliation: result.reconciliation
+    };
   }
 
   static #activityIdForRecipe(recipeId) {
@@ -768,7 +885,9 @@ export class KnowledgeItemService {
       recipe: snapshot,
       learnedAt: Date.now(),
       sourceName: String(sourceName || ""),
-      sourceType: String(sourceType || "Recipe")
+      sourceType: String(sourceType || "Recipe"),
+      sourceMissing: false,
+      orphanedAt: 0
     };
     await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
     return true;
@@ -783,7 +902,14 @@ export class KnowledgeItemService {
       const store = this.learnedStore(actor);
       if (!store[recipe.id]?.recipe) continue;
       try {
-        store[recipe.id] = { ...store[recipe.id], recipe: snapshot, revisedAt: Date.now() };
+        store[recipe.id] = {
+          ...store[recipe.id],
+          recipe: snapshot,
+          revisedAt: Date.now(),
+          sourceMissing: false,
+          orphanedAt: 0,
+          orphanReason: ""
+        };
         await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
         changed += 1;
       } catch (error) {
@@ -865,7 +991,10 @@ export class KnowledgeItemService {
     for (const actor of game.actors?.contents?.filter(a => a.type === "character") ?? []) {
       if (!this.knownRecipeIds(actor).includes(id)) continue;
       try {
-        if (await this.forget(actor, id)) changed += 1;
+        // Route destructive global removal through the same Project protection used by
+        // an individual Character unlearn action. Active/finalizing Projects keep their
+        // learned Recipe until the Project is finished or cancelled.
+        if (await this.unlearn(actor, id)) changed += 1;
       } catch (error) {
         console.error(`${MODULE_ID} | Could not forget unpublished Recipe ${id} for ${actor.name}.`, error);
         failed.push({ actorId: actor.id, actorName: actor.name, error: String(error?.message ?? error) });
@@ -875,7 +1004,10 @@ export class KnowledgeItemService {
   }
 
   static async reconcilePublishedKnowledge() {
-    if (!game.user?.isGM) return { published: 0, authoritativeIds: [], refreshed: 0, forgotten: 0, draftsUpdated: 0, indexChanged: false, failed: [] };
+    if (!game.user?.isGM) return {
+      published: 0, authoritativeIds: [], refreshed: 0, forgotten: 0,
+      legacyPreserved: 0, relinked: 0, draftsUpdated: 0, indexChanged: false, failed: []
+    };
 
     const pack = this.pack();
     const records = await this.publishedSources();
@@ -942,55 +1074,86 @@ export class KnowledgeItemService {
       }
     }
 
-    // Player clients may not have direct access to the private Compendium, so learned Actor
-    // snapshots are maintained as materialized read copies of the authoritative source.
+    // Learned knowledge is player state, not a projection that may be deleted merely because
+    // a library source disappeared. Published sources refresh learned snapshots while they
+    // exist; missing sources are retained as Legacy Knowledge using the Actor's frozen recipe.
     let refreshed = 0;
-    let forgotten = 0;
+    let legacyPreserved = 0;
+    let relinked = 0;
     for (const actor of game.actors?.contents?.filter(a => a.type === "character") ?? []) {
-      const initialStore = this.learnedStore(actor);
-      const orphanedLearnedIds = Object.keys(initialStore).filter(recipeId => !authorities.has(recipeId));
-      const legacy = this.legacyKnownRecipeIds(actor);
-      const filteredLegacy = legacy.filter(recipeId => authorities.has(recipeId));
-      const orphanedLegacyIds = legacy.filter(recipeId => !authorities.has(recipeId));
-
+      const store = this.learnedStore(actor);
+      const legacyIds = new Set(this.legacyKnownRecipeIds(actor));
+      let changed = false;
       let actorRefreshed = 0;
-      let actorForgotten = orphanedLearnedIds.length + orphanedLegacyIds.length;
+      let actorLegacy = 0;
+      let actorRelinked = 0;
+
       try {
-        // Object flags require Foundry's explicit nested deletion operator. A normal
-        // setFlag with the key omitted is a merge and can leave ghost Recipe IDs behind.
-        for (const recipeId of orphanedLearnedIds) {
-          await this.#deleteLearnedRecipeEntry(actor, recipeId);
+        // If an old Character still carries only the legacy ID array and the source exists,
+        // materialize the authoritative snapshot before doing anything else.
+        for (const recipeId of legacyIds) {
+          if (store[recipeId]?.recipe) continue;
+          const authority = authorities.get(recipeId);
+          if (!authority?.recipe) continue;
+          store[recipeId] = {
+            recipe: RecipeService.snapshot(authority.recipe),
+            learnedAt: 0,
+            sourceName: authority.item?.name ?? authority.recipe.name ?? "",
+            sourceType: authority.sourceType ?? authority.recipe.knowledge?.label ?? "Recipe",
+            sourceUuid: authority.uuid,
+            sourceMissing: false,
+            orphanedAt: 0
+          };
+          changed = true;
+          actorRefreshed += 1;
         }
 
-        const store = this.learnedStore(actor);
-        let refreshedStore = false;
         for (const [recipeId, entry] of Object.entries(store)) {
           const authority = authorities.get(recipeId);
-          if (!authority) continue;
-          if (!entry?.recipe || !this.sameRecipeDefinition(entry.recipe, authority.recipe)) {
-            store[recipeId] = { ...entry, recipe: authority.recipe, revisedAt: Date.now() };
-            refreshedStore = true;
-            actorRefreshed += 1;
+          if (!authority) {
+            if (!entry?.recipe) continue;
+            if (!entry.sourceMissing) {
+              store[recipeId] = {
+                ...entry,
+                sourceMissing: true,
+                orphanedAt: Number(entry.orphanedAt) || Date.now(),
+                orphanReason: String(entry.orphanReason || "sourceMissing")
+              };
+              changed = true;
+              actorLegacy += 1;
+            }
+            continue;
+          }
+
+          const wasMissing = Boolean(entry?.sourceMissing);
+          const recipeChanged = !entry?.recipe || !this.sameRecipeDefinition(entry.recipe, authority.recipe);
+          const metadataChanged = wasMissing
+            || String(entry?.sourceUuid || "") !== String(authority.uuid || "")
+            || Number(entry?.orphanedAt || 0) !== 0
+            || Boolean(entry?.orphanReason);
+
+          if (recipeChanged || metadataChanged) {
+            store[recipeId] = {
+              ...entry,
+              recipe: RecipeService.snapshot(authority.recipe),
+              revisedAt: recipeChanged ? Date.now() : Number(entry?.revisedAt) || 0,
+              sourceName: String(entry?.sourceName || authority.item?.name || authority.recipe.name || ""),
+              sourceType: String(entry?.sourceType || authority.sourceType || authority.recipe.knowledge?.label || "Recipe"),
+              sourceUuid: String(authority.uuid || ""),
+              sourceMissing: false,
+              orphanedAt: 0,
+              orphanReason: ""
+            };
+            changed = true;
+            if (recipeChanged) actorRefreshed += 1;
+            if (wasMissing) actorRelinked += 1;
           }
         }
-        if (refreshedStore) await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
 
-        if (orphanedLegacyIds.length) {
-          await actor.setFlag(MODULE_ID, FLAGS.KNOWN_RECIPES, filteredLegacy);
-          const remainingLegacy = this.legacyKnownRecipeIds(actor).filter(recipeId => !authorities.has(recipeId));
-          if (remainingLegacy.length) {
-            throw new Error(`Crafting Core could not remove unpublished legacy Recipe IDs from ${actor.name}: ${remainingLegacy.join(", ")}`);
-          }
-        }
-
-        const remainingOrphans = this.knownRecipeIds(actor).filter(recipeId => !authorities.has(recipeId));
-        if (remainingOrphans.length) {
-          throw new Error(`Crafting Core could not remove unpublished Recipe IDs from ${actor.name}: ${remainingOrphans.join(", ")}`);
-        }
-
-        if (!actorRefreshed && !actorForgotten) continue;
+        if (changed) await actor.setFlag(MODULE_ID, FLAGS.LEARNED_RECIPES, store);
         refreshed += actorRefreshed;
-        forgotten += actorForgotten;
+        legacyPreserved += actorLegacy;
+        relinked += actorRelinked;
       } catch (error) {
         console.error(`${MODULE_ID} | Character knowledge reconciliation failed for ${actor.name}.`, error);
         failed.push({ scope: "actor", actorId: actor.id, actorName: actor.name, error: String(error?.message ?? error) });
@@ -1001,7 +1164,9 @@ export class KnowledgeItemService {
       published: authorities.size,
       authoritativeIds: [...authorities.keys()],
       refreshed,
-      forgotten,
+      forgotten: 0,
+      legacyPreserved,
+      relinked,
       draftsUpdated,
       indexChanged,
       failed
@@ -1012,6 +1177,7 @@ export class KnowledgeItemService {
     if (!game.user?.isGM) return { actors: 0, items: 0 };
     let actorCount = 0;
     let itemCount = 0;
+    const published = new Map((await this.publishedSources()).map(record => [String(record.recipeId), record.recipe]));
 
     for (const actor of game.actors?.contents ?? []) {
       if (actor.type === "character") {
@@ -1019,9 +1185,16 @@ export class KnowledgeItemService {
         let changed = false;
         for (const id of this.legacyKnownRecipeIds(actor)) {
           if (store[id]?.recipe) continue;
-          const recipe = RecipeService.get(id);
+          const recipe = RecipeService.get(id) ?? published.get(String(id)) ?? null;
           if (!recipe) continue;
-          store[id] = { recipe: RecipeService.snapshot(recipe), learnedAt: 0, sourceName: "Legacy Crafting Core", sourceType: "Recipe" };
+          store[id] = {
+            recipe: RecipeService.snapshot(recipe),
+            learnedAt: 0,
+            sourceName: "Legacy Crafting Core",
+            sourceType: recipe.knowledge?.label ?? "Recipe",
+            sourceMissing: !published.has(String(id)),
+            orphanedAt: published.has(String(id)) ? 0 : Date.now()
+          };
           changed = true;
         }
         if (changed) {
@@ -1149,12 +1322,21 @@ export class KnowledgeItemService {
       const sourceName = String(item.name || "Knowledge Source");
       void (async () => {
         try {
+          const snapshot = item.getFlag?.(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT);
+          if (snapshot?.id) {
+            await this.preserveRecipesAsLegacy([{
+              recipe: snapshot,
+              item,
+              uuid: item.uuid,
+              sourceType: item.getFlag?.(MODULE_ID, FLAGS.KNOWLEDGE_SOURCE_TYPE) ?? snapshot.knowledge?.label ?? "Recipe"
+            }], { reason: "directSourceDeletion" });
+          }
           const result = await this.reconcilePublishedKnowledge();
           if (!result.authoritativeIds.includes(recipeId)) {
             Hooks.callAll(`${MODULE_ID}.knowledgeUnpublished`, recipeId, item.uuid);
             Hooks.callAll(`${MODULE_ID}.knowledgeSourcesChanged`, recipeId);
             const suffix = result.failed.length ? " Some reconciliation work is still pending; run Materials & Products → Synchronize Product Sources to retry." : "";
-            ui.notifications.warn(`${sourceName} was unpublished. Characters who knew that Recipe have forgotten it; active Projects keep their frozen snapshot.${suffix}`);
+            ui.notifications.warn(`${sourceName} was unpublished. Characters who already knew that Recipe keep it as Legacy Knowledge; active Projects remain unchanged.${suffix}`);
           } else if (result.failed.length) {
             ui.notifications.warn(`${sourceName} changed publication state, but some Character knowledge reconciliation is still pending.`);
           }

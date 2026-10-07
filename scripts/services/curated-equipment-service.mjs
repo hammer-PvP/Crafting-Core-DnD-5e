@@ -8,7 +8,7 @@ import { normalizeItemSourceForDnd5e6, rarityArray } from "../utils/dnd5e-data.m
 import { forcedDeletionMap } from "../utils/foundry-data.mjs";
 
 const SOURCE_PACK_ID = "dnd5e.equipment24";
-const VERSION = 2;
+const VERSION = 3;
 const WEAPON_TYPES = new Set(["simpleM", "simpleR", "martialM", "martialR"]);
 const ARMOR_TYPES = new Set(["light", "medium", "heavy", "shield"]);
 const MAGIC_COST = Object.freeze({ standard: { 1: 200, 2: 2000, 3: 20000 }, armor: { 1: 2000, 2: 20000, 3: 100000 } });
@@ -301,6 +301,173 @@ export class CuratedEquipmentService {
   static #productId(base, bonus) { return `equipment-${slug(base.system?.identifier || base.name)}-${bonus}`; }
   static #recipeId(base, bonus) { return `equipment-recipe-${slug(base.system?.identifier || base.name)}-${bonus}`; }
 
+  static #entriesForBases(bases) {
+    return (bases ?? []).flatMap(base => [0, 1, 2, 3].map(bonus => ({ base, bonus, category: this.#category(base) })));
+  }
+
+  static #expectedProductIds(entries) {
+    return new Set((entries ?? []).map(entry => this.#productId(entry.base, entry.bonus)));
+  }
+
+  static #expectedRecipeIds(entries) {
+    return new Set((entries ?? []).map(entry => this.#recipeId(entry.base, entry.bonus)));
+  }
+
+  static #containsUuid(value, uuid) {
+    if (!value || !uuid) return false;
+    if (typeof value === "string") return value === uuid;
+    if (Array.isArray(value)) return value.some(entry => this.#containsUuid(entry, uuid));
+    if (typeof value !== "object") return false;
+    return Object.values(value).some(entry => this.#containsUuid(entry, uuid));
+  }
+
+  static async #cleanupPreviewForEntries(entries) {
+    const expectedProducts = this.#expectedProductIds(entries);
+    const expectedRecipes = this.#expectedRecipeIds(entries);
+    const productPack = ProductSourceService.productsPack();
+    const knowledgePack = KnowledgeItemService.pack();
+    const productDocs = productPack ? await productPack.getDocuments() : [];
+    const knowledgeDocs = knowledgePack ? await knowledgePack.getDocuments() : [];
+
+    const staleProducts = productDocs.filter(item =>
+      String(item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) ?? "") === "equipment-product"
+      && !expectedProducts.has(String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? ""))
+    );
+    const staleRecipes = knowledgeDocs.filter(item =>
+      String(item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) ?? "") === "equipment-recipe"
+      && !expectedRecipes.has(String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? ""))
+    );
+    const staleRecipeIds = staleRecipes
+      .map(item => String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? ""))
+      .filter(Boolean);
+    const knownActors = KnowledgeItemService.actorsKnowingRecipeIds(staleRecipeIds);
+
+    return {
+      expectedProducts,
+      expectedRecipes,
+      staleProducts,
+      staleRecipes,
+      staleRecipeIds,
+      knownActors,
+      knownRecipeCount: new Set(knownActors.flatMap(row => row.recipeIds ?? [])).size
+    };
+  }
+
+  static async cleanupPreview() {
+    const bases = await this.baseItems();
+    const entries = this.#entriesForBases(bases);
+    const preview = await this.#cleanupPreviewForEntries(entries);
+    return {
+      baseItems: bases.length,
+      expectedProducts: preview.expectedProducts.size,
+      expectedRecipes: preview.expectedRecipes.size,
+      obsoleteProducts: preview.staleProducts.length,
+      obsoleteRecipes: preview.staleRecipes.length,
+      affectedActors: preview.knownActors.length,
+      knownObsoleteRecipes: preview.knownRecipeCount
+    };
+  }
+
+  static async #cleanupObsolete(entries, preview, { onProgress=null, overallBase=0, overallTotal=1 }={}) {
+    const staleRecipeIds = preview.staleRecipeIds ?? [];
+    const staleRecords = (preview.staleRecipes ?? []).map(item => ({
+      recipe: item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_SNAPSHOT),
+      item,
+      uuid: item.uuid,
+      sourceType: item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_SOURCE_TYPE) ?? "Blueprint"
+    })).filter(record => record.recipe?.id);
+
+    let legacy = { actors: 0, entries: 0, materialized: 0, refreshed: 0 };
+    let recipesRemoved = 0;
+    if (staleRecords.length) {
+      legacy = await KnowledgeItemService.preserveRecipesAsLegacy(staleRecords, { reason: "curatedEquipmentRetired" });
+      const removed = await KnowledgeItemService.removePublishedSources(staleRecipeIds, {
+        preserveKnowledge: false,
+        forgetActors: false,
+        reason: "curatedEquipmentRetired",
+        reconcile: false
+      });
+      recipesRemoved = Number(removed.removed) || 0;
+    }
+
+    onProgress?.({
+      phase: "Retiring Obsolete Equipment Blueprints",
+      label: recipesRemoved
+        ? `${recipesRemoved} obsolete Blueprint${recipesRemoved === 1 ? "" : "s"} removed; learned copies were preserved as Legacy Knowledge.`
+        : "No obsolete Equipment Blueprints require cleanup.",
+      current: preview.staleRecipes.length,
+      total: Math.max(1, preview.staleRecipes.length),
+      overallCurrent: overallBase + preview.staleRecipes.length,
+      overallTotal,
+      stats: { recipesRetired: recipesRemoved, legacyKnowledge: legacy.entries }
+    });
+
+    // Protect any obsolete Product that a surviving Draft or published Recipe still references.
+    // Retired Equipment knowledge is safe because preserveRecipesAsLegacy materializes its full
+    // recipe/result snapshot before the Blueprint disappears.
+    const survivingRecipes = [
+      ...RecipeService.list(),
+      ...(await KnowledgeItemService.publishedSources()).map(record => record.recipe)
+    ];
+    const retiredRecipeIds = new Set(staleRecipeIds);
+    for (const actor of game.actors?.contents?.filter(a => a.type === "character") ?? []) {
+      for (const recipe of KnowledgeItemService.knownRecipes(actor)) {
+        // Retired Equipment recipes were just materialized with a complete result snapshot,
+        // so their obsolete fallback Product is no longer required for safe crafting.
+        if (retiredRecipeIds.has(String(recipe.id)) && recipe.result?.snapshot) continue;
+        survivingRecipes.push(recipe);
+      }
+      const project = actor.getFlag?.(MODULE_ID, FLAGS.CRAFTING_JOB);
+      if (project?.recipe) survivingRecipes.push(project.recipe);
+    }
+    const deletableProducts = [];
+    const retainedProducts = [];
+    for (const item of preview.staleProducts ?? []) {
+      const referenced = survivingRecipes.some(recipe => this.#containsUuid(recipe, item.uuid));
+      (referenced ? retainedProducts : deletableProducts).push(item);
+    }
+
+    let productsRemoved = 0;
+    if (deletableProducts.length) {
+      const pack = ProductSourceService.productsPack();
+      if (pack) {
+        const wasLocked = Boolean(pack.locked);
+        if (wasLocked) await pack.configure({ locked: false });
+        try {
+          const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+          await ItemClass.deleteDocuments(deletableProducts.map(item => item.id), { pack: pack.collection });
+          productsRemoved = deletableProducts.length;
+        } finally {
+          if (wasLocked) await pack.configure({ locked: true });
+        }
+      }
+    }
+
+    onProgress?.({
+      phase: "Retiring Obsolete Equipment Products",
+      label: retainedProducts.length
+        ? `${productsRemoved} obsolete Product${productsRemoved === 1 ? "" : "s"} removed; ${retainedProducts.length} retained because surviving custom content still references them.`
+        : `${productsRemoved} obsolete Equipment Product${productsRemoved === 1 ? "" : "s"} removed.`,
+      current: preview.staleProducts.length,
+      total: Math.max(1, preview.staleProducts.length),
+      overallCurrent: overallBase + preview.staleRecipes.length + preview.staleProducts.length,
+      overallTotal,
+      stats: {
+        productsRetired: productsRemoved,
+        productsRetained: retainedProducts.length,
+        recipesRetired: recipesRemoved,
+        legacyKnowledge: legacy.entries
+      }
+    });
+
+    return {
+      recipesRemoved,
+      productsRemoved,
+      productsRetained: retainedProducts.length,
+      legacy
+    };
+  }
+
   static #productData(base, bonus, folderId) {
     const category = this.#category(base);
     const data = normalizeItemSourceForDnd5e6(clone(base.toObject(true)));
@@ -488,13 +655,22 @@ export class CuratedEquipmentService {
   static async catalogContext() {
     const state = this.state();
     const bases = await this.baseItems();
+    const entries = this.#entriesForBases(bases);
+    const expectedProducts = this.#expectedProductIds(entries);
+    const expectedRecipes = this.#expectedRecipeIds(entries);
     const products = ProductSourceService.productsPack();
     const learn = KnowledgeItemService.pack();
     const productDocs = products ? await products.getDocuments() : [];
     const knowledgeDocs = learn ? await learn.getDocuments() : [];
-    const productCount = productDocs.filter(item => item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) === "equipment-product").length;
-    const recipeCount = knowledgeDocs.filter(item => item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) === "equipment-recipe").length;
-    const total = bases.length * 4;
+    const productCount = productDocs.filter(item =>
+      item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) === "equipment-product"
+      && expectedProducts.has(String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? ""))
+    ).length;
+    const recipeCount = knowledgeDocs.filter(item =>
+      item.getFlag(MODULE_ID, FLAGS.CURATED_KIND) === "equipment-recipe"
+      && expectedRecipes.has(String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? ""))
+    ).length;
+    const total = entries.length;
     const categoryCounts = bases.reduce((counts, item) => {
       const key = this.#category(item);
       counts[key] = (counts[key] ?? 0) + 1;
@@ -520,18 +696,90 @@ export class CuratedEquipmentService {
     const bases = await this.baseItems();
     if (!bases.length) throw new Error("No mundane weapons, armor, shields, or ammunition were found in dnd5e.equipment24.");
     const materialDocs = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
-    const entries = bases.flatMap(base => [0, 1, 2, 3].map(bonus => ({ base, bonus, category: this.#category(base) })));
+    const entries = this.#entriesForBases(bases);
+    const cleanupPreview = await this.#cleanupPreviewForEntries(entries);
     const contentTotal = entries.length * 2;
-    const overallTotal = contentTotal + 3;
+    const cleanupTotal = cleanupPreview.staleRecipes.length + cleanupPreview.staleProducts.length;
+    const overallTotal = contentTotal + cleanupTotal + 3;
+
     const products = await this.#syncProducts(entries, { onProgress, overallBase: 0, overallTotal });
     const recipes = await this.#syncRecipes(entries, products.documents, materialDocs, { onProgress, overallBase: entries.length, overallTotal });
-    onProgress?.({ phase: "Saving Equipment State", label: "Recording the installed Curated Equipment version…", current: 1, total: 1, overallCurrent: contentTotal + 1, overallTotal, stats: { products: entries.length, recipes: entries.length, created: products.created + recipes.created, updated: products.updated + recipes.updated } });
+    const cleanup = await this.#cleanupObsolete(entries, cleanupPreview, {
+      onProgress,
+      overallBase: contentTotal,
+      overallTotal
+    });
+
+    const stateBase = contentTotal + cleanupTotal;
+    onProgress?.({
+      phase: "Saving Equipment State",
+      label: "Recording the installed Curated Equipment version…",
+      current: 1,
+      total: 1,
+      overallCurrent: stateBase + 1,
+      overallTotal,
+      stats: {
+        products: entries.length,
+        recipes: entries.length,
+        created: products.created + recipes.created,
+        updated: products.updated + recipes.updated,
+        productsRetired: cleanup.productsRemoved,
+        recipesRetired: cleanup.recipesRemoved,
+        legacyKnowledge: cleanup.legacy.entries
+      }
+    });
     await game.settings.set(MODULE_ID, SETTINGS.CURATED_EQUIPMENT_STATE, { enabled: true, version: VERSION, restoredAt: Date.now() });
-    onProgress?.({ phase: "Rebuilding Knowledge Authority", label: "Refreshing the published Blueprint index…", current: 1, total: 1, overallCurrent: contentTotal + 2, overallTotal, stats: { products: entries.length, recipes: entries.length, created: products.created + recipes.created, updated: products.updated + recipes.updated } });
+
+    onProgress?.({
+      phase: "Rebuilding Knowledge Authority",
+      label: "Refreshing the published Blueprint index…",
+      current: 1,
+      total: 1,
+      overallCurrent: stateBase + 2,
+      overallTotal,
+      stats: {
+        products: entries.length,
+        recipes: entries.length,
+        productsRetired: cleanup.productsRemoved,
+        recipesRetired: cleanup.recipesRemoved,
+        legacyKnowledge: cleanup.legacy.entries
+      }
+    });
     await KnowledgeItemService.rebuildAuthorityCache();
-    onProgress?.({ phase: "Reconciling Learned Recipes", label: "Refreshing Characters that already know these Blueprints…", current: 0, total: 1, overallCurrent: contentTotal + 2, overallTotal, stats: { products: entries.length, recipes: entries.length, created: products.created + recipes.created, updated: products.updated + recipes.updated } });
+
+    onProgress?.({
+      phase: "Reconciling Learned Recipes",
+      label: "Refreshing published knowledge while preserving unavailable Recipes as Legacy Knowledge…",
+      current: 0,
+      total: 1,
+      overallCurrent: stateBase + 2,
+      overallTotal,
+      stats: {
+        products: entries.length,
+        recipes: entries.length,
+        productsRetired: cleanup.productsRemoved,
+        recipesRetired: cleanup.recipesRemoved,
+        legacyKnowledge: cleanup.legacy.entries
+      }
+    });
     const reconciliation = await KnowledgeItemService.reconcilePublishedKnowledge();
-    onProgress?.({ phase: "Equipment Complete", label: "Products and Blueprints are restored.", current: 1, total: 1, overallCurrent: overallTotal, overallTotal, stats: { products: entries.length, recipes: entries.length, created: products.created + recipes.created, updated: products.updated + recipes.updated } });
-    return { baseItems: bases.length, products, recipes, reconciliation, total: entries.length };
+
+    onProgress?.({
+      phase: "Equipment Complete",
+      label: "Products and Blueprints are restored; learned legacy knowledge was preserved.",
+      current: 1,
+      total: 1,
+      overallCurrent: overallTotal,
+      overallTotal,
+      stats: {
+        products: entries.length,
+        recipes: entries.length,
+        productsRetired: cleanup.productsRemoved,
+        productsRetained: cleanup.productsRetained,
+        recipesRetired: cleanup.recipesRemoved,
+        legacyKnowledge: cleanup.legacy.entries
+      }
+    });
+    return { baseItems: bases.length, products, recipes, cleanup, reconciliation, total: entries.length };
   }
 }
