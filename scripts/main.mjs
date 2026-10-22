@@ -18,6 +18,8 @@ import { MaterialSourceService } from "./services/material-source-service.mjs";
 import { CuratedAlchemyService } from "./services/curated-alchemy-service.mjs";
 import { CuratedEquipmentService } from "./services/curated-equipment-service.mjs";
 import { ProductSourceService } from "./services/product-source-service.mjs";
+import { ContentPackService } from "./services/content-pack-service.mjs";
+import { CatalogAuditService } from "./services/catalog-audit-service.mjs";
 
 let app = null;
 let generatorApp = null;
@@ -67,7 +69,9 @@ const API = {
   get curatedAlchemy() { return game.user?.isGM ? CuratedAlchemyService : undefined; },
   get curatedEquipment() { return game.user?.isGM ? CuratedEquipmentService : undefined; },
   get materialSources() { return game.user?.isGM ? MaterialSourceService : undefined; },
-  get productSources() { return game.user?.isGM ? ProductSourceService : undefined; }
+  get productSources() { return game.user?.isGM ? ProductSourceService : undefined; },
+  get contentPacks() { return game.user?.isGM ? ContentPackService : undefined; },
+  get catalogAudit() { return game.user?.isGM ? CatalogAuditService : undefined; }
 };
 
 function exposeApi() {
@@ -97,6 +101,7 @@ Hooks.once("init", () => {
   runInitStep("curated content settings", () => CuratedContentService.registerSettings());
   runInitStep("curated alchemy settings", () => CuratedAlchemyService.registerSettings());
   runInitStep("curated equipment settings", () => CuratedEquipmentService.registerSettings());
+  runInitStep("content architecture settings", () => ContentPackService.registerSettings());
   runInitStep("Crafting Core settings menu", () => game.settings.registerMenu(MODULE_ID, "craftingCoreSettings", {
     name: "Crafting Core",
     label: "Configure Crafting Core",
@@ -146,6 +151,13 @@ Hooks.once("ready", async () => {
     } catch (error) {
       console.error(`${MODULE_TITLE} | Legacy knowledge migration failed.`, error);
     }
+    try {
+      const contentMigration = await ContentPackService.migrateExistingWorld();
+      if (contentMigration.migrated) console.info(`${MODULE_TITLE} | Content architecture migration complete:`, contentMigration);
+    } catch (error) {
+      console.error(`${MODULE_TITLE} | Content architecture migration failed.`, error);
+    }
+
     try {
       const harvestMigration = await HarvestProfileService.migrateStoredProfilesToPools();
       if (harvestMigration.migrated) console.info(`${MODULE_TITLE} | Migrated legacy Harvest Profile slots to rarity pools.`, harvestMigration);

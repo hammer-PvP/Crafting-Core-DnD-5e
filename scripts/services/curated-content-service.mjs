@@ -659,7 +659,7 @@ export class CuratedContentService {
     const recipeTotal = CURATED_RECIPES.filter(entry => !state.suppressedRecipes.includes(entry.recipeId)).length;
     const overallTotal = productTotal + recipeTotal + 2;
     onProgress?.({ phase: "Resolving Materials", label: "Preparing Curated Culinary dependencies…", current: 0, total: productTotal, overallCurrent: 0, overallTotal, stats: { products: 0, recipes: 0 } });
-    const materialDocs = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
+    const materialDocs = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true, includeAlchemy: false });
     const products = await this.#syncProducts(state, materialDocs, { restore, onProgress, overallBase: 0, overallTotal, phaseTotal: productTotal });
     const recipes = await this.#syncRecipes(state, materialDocs, products.documentsByProductId, { restore, onProgress, overallBase: productTotal, overallTotal, phaseTotal: recipeTotal });
     state.culinaryVersion = CURATED_CONTENT_VERSION;
@@ -842,6 +842,7 @@ export class CuratedContentService {
           [FLAGS.CURATED]: true,
           [FLAGS.CURATED_ID]: entry.id,
           [FLAGS.CURATED_KIND]: "culinary-product",
+          [FLAGS.CONTENT_PACK_ID]: "hammer-culinary", [FLAGS.CONTENT_ORIGIN]: "pack",
           [FLAGS.CURATED_VERSION]: CURATED_CONTENT_VERSION,
           [FLAGS.PRODUCT]: true,
           [FLAGS.PRODUCT_ID]: entry.productId,
@@ -1260,6 +1261,7 @@ export class CuratedContentService {
           [FLAGS.CURATED]: true,
           [FLAGS.CURATED_ID]: entry.id,
           [FLAGS.CURATED_KIND]: "culinary-recipe",
+          [FLAGS.CONTENT_PACK_ID]: "hammer-culinary", [FLAGS.CONTENT_ORIGIN]: "pack",
           [FLAGS.CURATED_VERSION]: CURATED_CONTENT_VERSION,
           [FLAGS.PRODUCT_ID]: entry.productId,
           [FLAGS.PRODUCT_CATEGORY]: entry.category,

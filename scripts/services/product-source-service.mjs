@@ -11,6 +11,8 @@ const PRODUCTS_PACK_LABEL = "Crafting Core — Products";
 const PRODUCTS_PACK_ID = `world.${PRODUCTS_PACK_NAME}`;
 const LINKED_FOLDER_KEY = "linked-products";
 const LINKED_FOLDER_NAME = "Linked Products";
+const WORLD_FOLDER_KEY = "world-products";
+const WORLD_FOLDER_NAME = "World Products";
 
 const STATUS = Object.freeze({
   SYNCED: "synced",
@@ -149,7 +151,7 @@ export class ProductSourceService {
 
   static async ensureProductsPack() {
     const pack = await CompendiumService.ensureWorldItemPack({ name: PRODUCTS_PACK_NAME, label: PRODUCTS_PACK_LABEL });
-    await CompendiumService.ensurePackFolders(pack, [{ key: LINKED_FOLDER_KEY, name: LINKED_FOLDER_NAME }]);
+    await CompendiumService.ensurePackFolders(pack, [{ key: WORLD_FOLDER_KEY, name: WORLD_FOLDER_NAME }, { key: LINKED_FOLDER_KEY, name: LINKED_FOLDER_NAME }]);
     return pack;
   }
 
@@ -220,6 +222,41 @@ export class ProductSourceService {
       lastSyncedAt: Date.now(),
       snapshot: this.#snapshotData(snapshotDoc)
     };
+  }
+
+  static async createCustomProduct({ name="New Crafting Product" }={}) {
+    if (!game.user?.isGM) throw new Error("Only a GM can create Crafting Core Products.");
+    const pack = await this.ensureProductsPack();
+    const wasLocked = Boolean(pack.locked);
+    if (wasLocked) await pack.configure({ locked: false });
+    try {
+      const folders = await CompendiumService.ensurePackFolders(pack, [{ key: WORLD_FOLDER_KEY, name: WORLD_FOLDER_NAME }, { key: LINKED_FOLDER_KEY, name: LINKED_FOLDER_NAME }]);
+      const productId = `world-product-${foundry.utils.randomID(16)}`;
+      const data = {
+        name, type: "loot", img: "icons/svg/item-bag.svg", folder: folders.get(WORLD_FOLDER_KEY)?.id ?? null,
+        system: {
+          description: { value: "", chat: "" }, quantity: 1, weight: { value: 0, units: "lb" },
+          price: { value: 0, denomination: "gp" }, rarities: [], identified: true,
+          unidentified: { description: "" }, container: null, properties: [], type: { value: "trade", subtype: "" },
+          identifier: `cc-${productId}`, source: { custom: "Crafting Core World Product", book: "", page: "", license: "", rules: "2024", revision: 1 }
+        },
+        flags: { [MODULE_ID]: {
+          [FLAGS.PRODUCT]: true, [FLAGS.PRODUCT_ID]: productId, [FLAGS.PRODUCT_MANAGED]: false,
+          [FLAGS.CONTENT_ORIGIN]: "world", [FLAGS.CONTENT_PACK_ID]: ""
+        } }
+      };
+      const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+      const [created] = await ItemClass.createDocuments([data], { pack: pack.collection });
+      return created;
+    } finally { if (wasLocked) await pack.configure({ locked: true }); }
+  }
+
+  static async registerExistingProduct(item) {
+    if (!game.user?.isGM) throw new Error("Only a GM can register Crafting Core Products.");
+    if (!(item instanceof Item)) throw new Error("Drop a D&D5e Item to register it as a Product.");
+    const result = await this.referenceForItem(item, 1);
+    const fallback = result?.fallbackUuid ? await safeFromUuid(result.fallbackUuid) : null;
+    return fallback ?? item;
   }
 
   static async referenceForItem(item, quantity=1) {
@@ -596,7 +633,9 @@ export class ProductSourceService {
       [FLAGS.PRODUCT_SOURCE_FINGERPRINT]: currentContent,
       [FLAGS.PRODUCT_IDENTITY_FINGERPRINT]: currentIdentity,
       [FLAGS.PRODUCT_SYNC_STATUS]: STATUS.SYNCED,
-      [FLAGS.PRODUCT_SYNCED_AT]: Date.now()
+      [FLAGS.PRODUCT_SYNCED_AT]: Date.now(),
+      [FLAGS.CONTENT_PACK_ID]: "",
+      [FLAGS.CONTENT_ORIGIN]: "external"
     };
     const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
     const wasLocked = Boolean(pack.locked);
@@ -639,7 +678,9 @@ export class ProductSourceService {
       [FLAGS.PRODUCT_SOURCE_FINGERPRINT]: currentContent,
       [FLAGS.PRODUCT_IDENTITY_FINGERPRINT]: currentIdentity,
       [FLAGS.PRODUCT_SYNC_STATUS]: STATUS.SOURCE_MISSING,
-      [FLAGS.PRODUCT_SYNCED_AT]: Date.now()
+      [FLAGS.PRODUCT_SYNCED_AT]: Date.now(),
+      [FLAGS.CONTENT_PACK_ID]: "",
+      [FLAGS.CONTENT_ORIGIN]: "external"
     };
     const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
     const wasLocked = Boolean(pack.locked);
@@ -702,7 +743,9 @@ export class ProductSourceService {
       [FLAGS.PRODUCT_SOURCE_FINGERPRINT]: sourceFingerprint,
       [FLAGS.PRODUCT_IDENTITY_FINGERPRINT]: identityFingerprint,
       [FLAGS.PRODUCT_SYNC_STATUS]: status,
-      [FLAGS.PRODUCT_SYNCED_AT]: Date.now()
+      [FLAGS.PRODUCT_SYNCED_AT]: Date.now(),
+      [FLAGS.CONTENT_PACK_ID]: "",
+      [FLAGS.CONTENT_ORIGIN]: "external"
     };
 
     const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
@@ -750,7 +793,9 @@ export class ProductSourceService {
       [FLAGS.PRODUCT_SOURCE_FINGERPRINT]: sourceFingerprint,
       [FLAGS.PRODUCT_IDENTITY_FINGERPRINT]: identityFingerprint,
       [FLAGS.PRODUCT_SYNC_STATUS]: status,
-      [FLAGS.PRODUCT_SYNCED_AT]: Date.now()
+      [FLAGS.PRODUCT_SYNCED_AT]: Date.now(),
+      [FLAGS.CONTENT_PACK_ID]: "",
+      [FLAGS.CONTENT_ORIGIN]: "external"
     };
 
     const wasLocked = Boolean(pack.locked);

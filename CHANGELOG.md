@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.0 - Content Architecture, Optional Packs & Catalog UX
+
+- Separated the Crafting Core engine from Hammer/SRD content. A fresh World no longer treats embedded curated definitions as installed runtime content and starts with no forced Materials, Products, curated Recipes, or harvest catalog.
+- Added first-class **Content Packs** for Hammer Materials, Hammer Culinary, Hammer Alchemy & Inscription, and SRD Equipment Crafting. Packs can be installed/restored independently; **Install Missing Packs** resolves dependencies without overwriting already-complete packs.
+- Added a one-time in-place existing-World content architecture migration. Existing Materials, Products, and published Recipes are classified by origin/pack metadata without changing document IDs/UUIDs, stable Recipe/Product IDs, learned Character knowledge, or active Projects.
+- Changed runtime Material consumers to use only Materials actually installed in the World. Creature Scanner, Harvest profiles, Gathering/Material Generation, Material Source rebuilds, Item Piles bridges, and Recipe transfer no longer see Hammer definitions that were never installed.
+- Added manual World-content workflows to create a Material, create a Product, register an existing Item as a Material, and register an existing Item as a Product without installing any Crafting Core content pack.
+- Rebuilt the Catalog UI around **Materials / Products / Content Packs** plus a dedicated **Validate Catalog** action. Removed the normal-workflow dependence on large Product Source/Curated maintenance cards and reduced persistent explanatory text.
+- Added Content Pack states **Not Installed / Needs Restore / Installed** based on actual persisted content rather than historical enabled settings. Deleting a pack's documents therefore does not make the UI pretend the pack is still installed.
+- Added Catalog validation for duplicate stable IDs, Product Source Missing/Needs Review, incomplete installed Content Packs, and Legacy Knowledge. Product Source synchronization is offered only when relevant validation issues are found.
+- Added lazy/cached Catalog contexts. Switching tabs no longer loads every Material, Culinary, Alchemy, Equipment, and Product Source context on every render. Product views primarily use Compendium indexes and catalog groups start collapsed.
+- Preserved explicit GM control: Content Pack installation does not automatically scan the bestiary. Run Creature Scanner separately when Harvest links are desired.
+- Updated release identity and documentation for the v0.6.0 content-agnostic architecture while retaining Foundry VTT 14.368 and D&D5e 6.0.x compatibility targets.
+
 ## 0.5.11 - Knowledge Safety & Equipment Cleanup
 
 - Changed Knowledge reconciliation so **missing/unpublished sources no longer make Characters forget learned Recipes**. Learned Actor snapshots are preserved as **Legacy Knowledge** and remain craftable from their frozen definition.

@@ -1,4 +1,4 @@
-import { MODULE_ID } from "../constants.mjs";
+import { FLAGS, MODULE_ID } from "../constants.mjs";
 import { MaterialCatalogService } from "../services/material-catalog-service.mjs";
 import { CuratedContentService } from "../services/curated-content-service.mjs";
 import { CuratedAlchemyService } from "../services/curated-alchemy-service.mjs";
@@ -6,6 +6,8 @@ import { CuratedEquipmentService } from "../services/curated-equipment-service.m
 import { ProductSourceService } from "../services/product-source-service.mjs";
 import { MaterialEditorApp } from "./material-editor-app.mjs";
 import { OperationProgressApp } from "../ui/operation-progress.mjs";
+import { ContentPackService } from "../services/content-pack-service.mjs";
+import { CatalogAuditService } from "../services/catalog-audit-service.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 const TextEditor = foundry.applications.ux.TextEditor.implementation;
@@ -16,7 +18,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     classes: ["crafting-core", "crafting-core-materials-app", "standard-form"],
     tag: "form",
     position: { width: 1280, height: 820 },
-    window: { title: "Crafting Core — Materials & Products", resizable: true }
+    window: { title: "Crafting Core — Catalog", resizable: true }
   };
 
   static PARTS = {
@@ -25,38 +27,54 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
 
   filters = { search: "", family: "all", nature: "all", rarity: "all" };
   catalogView = "materials";
+  contextCache = new Map();
 
   async _prepareContext() {
-    const summary = await MaterialCatalogService.packSummary();
-    const entries = await MaterialCatalogService.allEntries();
+    const cacheKey = this.catalogView;
+    let specific = this.contextCache.get(cacheKey);
+    if (!specific) {
+      specific = this.catalogView === "materials"
+        ? await this.#materialsContext()
+        : this.catalogView === "products"
+          ? await this.#productsContext()
+          : await this.#contentPacksContext();
+      this.contextCache.set(cacheKey, specific);
+    }
+    return {
+      ...specific,
+      catalogView: this.catalogView,
+      isMaterials: this.catalogView === "materials",
+      isProducts: this.catalogView === "products",
+      isContentPacks: this.catalogView === "packs"
+    };
+  }
+
+  async #materialsContext() {
+    const entries = await MaterialCatalogService.installedEntries();
+    const materialPack = MaterialCatalogService.pack();
+    const summary = {
+      exists: Boolean(materialPack),
+      collection: materialPack?.collection ?? MaterialCatalogService.PACK_ID,
+      count: entries.length,
+      managed: entries.filter(row => row.managed).length,
+      custom: entries.filter(row => !row.managed).length,
+      private: materialPack?.metadata?.private !== false
+    };
     const filtered = entries.filter(entry => this.#matches(entry, { includeSearch: false })).map(entry => {
       const row = MaterialCatalogService.withIconChoices(entry);
       row.searchText = this.#searchText(entry);
+      row.rarityLabel = MaterialCatalogService.rarityLabel(row.rarity);
+      row.sourceLabel = row.managed ? "Content Pack" : "World";
       return row;
     });
     const natures = [...new Set(entries.map(entry => entry.nature).filter(Boolean))].sort((a,b) => a.localeCompare(b, game.i18n.lang));
-    const culinary = await CuratedContentService.culinaryCatalogContext();
-    const alchemy = await CuratedAlchemyService.catalogContext();
-    const equipment = await CuratedEquipmentService.catalogContext();
-    const linkedProducts = await ProductSourceService.catalogContext();
-    const productCatalogTotal = Number(culinary.total ?? 0) + (alchemy.enabled ? Number(alchemy.productTotal ?? 0) : 0) + (equipment.enabled ? Number(equipment.productTotal ?? 0) : 0);
-    const productCatalogCount = Number(culinary.count ?? 0) + (alchemy.enabled ? Number(alchemy.productCount ?? 0) : 0) + (equipment.enabled ? Number(equipment.productCount ?? 0) : 0);
     return {
       summary,
       groups: MaterialCatalogService.groupedEntries(filtered),
       economy: MaterialCatalogService.economy(),
       catalogCount: entries.length,
-      productCatalogTotal,
-      productCatalogCount,
       shownCount: filtered.filter(entry => !this.filters.search || entry.searchText.includes(String(this.filters.search).trim().toLowerCase())).length,
       filters: this.filters,
-      catalogView: this.catalogView,
-      isMaterials: this.catalogView === "materials",
-      isProducts: this.catalogView === "products",
-      culinary,
-      alchemy,
-      equipment,
-      linkedProducts,
       natureOptions: natures.map(value => ({ value, label: value.replace(/[-_]+/g," ").replace(/\b\w/g,c=>c.toUpperCase()), selected: this.filters.nature === value })),
       familyOptions: [
         { value: "all", label: "All Families", selected: this.filters.family === "all" },
@@ -69,6 +87,51 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     };
   }
 
+  async #productsContext() {
+    const pack = ProductSourceService.productsPack();
+    if (!pack) return { productPackExists: false, productCount: 0, productGroups: [] };
+    const index = await pack.getIndex({ fields: [
+      "name", "img", "type", "system.rarities", "system.identifier",
+      `flags.${MODULE_ID}.${FLAGS.PRODUCT_ID}`, `flags.${MODULE_ID}.${FLAGS.PRODUCT_SYNC_STATUS}`,
+      `flags.${MODULE_ID}.${FLAGS.PRODUCT_MIRROR}`, `flags.${MODULE_ID}.${FLAGS.CURATED_KIND}`,
+      `flags.${MODULE_ID}.${FLAGS.CONTENT_PACK_ID}`, `flags.${MODULE_ID}.${FLAGS.CONTENT_ORIGIN}`
+    ] });
+    const rows = Array.from(index ?? []).map(row => {
+      const flags = row.flags?.[MODULE_ID] ?? {};
+      const sourceLabel = ContentPackService.sourceLabelForDocument(row);
+      const origin = ContentPackService.originForDocument(row);
+      return {
+        id: row._id ?? row.id, name: row.name, img: row.img || "icons/svg/item-bag.svg", type: row.type || "Item",
+        productId: String(flags[FLAGS.PRODUCT_ID] ?? ""), sourceLabel, origin,
+        statusLabel: ProductSourceService.statusLabel(flags[FLAGS.PRODUCT_SYNC_STATUS] ?? ProductSourceService.STATUS.SYNCED),
+        curatedKind: String(flags[FLAGS.CURATED_KIND] ?? ""),
+        identifier: String(row.system?.identifier ?? "")
+      };
+    }).sort((a,b) => a.name.localeCompare(b.name, game.i18n.lang));
+    const groups = new Map();
+    for (const row of rows) {
+      if (!groups.has(row.sourceLabel)) groups.set(row.sourceLabel, []);
+      groups.get(row.sourceLabel).push(row);
+    }
+    return {
+      productPackExists: true, productCount: rows.length,
+      productGroups: [...groups.entries()].map(([label, products]) => ({ label, count: products.length, products }))
+        .sort((a,b) => a.label.localeCompare(b.label, game.i18n.lang))
+    };
+  }
+
+  async #contentPacksContext() {
+    const packs = await ContentPackService.statusCards();
+    return {
+      contentPacks: packs,
+      installedPackCount: packs.filter(row => row.installed).length,
+      totalPackCount: packs.length,
+      allPacksInstalled: packs.every(row => row.installed),
+      itemCreatorCompatible: CuratedContentService.itemCreatorCompatible(),
+      equipmentSourceAvailable: Boolean(CuratedEquipmentService.sourcePack())
+    };
+  }
+
   _onRender() {
     const root = this.element;
     root.querySelectorAll('[data-action="catalog-tab"]').forEach(button => button.addEventListener("click", event => {
@@ -76,25 +139,21 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       this.catalogView = String(button.dataset.catalogView ?? "materials");
       this.render({ force: true });
     }));
-    root.querySelector('[data-action="restore-curated-culinary"]')?.addEventListener("click", event => this.#restoreCuratedCulinary(event));
-    root.querySelector('[data-action="restore-curated-alchemy"]')?.addEventListener("click", event => this.#restoreCuratedAlchemy(event));
-    root.querySelector('[data-action="restore-curated-equipment"]')?.addEventListener("click", event => this.#restoreCuratedEquipment(event));
-    root.querySelector('[data-action="sync-product-sources"]')?.addEventListener("click", event => this.#syncProductSources(event));
-    root.querySelector('[data-action="open-alchemy-products"]')?.addEventListener("click", event => {
+    root.querySelector('[data-action="validate-catalog"]')?.addEventListener("click", event => this.#validateCatalog(event));
+    root.querySelectorAll('[data-action="install-content-pack"]').forEach(button => button.addEventListener("click", event => this.#installContentPack(event)));
+    root.querySelector('[data-action="install-all-content"]')?.addEventListener("click", event => this.#installAllContent(event));
+
+    root.querySelector('[data-action="create-material"]')?.addEventListener("click", event => this.#createMaterial(event));
+    root.querySelector('[data-action="create-product"]')?.addEventListener("click", event => this.#createProduct(event));
+    root.querySelector('[data-action="open-materials"]')?.addEventListener("click", event => {
       event.preventDefault();
-      if (!CuratedAlchemyService.openProductsPack()) ui.notifications.warn("Install the optional Alchemy & Inscription library first.");
+      if (!MaterialCatalogService.openPack()) ui.notifications.warn("No Materials Compendium exists yet.");
     });
     root.querySelector('[data-action="open-products"]')?.addEventListener("click", event => {
       event.preventDefault();
-      if (!CuratedContentService.openProductsPack()) ui.notifications.warn("Restore the Curated Product library first.");
+      if (!CuratedContentService.openProductsPack()) ui.notifications.warn("No Products Compendium exists yet.");
     });
-    root.querySelectorAll('[data-action="choose-product-icon"]').forEach(input => input.addEventListener("change", event => this.#chooseProductIcon(event)));
-    root.querySelector('[data-action="sync-materials"]')?.addEventListener("click", event => this.#sync(event));
-    root.querySelector('[data-action="reset-curated-defaults"]')?.addEventListener("click", event => this.#resetCuratedDefaults(event));
-    root.querySelector('[data-action="open-materials"]')?.addEventListener("click", event => {
-      event.preventDefault();
-      if (!MaterialCatalogService.openPack()) ui.notifications.warn("Sync the Materials Compendium first.");
-    });
+    root.querySelectorAll('[data-action="open-product"]').forEach(button => button.addEventListener("click", event => this.#openProduct(event)));
     root.querySelector('[data-action="save-economy"]')?.addEventListener("click", event => this.#saveEconomy(event));
     root.querySelectorAll('[data-action="edit-material"]').forEach(button => button.addEventListener("click", event => {
       event.preventDefault();
@@ -106,6 +165,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       root.querySelector(selector)?.addEventListener("change", event => {
         const key = event.currentTarget.name.split(".")[1];
         this.filters[key] = event.currentTarget.value;
+        this.#invalidate("materials");
         this.render({ force: true });
       });
     }
@@ -114,22 +174,22 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       this.filters.search = event.currentTarget.value;
       this.#applySearchFilter();
     });
-    // Search is deliberately DOM-local: no render while the GM is typing, so focus, caret,
-    // scroll position and open groups remain untouched even with a slow human typing cadence.
     this.#applySearchFilter();
 
-    const dropZone = root.querySelector('[data-drop-kind="custom-material"]');
-    if (dropZone) {
-      dropZone.addEventListener("dragover", event => {
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "copy";
-        dropZone.classList.add("drag-over");
-      });
+    for (const [selector, kind] of [['[data-drop-kind="custom-material"]', "material"], ['[data-drop-kind="custom-product"]', "product"]]) {
+      const dropZone = root.querySelector(selector);
+      if (!dropZone) continue;
+      dropZone.addEventListener("dragover", event => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; dropZone.classList.add("drag-over"); });
       dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
-      dropZone.addEventListener("drop", event => this.#registerDrop(event, dropZone));
+      dropZone.addEventListener("drop", event => kind === "material" ? this.#registerDrop(event, dropZone) : this.#registerProductDrop(event, dropZone));
     }
 
-    this._ccMaterialSavedHook ??= Hooks.on(`${MODULE_ID}.materialEditorSaved`, () => this.render({ force: true }));
+    this._ccMaterialSavedHook ??= Hooks.on(`${MODULE_ID}.materialEditorSaved`, () => { this.#invalidate("materials"); this.render({ force: true }); });
+  }
+
+  #invalidate(...views) {
+    if (!views.length) this.contextCache.clear();
+    else for (const view of views) this.contextCache.delete(view);
   }
 
   #setMaintenanceButtonsDisabled(disabled) {
@@ -517,6 +577,172 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     }
   }
 
+  async #createMaterial(event) {
+    event.preventDefault();
+    try {
+      const item = await MaterialCatalogService.createCustomMaterial();
+      this.#invalidate("materials", "packs");
+      new MaterialEditorApp(String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? item.id)).render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Custom material creation failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not create that material.");
+    }
+  }
+
+  async #createProduct(event) {
+    event.preventDefault();
+    try {
+      const item = await ProductSourceService.createCustomProduct();
+      this.#invalidate("products", "packs");
+      item.sheet?.render?.({ force: true });
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Custom Product creation failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not create that Product.");
+    }
+  }
+
+  async #registerProductDrop(event, dropZone) {
+    event.preventDefault();
+    dropZone.classList.remove("drag-over");
+    try {
+      const data = TextEditor.getDragEventData(event);
+      if (data?.type !== "Item") return ui.notifications.warn("Drop a D&D5e Item here.");
+      const item = await Item.implementation.fromDropData(data);
+      if (!(item instanceof Item)) return ui.notifications.warn("Crafting Core could not resolve that Item.");
+      const created = await ProductSourceService.registerExistingProduct(item);
+      ui.notifications.info(`${created.name} registered in Crafting Core — Products.`);
+      this.#invalidate("products", "packs");
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Product registration failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not register that Product.");
+    }
+  }
+
+  async #openProduct(event) {
+    event.preventDefault();
+    const id = String(event.currentTarget?.dataset?.itemId ?? "");
+    const pack = ProductSourceService.productsPack();
+    if (!id || !pack) return;
+    const item = await pack.getDocument(id);
+    item?.sheet?.render?.({ force: true });
+  }
+
+  async #installContentPack(event) {
+    event.preventDefault();
+    const packId = String(event.currentTarget?.dataset?.packId ?? "");
+    const title = String(event.currentTarget?.dataset?.packTitle ?? "Content Pack");
+    if (!packId || OperationProgressApp.busy) return;
+    const confirmed = await foundry.applications.api.DialogV2.confirm({
+      window: { title: `${title} — ${event.currentTarget?.dataset?.installed === "true" ? "Restore Defaults" : "Install"}` },
+      content: `<p>${event.currentTarget?.dataset?.installed === "true" ? "Restore the managed defaults for" : "Install"} <strong>${title}</strong>?</p><p>World-owned content, learned Character Recipes and active Projects are not removed by this operation.</p>`,
+      yes: { label: event.currentTarget?.dataset?.installed === "true" ? "Restore Defaults" : "Install", icon: `fa-solid ${event.currentTarget?.dataset?.installed === "true" ? "fa-rotate-left" : "fa-download"}` },
+      no: { label: "Cancel" }
+    });
+    if (!confirmed) return;
+    try {
+      await OperationProgressApp.run({
+        title: `Crafting Core — ${title}`,
+        initial: { phase: "Preparing Content Pack", label: title, current: 0, total: 1, overallCurrent: 0, overallTotal: 1 },
+        task: report => ContentPackService.install(packId, { onProgress: report }),
+        summarize: () => ({ message: `${title} is ready.`, summary: [] })
+      });
+      this.#invalidate();
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Content Pack installation failed.`, error);
+      ui.notifications.error(error.message ?? `Crafting Core could not install ${title}.`);
+    }
+  }
+
+  async #installAllContent(event) {
+    event.preventDefault();
+    if (OperationProgressApp.busy) return;
+    const confirmed = await foundry.applications.api.DialogV2.confirm({
+      window: { title: "Install Crafting Core Content" },
+      content: "<p>Install all currently missing Crafting Core content packs?</p><p>Missing packs are installed in dependency order: Materials first, then Culinary, Alchemy &amp; Inscription, and SRD Equipment Crafting. The Creature Scanner remains a separate GM action after installation.</p>",
+      yes: { label: "Install All", icon: "fa-solid fa-download" },
+      no: { label: "Cancel" }
+    });
+    if (!confirmed) return;
+    try {
+      const result = await OperationProgressApp.run({
+        title: "Crafting Core — Install All Content",
+        initial: { phase: "Preparing Content", label: "Resolving installed dependencies…", current: 0, total: 4, overallCurrent: 0, overallTotal: 4 },
+        task: report => ContentPackService.installAll({ onProgress: report }),
+        summarize: rows => ({
+          message: "Content installation complete.",
+          summary: [
+            { label: "Installed", value: rows.filter(row => !row.skipped).length },
+            { label: "Skipped", value: rows.filter(row => row.skipped).length },
+            { label: "Next", value: "Run Creature Scanner if you want Harvest links" }
+          ]
+        })
+      });
+      if (!result) return;
+      this.#invalidate();
+      this.render({ force: true });
+    } catch (error) {
+      console.error(`${MODULE_ID} | Install All failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not install all content packs.");
+    }
+  }
+
+  async #validateCatalog(event) {
+    event.preventDefault();
+    if (OperationProgressApp.busy) return;
+    try {
+      const result = await OperationProgressApp.run({
+        title: "Crafting Core — Validate Catalog",
+        initial: { phase: "Validating Catalog", label: "Checking Materials, Products, Recipes and source integrity…", current: 0, total: 1, overallCurrent: 0, overallTotal: 1 },
+        task: async report => {
+          const audit = await CatalogAuditService.audit();
+          report({ phase: "Catalog Validation Complete", label: audit.healthy ? "No catalog integrity issues were detected." : `${audit.issueCount} issue${audit.issueCount === 1 ? "" : "s"} detected.`, current: 1, total: 1, overallCurrent: 1, overallTotal: 1, stats: { materials: audit.materials, products: audit.products, recipes: audit.recipes, sourceMissing: audit.issues.sourceMissing, needsReview: audit.issues.needsReview, duplicates: audit.issues.duplicateMaterials + audit.issues.duplicateProducts + audit.issues.duplicateRecipes, incompletePacks: audit.issues.incompletePacks, legacyKnowledge: audit.legacyKnowledge } });
+          return audit;
+        },
+        summarize: audit => ({
+          message: audit.healthy ? "Catalog validation passed." : "Catalog validation found items that need review.",
+          summary: [
+            { label: "Materials", value: audit.materials },
+            { label: "Products", value: audit.products },
+            { label: "Published Recipes", value: audit.recipes },
+            { label: "Source Missing", value: audit.issues.sourceMissing },
+            { label: "Needs Review", value: audit.issues.needsReview },
+            { label: "Duplicate IDs", value: audit.issues.duplicateMaterials + audit.issues.duplicateProducts + audit.issues.duplicateRecipes },
+            { label: "Packs Need Restore", value: audit.issues.incompletePacks },
+            { label: "Legacy Knowledge", value: audit.legacyKnowledge }
+          ]
+        })
+      });
+      if (!result) return;
+      const sourceIssues = Number(result.issues?.sourceMissing ?? 0) + Number(result.issues?.needsReview ?? 0);
+      if (sourceIssues > 0) {
+        const repair = await foundry.applications.api.DialogV2.confirm({
+          window: { title: "Product Source Integrity" },
+          content: `<p>Validation found <strong>${sourceIssues}</strong> Product Source issue${sourceIssues === 1 ? "" : "s"}.</p><p>Run Product Source synchronization now? Needs Review entries remain reviewable; the operation does not reconnect by name.</p>`,
+          yes: { label: "Synchronize Sources", icon: "fa-solid fa-arrows-rotate" },
+          no: { label: "Not Now" }
+        });
+        if (repair) {
+          await OperationProgressApp.run({
+            title: "Crafting Core — Product Source Sync",
+            initial: { phase: "Synchronizing Product Sources", label: "Checking current mother Items and stable fallbacks…", current: 0, total: 1, overallCurrent: 0, overallTotal: 1 },
+            task: report => ProductSourceService.syncAll({ onProgress: report, reconcile: true }),
+            summarize: sync => ({ message: "Product Source synchronization complete.", summary: [
+              { label: "Synced", value: sync.synced ?? 0 }, { label: "Updated", value: sync.updated ?? 0 },
+              { label: "Source Missing", value: sync.sourceMissing ?? 0 }, { label: "Needs Review", value: sync.needsReview ?? 0 }
+            ] })
+          });
+          this.#invalidate("products", "packs");
+        }
+      }
+    } catch (error) {
+      console.error(`${MODULE_ID} | Catalog validation failed.`, error);
+      ui.notifications.error(error.message ?? "Crafting Core could not validate the catalog.");
+    }
+  }
+
   async #saveEconomy(event, { notify=true }={}) {
     event?.preventDefault?.();
     const root = this.element;
@@ -530,7 +756,8 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     }
     await MaterialCatalogService.saveEconomy(economy);
     if (notify) {
-      ui.notifications.info("Material rarity defaults saved. Sync the Compendium to apply them to unchanged curated materials.");
+      ui.notifications.info("Material rarity defaults saved. Restore the Materials content pack to apply defaults to managed Materials.");
+      this.#invalidate("materials", "packs");
       this.render({ force: true });
     }
   }
@@ -545,6 +772,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       if (!(item instanceof Item)) return ui.notifications.warn("Crafting Core could not resolve that Item.");
       const created = await MaterialCatalogService.registerItem(item);
       ui.notifications.info(`${created.name} registered in Crafting Core — Materials.`);
+      this.#invalidate("materials", "packs");
       this.render({ force: true });
     } catch (error) {
       console.error(`${MODULE_ID} | Custom material registration failed.`, error);

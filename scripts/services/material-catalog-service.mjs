@@ -121,14 +121,18 @@ export class MaterialCatalogService {
     return stored && typeof stored === "object" && !Array.isArray(stored) ? foundry.utils.deepClone(stored) : {};
   }
 
-  static definitions() {
+  static definitions({ includeAlchemy=null }={}) {
     const economy = this.economy();
     const overrides = this.overrides();
-    let alchemyEnabled = false;
-    try {
-      const state = game.settings.get(MODULE_ID, SETTINGS.CURATED_ALCHEMY_STATE);
-      alchemyEnabled = Boolean(state?.enabled);
-    } catch (_) { /* setting is registered during init; core catalog remains safe before then */ }
+    let alchemyEnabled = includeAlchemy;
+    if (alchemyEnabled === null || alchemyEnabled === undefined) {
+      alchemyEnabled = false;
+      try {
+        const state = game.settings.get(MODULE_ID, SETTINGS.CURATED_ALCHEMY_STATE);
+        alchemyEnabled = Boolean(state?.enabled);
+      } catch (_) { /* setting is registered during init; core catalog remains safe before then */ }
+    }
+    alchemyEnabled = Boolean(alchemyEnabled);
     const activeDefaults = alchemyEnabled
       ? DEFAULT_MATERIALS
       : DEFAULT_MATERIALS.filter(base => !CURATED_ALCHEMY_MATERIAL_IDS.has(base.id));
@@ -182,19 +186,56 @@ export class MaterialCatalogService {
     return entries.sort((a, b) => String(a.name).localeCompare(String(b.name), game.i18n.lang));
   }
 
+  static async installedEntries() {
+    const pack = this.pack();
+    if (!pack) return [];
+    const docs = await pack.getDocuments();
+    const definitions = new Map(this.definitions().map(row => [String(row.id), row]));
+    const entries = [];
+    for (const item of docs) {
+      if (!item.getFlag(MODULE_ID, FLAGS.MATERIAL)) continue;
+      const id = String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? item.id);
+      const managed = Boolean(item.getFlag(MODULE_ID, FLAGS.MATERIAL_MANAGED));
+      if (!managed) {
+        entries.push(this.#entryFromItem(item));
+        continue;
+      }
+      const base = definitions.get(id);
+      if (!base) {
+        const fallback = this.#entryFromItem(item);
+        fallback.managed = true;
+        fallback.source = "builtin";
+        entries.push(fallback);
+        continue;
+      }
+      const itemImg = String(item.img || "");
+      entries.push(this.#normalizeMaterial({
+        ...foundry.utils.deepClone(base),
+        name: item.name,
+        img: itemImg && itemImg !== DEFAULT_MATERIAL_ICON ? itemImg : base.img,
+        packUuid: item.uuid,
+        managed: true,
+        source: "builtin",
+        creatureSources: MaterialOriginService.normalizeCreatureSources(item.getFlag(MODULE_ID, FLAGS.MATERIAL_CREATURE_SOURCES) ?? [])
+      }));
+    }
+    return entries.sort((a, b) => String(a.name).localeCompare(String(b.name), game.i18n.lang));
+  }
+
   static async getEntry(id) {
-    return (await this.allEntries()).find(entry => entry.id === String(id)) ?? null;
+    const installed = await this.installedEntries();
+    return installed.find(entry => entry.id === String(id)) ?? (await this.allEntries()).find(entry => entry.id === String(id)) ?? null;
   }
 
   /**
    * Resolve all material Items in the private Materials Compendium by stable materialId.
    * If the pack is missing (or is missing a newly-added curated record), synchronize once.
    */
-  static async materialDocumentsById({ ensureComplete=true }={}) {
+  static async materialDocumentsById({ ensureComplete=false, includeAlchemy=null }={}) {
     let pack = this.pack();
     if (!pack) {
       if (!ensureComplete) return new Map();
-      pack = (await this.sync()).pack;
+      pack = (await this.sync({ includeAlchemy })).pack;
     }
 
     let docs = await pack.getDocuments();
@@ -203,12 +244,12 @@ export class MaterialCatalogService {
       .map(item => [String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? ""), item])
       .filter(([id]) => id));
 
-    const missingCurated = this.definitions().some(entry => !map.has(entry.id));
+    const missingCurated = this.definitions({ includeAlchemy }).some(entry => !map.has(entry.id));
     const staleCurated = docs.some(item => item.getFlag(MODULE_ID, FLAGS.MATERIAL_MANAGED)
       && Number(item.getFlag(MODULE_ID, FLAGS.MATERIAL_CATALOG_VERSION) ?? 0) !== MATERIAL_CATALOG_VERSION);
 
     if (ensureComplete && (missingCurated || staleCurated)) {
-      pack = (await this.sync()).pack;
+      pack = (await this.sync({ includeAlchemy })).pack;
       docs = await pack.getDocuments();
       map = new Map(docs
         .filter(item => item.getFlag(MODULE_ID, FLAGS.MATERIAL))
@@ -329,7 +370,7 @@ export class MaterialCatalogService {
     return defs;
   }
 
-  static async sync({ onProgress=null }={}) {
+  static async sync({ onProgress=null, includeAlchemy=null }={}) {
     if (!game.user.isGM) throw new Error("Only a GM can synchronize Crafting Core materials.");
     const pack = await this.ensurePack();
     const wasLocked = Boolean(pack.locked);
@@ -342,7 +383,7 @@ export class MaterialCatalogService {
         .map(item => [String(item.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? ""), item])
         .filter(([id]) => id));
       const catalogOverrides = this.overrides();
-      const definitions = this.definitions();
+      const definitions = this.definitions({ includeAlchemy });
       const overallTotal = definitions.length + 2;
       onProgress?.({ phase: "Preparing Materials", label: "Reading the curated catalog…", current: 0, total: definitions.length, overallCurrent: 0, overallTotal, stats: { created: 0, updated: 0 } });
 
@@ -383,6 +424,8 @@ export class MaterialCatalogService {
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_PROCESSED_FROM}`]: material.processedFrom ?? [],
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_VENDOR_AVAILABILITY}`]: material.vendorAvailability ?? "",
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_MANAGED}`]: true,
+          [`flags.${MODULE_ID}.${FLAGS.CONTENT_PACK_ID}`]: CURATED_ALCHEMY_MATERIAL_IDS.has(material.id) ? "hammer-alchemy-inscription" : "hammer-materials",
+          [`flags.${MODULE_ID}.${FLAGS.CONTENT_ORIGIN}`]: "pack",
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_CATALOG_VERSION}`]: MATERIAL_CATALOG_VERSION
         };
         // v0.0.19b visual migration:
@@ -411,6 +454,35 @@ export class MaterialCatalogService {
       Hooks.callAll(`${MODULE_ID}.materialsChanged`);
       onProgress?.({ phase: "Materials Complete", label: "Materials Compendium is synchronized.", current: definitions.length, total: definitions.length, overallCurrent: overallTotal, overallTotal, stats: { created: created.length, updated: updated.length } });
       return { pack, created: created.length, updated: updated.length, total: definitions.length };
+    } finally {
+      if (wasLocked) await pack.configure({ locked: true });
+    }
+  }
+
+  static async createCustomMaterial({ name="New Crafting Material" }={}) {
+    if (!game.user?.isGM) throw new Error("Only a GM can create Crafting Core materials.");
+    const pack = await this.ensurePack();
+    const wasLocked = Boolean(pack.locked);
+    if (wasLocked) await pack.configure({ locked: false });
+    try {
+      const folders = await CompendiumService.ensurePackFolders(pack, this.#folderDefinitions());
+      const materialId = `custom-${foundry.utils.randomID(16)}`;
+      const normalized = this.#normalizeMaterial({
+        id: materialId, name, family: "profession", nature: "trade", category: "general", rarity: "common",
+        chance: this.economy().common?.chance ?? 0, quantity: "1", tags: [], requires: [], biomes: [], price: this.economy().common?.price ?? 0, denomination: "gp"
+      });
+      const folder = folders.get("profession:general") ?? folders.get("profession") ?? null;
+      const data = this.#itemData(normalized, folder?.id ?? null);
+      data.flags ??= {};
+      data.flags[MODULE_ID] ??= {};
+      data.flags[MODULE_ID][FLAGS.MATERIAL_MANAGED] = false;
+      data.flags[MODULE_ID][FLAGS.CONTENT_ORIGIN] = "world";
+      data.flags[MODULE_ID][FLAGS.CONTENT_PACK_ID] = "";
+      data.system.source = { custom: "Crafting Core — World Material", book: "", page: "", license: "", rules: "2024", revision: 1 };
+      const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+      const [created] = await ItemClass.createDocuments([data], { pack: pack.collection });
+      Hooks.callAll(`${MODULE_ID}.materialsChanged`, materialId);
+      return created;
     } finally {
       if (wasLocked) await pack.configure({ locked: true });
     }
@@ -480,6 +552,8 @@ export class MaterialCatalogService {
         [FLAGS.MATERIAL_VENDOR_AVAILABILITY]: normalized.vendorAvailability ?? "",
         [FLAGS.MATERIAL_CREATURE_SOURCES]: [],
         [FLAGS.MATERIAL_MANAGED]: false,
+        [FLAGS.CONTENT_ORIGIN]: "world",
+        [FLAGS.CONTENT_PACK_ID]: "",
         [FLAGS.MATERIAL_CATALOG_VERSION]: MATERIAL_CATALOG_VERSION
       };
 
@@ -700,6 +774,8 @@ export class MaterialCatalogService {
           [FLAGS.MATERIAL_PROCESSED_FROM]: material.processedFrom ?? [],
           [FLAGS.MATERIAL_VENDOR_AVAILABILITY]: material.vendorAvailability ?? "",
           [FLAGS.MATERIAL_MANAGED]: true,
+          [FLAGS.CONTENT_PACK_ID]: CURATED_ALCHEMY_MATERIAL_IDS.has(material.id) ? "hammer-alchemy-inscription" : "hammer-materials",
+          [FLAGS.CONTENT_ORIGIN]: "pack",
           [FLAGS.MATERIAL_CATALOG_VERSION]: MATERIAL_CATALOG_VERSION
         };
         for (const [flag, desired] of Object.entries(desiredFlags)) {
@@ -848,6 +924,8 @@ export class MaterialCatalogService {
           [FLAGS.MATERIAL_VENDOR_AVAILABILITY]: material.vendorAvailability ?? "",
           [FLAGS.MATERIAL_CREATURE_SOURCES]: [],
           [FLAGS.MATERIAL_MANAGED]: true,
+          [FLAGS.CONTENT_PACK_ID]: CURATED_ALCHEMY_MATERIAL_IDS.has(material.id) ? "hammer-alchemy-inscription" : "hammer-materials",
+          [FLAGS.CONTENT_ORIGIN]: "pack",
           [FLAGS.MATERIAL_CATALOG_VERSION]: MATERIAL_CATALOG_VERSION
         }
       },

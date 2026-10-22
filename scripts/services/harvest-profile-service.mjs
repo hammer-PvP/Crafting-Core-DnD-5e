@@ -291,7 +291,7 @@ export class HarvestProfileService {
     const requested = [...new Set((collections ?? []).map(String).filter(Boolean))];
     if (!requested.length) throw new Error("Choose at least one Actor Compendium to scan.");
 
-    const materials = await MaterialCatalogService.allEntries();
+    const materials = await MaterialCatalogService.installedEntries();
     const creatureNatures = new Set(materials.filter(m => m.family === "creature").map(m => m.nature));
     const existing = this.raw();
     const existingByUuid = new Map(Object.values(existing).map(profile => [String(profile.sourceUuid), profile]));
@@ -390,7 +390,7 @@ export class HarvestProfileService {
 
   /** Analyze one D&D5e NPC into deterministic anatomy, four rarity pools, and one separate Essence slot. */
   static async analyzeActor(actor, { materials=null, previous=null }={}) {
-    const entries = materials ?? await MaterialCatalogService.allEntries();
+    const entries = materials ?? await MaterialCatalogService.installedEntries();
     const nature = String(actor.system?.details?.type?.value ?? "").toLowerCase();
     const analysis = this.#inferAnatomy(actor, nature);
     const essenceAnalysis = this.#inferEssenceAffinities(actor, entries.filter(entry => entry.family === "essence"), analysis);
@@ -466,7 +466,7 @@ export class HarvestProfileService {
   }
 
   static async materialOptions({ nature=null, includeAll=false, includeMaterialIds=[] }={}) {
-    const entries = await MaterialCatalogService.allEntries();
+    const entries = await MaterialCatalogService.installedEntries();
     const forced = new Set((includeMaterialIds ?? []).map(String).filter(Boolean));
     return entries
       .filter(entry => includeAll || (entry.family === "creature" && ((!nature || entry.nature === nature) || forced.has(entry.id))))
@@ -490,7 +490,7 @@ export class HarvestProfileService {
 
   static async hydrateProfile(profile) {
     const normalized = this.#normalizeProfile(profile);
-    const materials = await MaterialCatalogService.allEntries();
+    const materials = await MaterialCatalogService.installedEntries();
     const map = new Map(materials.map(entry => [entry.id, entry]));
     normalized.slots = normalized.slots.map((slot, index) => ({
       ...slot,

@@ -93,6 +93,17 @@ export class CuratedEquipmentService {
 
   static sourcePack() { return game.packs?.get?.(SOURCE_PACK_ID) ?? null; }
 
+  static async expectedVariantCount() {
+    const pack = this.sourcePack();
+    if (!pack) return 0;
+    const index = await pack.getIndex({ fields: [
+      "type", "system.type", "system.properties", "system.rarities",
+      "system.magicalBonus", "system.armor.magicalBonus"
+    ] });
+    const bases = Array.from(index ?? []).filter(item => this.#isBaseEquipment(item));
+    return bases.length * 4;
+  }
+
   static #isBaseEquipment(item) {
     if (!item || hasMagic(item)) return false;
     if (item.type === "weapon") return WEAPON_TYPES.has(String(item.system?.type?.value || ""));
@@ -493,7 +504,7 @@ export class CuratedEquipmentService {
     data.flags[MODULE_ID] = {
       ...(data.flags[MODULE_ID] ?? {}),
       [FLAGS.CURATED]: true, [FLAGS.CURATED_ID]: this.#productId(base, bonus),
-      [FLAGS.CURATED_KIND]: "equipment-product", [FLAGS.CURATED_VERSION]: VERSION,
+      [FLAGS.CURATED_KIND]: "equipment-product", [FLAGS.CONTENT_PACK_ID]: "srd-equipment", [FLAGS.CONTENT_ORIGIN]: "pack", [FLAGS.CURATED_VERSION]: VERSION,
       [FLAGS.PRODUCT]: true, [FLAGS.PRODUCT_ID]: this.#productId(base, bonus),
       [FLAGS.PRODUCT_CATEGORY]: "equipment", [FLAGS.PRODUCT_SUBCATEGORY]: category,
       [FLAGS.PRODUCT_RARITY]: rarity, [FLAGS.PRODUCT_TIER]: bonus,
@@ -628,7 +639,7 @@ export class CuratedEquipmentService {
         const data = KnowledgeItemService.knowledgeItemData(recipe, { folderId: folder?.id ?? null, published: true });
         data.flags[MODULE_ID] = {
           ...(data.flags[MODULE_ID] ?? {}), [FLAGS.CURATED]: true, [FLAGS.CURATED_ID]: recipe.id,
-          [FLAGS.CURATED_KIND]: "equipment-recipe", [FLAGS.CURATED_VERSION]: VERSION,
+          [FLAGS.CURATED_KIND]: "equipment-recipe", [FLAGS.CONTENT_PACK_ID]: "srd-equipment", [FLAGS.CONTENT_ORIGIN]: "pack", [FLAGS.CURATED_VERSION]: VERSION,
           [FLAGS.PRODUCT_ID]: productId, [FLAGS.PRODUCT_CATEGORY]: "equipment",
           [FLAGS.PRODUCT_SUBCATEGORY]: entry.category, [FLAGS.PRODUCT_TIER]: entry.bonus,
           [FLAGS.PRODUCT_YIELD]: entry.category === "ammunition" ? 10 : 1
@@ -695,7 +706,7 @@ export class CuratedEquipmentService {
     if (!game.user?.isGM) throw new Error("Only a GM can restore Curated Equipment.");
     const bases = await this.baseItems();
     if (!bases.length) throw new Error("No mundane weapons, armor, shields, or ammunition were found in dnd5e.equipment24.");
-    const materialDocs = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
+    const materialDocs = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true, includeAlchemy: false });
     const entries = this.#entriesForBases(bases);
     const cleanupPreview = await this.#cleanupPreviewForEntries(entries);
     const contentTotal = entries.length * 2;

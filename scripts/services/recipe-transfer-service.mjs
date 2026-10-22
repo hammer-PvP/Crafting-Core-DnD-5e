@@ -154,7 +154,7 @@ export class RecipeTransferService {
     const validation = this.validateBundle(bundle);
     if (!validation.valid) throw new Error(validation.errors.join(" "));
 
-    const materialById = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
+    const materialById = await MaterialCatalogService.materialDocumentsById({ ensureComplete: false });
     const result = [];
     for (const raw of bundle.entries) {
       const recipe = RecipeService.normalize(foundry.utils.deepClone(raw?.recipe ?? {}));

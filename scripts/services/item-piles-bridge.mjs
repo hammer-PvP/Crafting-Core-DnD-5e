@@ -76,7 +76,7 @@ export class ItemPilesBridge {
   static async buildHarvestPayload(result) {
     const rows = Array.isArray(result?.items) ? result.items : [];
     if (!rows.length) return [];
-    const documents = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
+    const documents = await MaterialCatalogService.materialDocumentsById({ ensureComplete: false });
     const payload = [];
     const missing = [];
     for (const row of rows) {
@@ -119,7 +119,7 @@ export class ItemPilesBridge {
     if (typeof api.createItemPile !== "function") throw new Error("The active Item Piles version does not expose createItemPile().");
     if (typeof api.addItems !== "function") throw new Error("The active Item Piles version does not expose addItems().");
 
-    const documents = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
+    const documents = await MaterialCatalogService.materialDocumentsById({ ensureComplete: false });
     const payload = [];
     const missing = [];
     const batchId = foundry.utils.randomID(16);

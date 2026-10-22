@@ -13,11 +13,29 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.5.11
+- **Crafting Core:** v0.6.0
 - **Foundry VTT:** minimum 14.367, verified 14.368
 - **D&D 5e:** 6.0.0-6.0.999, verified 6.0.1
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
 - **DnD 5e Item Creator:** optional for the core module; **0.7.1+ is required for the official persistent Curated Food and Alcohol Products**
+
+Crafting Core v0.6.0 separates the **crafting engine from optional content**. A fresh World starts with no forced Materials, Products, Recipes, or Hammer harvest catalog. GMs can build a complete World-owned crafting system from scratch, register existing D&D5e Items, or install optional Content Packs to reproduce the full curated setup used by the project. Existing Worlds migrate in-place: document IDs/UUIDs, Recipe/Product identities, learned Character knowledge, and active Projects are preserved.
+
+### v0.6.0 — Content Architecture & Catalog UX
+
+The **Crafting Core Catalog** is now organized around three clear workflows:
+
+- **Materials** — only Materials that actually exist in this World. Create a Material or register an existing Item without installing Hammer content.
+- **Products** — only Products that actually exist in this World, grouped by origin (World, external source, or installed Content Pack). Create or register Products manually.
+- **Content Packs** — optional managed libraries. `Hammer — Materials`, `Hammer — Culinary`, `Hammer — Alchemy & Inscription`, and `SRD Equipment Crafting` can be installed or restored independently. **Install Missing Packs** reproduces the complete curated setup without automatically running the Creature Scanner.
+
+A fresh World therefore begins at **0 Materials / 0 Products / 0 published curated Recipes** until the GM deliberately creates/registers content or installs a Content Pack. Availability of built-in definitions no longer makes them runtime content. Scanner, Harvest, Gathering, Material Generation, Recipe transfer, and Item Piles integration consume only Materials that are actually installed in the World.
+
+Existing Worlds receive a one-time **content architecture migration** that classifies existing documents in-place as Content Pack, World, or External content. It does not reinstall packs, change IDs/UUIDs, unpublish Recipes, erase learned knowledge, or modify active Projects. Legacy Knowledge safety from v0.5.11 remains authoritative.
+
+**Validate Catalog** replaces the old wall of maintenance cards. It audits duplicate stable IDs, Product Source integrity, incomplete installed Content Packs, and Legacy Knowledge. Product Source synchronization is offered only when validation finds source issues and never reconnects by Item name.
+
+Catalog loading is now lazy and cached per tab. Switching to Materials no longer loads Products/Culinary/Alchemy/Equipment, and switching to Products no longer rebuilds Materials. Content Pack status uses lightweight indexes where possible, collapsed groups reduce initial visual work, and cached tab contexts are invalidated only after relevant catalog changes.
 
 Crafting Core v0.5.11 hardens established production Worlds around **Knowledge safety**. Removing, retiring, or temporarily losing a published Knowledge Source no longer makes Characters forget a Recipe automatically. Learned snapshots are preserved as Legacy Knowledge, active Projects remain frozen, and Equipment restore can retire obsolete managed content without erasing player progression.
 
@@ -49,7 +67,7 @@ The optional **Equipment Crafting** library discovers mundane Weapons, Armor, Sh
 
 ### Product source synchronization
 
-The Products view includes **Synchronize Product Sources**. Synchronization is manual: when the GM runs it, normal updates to the same mother Item update the fallback mirror and Recipe definitions. If the mother source disappears, crafting uses the fallback. If its identity fingerprint changes, the link enters **Needs Review** instead of silently adopting the replacement.
+Product Source maintenance is now surfaced through **Validate Catalog** rather than occupying a permanent catalog card. Synchronization remains GM-invoked: normal updates to the same mother Item update the fallback mirror and Recipe definitions. If the mother source disappears, crafting uses the fallback. If its identity fingerprint changes, the link enters **Needs Review** instead of silently adopting the replacement.
 
 ### Long-operation progress
 
@@ -81,16 +99,12 @@ No Recipes, drop rates, project rules, curated content, Scanner philosophy, life
 
 ### 1. Prepare Materials and Products
 
-The private **Crafting Core - Materials** Compendium contains the built-in material catalog used by harvesting, gathering, generation, and Recipe building.
+A fresh v0.6.0 World has no forced Crafting Core content. Open **Crafting Core Catalog** and choose one of two first-class paths:
 
-The core catalog contains **234 curated materials**. Installing the optional Curated Alchemy & Inscription library adds 23 more for **257 active built-in Materials**.
+- **World content:** Create a Material/Product or register an existing D&D5e Item. These documents belong to the World and are never restored by a Hammer Content Pack.
+- **Content Packs:** install Hammer Materials, Hammer Culinary, Hammer Alchemy & Inscription, and/or SRD Equipment Crafting. Installing all current packs reproduces the complete curated setup used by the project.
 
-- Creature Harvest materials;
-- magical Essences;
-- Flora, Roots, Fungi, Wood & Resin, and Minerals & Geological resources;
-- Food & Cooking, Metalworking, Leatherworking, Alchemy, and General Materials.
-
-The Materials interface also exposes the official **Curated Products** library when DnD 5e Item Creator 0.7.1+ is active.
+The Hammer Materials pack contains **234 core curated Materials**. Hammer Alchemy & Inscription contributes 23 optional Materials, bringing the full installed Hammer material library to **257**. Creature Scanner, Harvesting, Gathering and Material Generation only use Materials that actually exist in the World.
 
 ### 2. Create a Recipe Draft
 
@@ -259,7 +273,7 @@ Default rarity economy:
 | Very Rare | 500 gp | 5% |
 | Legendary | 1,000 gp | 1% |
 
-The GM can override built-in material presentation and values. Curated defaults can be restored without affecting unrelated custom Items.
+The GM can edit World-owned material presentation and values freely. Managed Content Pack defaults can be restored explicitly without affecting unrelated World-owned Items.
 
 Any D&D 5e Item can still be used directly in a Recipe even if it is not registered in the Materials catalog.
 
@@ -384,7 +398,7 @@ Crafting Core uses private world Compendiums as durable content stores and inter
 
 ### Crafting Core - Materials
 
-234 core curated crafting materials plus GM-registered material content. When Curated Alchemy & Inscription is installed, 23 additional source-normalized Materials are activated for a total of 257 built-ins.
+Contains only Materials actually installed or registered in this World. It may be absent/empty in a fresh content-agnostic setup. Installing Hammer Materials contributes 234 core Materials; Hammer Alchemy & Inscription contributes 23 optional Materials, for 257 when both packs are installed. World-owned Materials coexist with managed pack content and are never overwritten by pack Restore operations.
 
 ### Crafting Core - Learn Sources
 
@@ -394,7 +408,7 @@ The official Curated Recipe library is organized by Product family and culture u
 
 ### Crafting Core - Products
 
-Created and maintained when Curated libraries are installed by the GM. Culinary contributes 58 ready-to-buy/use Meals, Alcoholic Drinks, and Non-Alcoholic Drinks. Curated Alchemy & Inscription adds 82 optional Products (43 SRD-based consumables, 34 Inscription presentation variants, and 5 Inscription Inks). Equipment Crafting adds one +0 / +1 / +2 / +3 Product per eligible SRD 5.2 base equipment item; with the current 58 eligible `equipment24` base items this adds 232 Products, for 372 Curated Products when all three current libraries are installed.
+Contains Products actually created, registered, mirrored, or installed in this World. It may be absent/empty in a fresh content-agnostic setup. Hammer Culinary contributes 58 ready-to-buy/use Products; Hammer Alchemy & Inscription adds 82 optional Products; SRD Equipment Crafting adds one +0 / +1 / +2 / +3 Product per eligible SRD 5.2 base equipment item (232 with the current 58 eligible bases). Installing every current Product pack therefore reproduces the 372 managed Products of the full project setup, alongside any World-owned or external Products.
 
 ## Game Settings
 

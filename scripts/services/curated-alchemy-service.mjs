@@ -302,6 +302,7 @@ export class CuratedAlchemyService {
       [FLAGS.CURATED]: true,
       [FLAGS.CURATED_ID]: entry.id,
       [FLAGS.CURATED_KIND]: entry.kind === "inscription" ? "inscription-product" : entry.kind === "ink" ? "inscription-ink" : "alchemy-product",
+      [FLAGS.CONTENT_PACK_ID]: "hammer-alchemy-inscription", [FLAGS.CONTENT_ORIGIN]: "pack",
       [FLAGS.CURATED_VERSION]: CURATED_ALCHEMY_VERSION,
       [FLAGS.PRODUCT]: true,
       [FLAGS.PRODUCT_ID]: entry.productId,
@@ -756,6 +757,7 @@ export class CuratedAlchemyService {
           [FLAGS.CURATED]: true,
           [FLAGS.CURATED_ID]: entry.id,
           [FLAGS.CURATED_KIND]: "alchemy-recipe",
+          [FLAGS.CONTENT_PACK_ID]: "hammer-alchemy-inscription", [FLAGS.CONTENT_ORIGIN]: "pack",
           [FLAGS.CURATED_VERSION]: CURATED_ALCHEMY_VERSION,
           [FLAGS.PRODUCT_ID]: entry.productId,
           [FLAGS.PRODUCT_CATEGORY]: String(entry.group).startsWith("inscription:") ? "inscription" : "alchemy",
@@ -840,7 +842,7 @@ export class CuratedAlchemyService {
     await this.#saveState(state);
     this.#sourceCache.clear();
     onProgress?.({ phase: "Resolving Materials", label: "Resolving optional Materials and native dependencies…", current: 1, total: 1, overallCurrent: 1, overallTotal, stats: { products: 0, recipes: 0, failed: 0, skipped: 0 } });
-    const materialDocs = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
+    const materialDocs = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true, includeAlchemy: true });
     const products = await this.#syncProducts(state, { forceRebuild: restore, onProgress, overallBase: 1, overallTotal, phaseTotal: productTotal });
     const recipes = await this.#syncRecipes(state, materialDocs, products.documentsByProductId, { onProgress, overallBase: 1 + productTotal, overallTotal, phaseTotal: recipeTotal });
     const complete = products.failures.length === 0 && recipes.skipped.length === 0;

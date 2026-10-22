@@ -55,8 +55,8 @@ export class MaterialSourceService {
   static async #rebuildInternal({ onProgress=null }={}) {
     // Ensures newly-added curated Materials exist before constructing the reverse index.
     onProgress?.({ phase: "Resolving Materials", label: "Loading Materials and Harvest Profiles…", current: 0, total: 1, overallCurrent: 0, overallTotal: 3, stats: { materials: 0 } });
-    const documentsById = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
-    const entries = await MaterialCatalogService.allEntries();
+    const documentsById = await MaterialCatalogService.materialDocumentsById({ ensureComplete: false });
+    const entries = await MaterialCatalogService.installedEntries();
     const entriesById = new Map(entries.map(entry => [String(entry.id), entry]));
     const materialLookup = new Map();
     for (const [id, entry] of entriesById) {

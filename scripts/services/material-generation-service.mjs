@@ -105,7 +105,7 @@ export class MaterialGenerationService {
   }
 
   static async options() {
-    const entries = await MaterialCatalogService.allEntries();
+    const entries = await MaterialCatalogService.installedEntries();
     const creatureNatures = [...new Set(entries.filter(e => e.family === "creature").map(e => e.nature).filter(Boolean))]
       .sort((a, b) => this.title(a).localeCompare(this.title(b), game.i18n.lang));
     const biomes = [...new Set(entries.filter(e => e.family === "gathering" && !(e.tags ?? []).includes("game-hunt")).flatMap(e => e.biomes ?? []).filter(Boolean))]
@@ -150,7 +150,7 @@ export class MaterialGenerationService {
 
   static async generateCreature({ natures=[], nature="", profileKeys=[], profileId="general", sources=1, essenceAffinities=[] }={}) {
     if (!game.user?.isGM) throw new Error("Only a GM can generate Crafting Core materials.");
-    const allEntries = await MaterialCatalogService.allEntries();
+    const allEntries = await MaterialCatalogService.installedEntries();
     const selectedNatures = [...new Set(this.#array(natures).concat(nature ? [nature] : []).map(value => String(value).toLowerCase()).filter(Boolean))];
     if (!selectedNatures.length) throw new Error("Select at least one Creature Type.");
 
@@ -227,7 +227,7 @@ export class MaterialGenerationService {
     if (!game.user?.isGM) throw new Error("Only a GM can generate Crafting Core materials.");
     if (!profile?.sourceUuid) throw new Error("A valid Harvest Profile is required.");
 
-    const entries = await MaterialCatalogService.allEntries();
+    const entries = await MaterialCatalogService.installedEntries();
     const materials = new Map(entries.map(entry => [entry.id, entry]));
     const essences = new Map(entries.filter(entry => entry.family === "essence").map(entry => [String(entry.nature), entry]));
     const automatic = (profile.slots ?? []).slice(0, 4).filter(row => (row?.materialIds?.length ?? 0) > 0 || row?.materialId);
@@ -318,7 +318,7 @@ export class MaterialGenerationService {
     if (!selectedResources.length) throw new Error("Select at least one Resource Category.");
     if (!selectedAbundances.length) selectedAbundances.push("normal");
 
-    const allEntries = (await MaterialCatalogService.allEntries()).filter(entry => entry.family === "gathering" && !(entry.tags ?? []).includes("game-hunt"));
+    const allEntries = (await MaterialCatalogService.installedEntries()).filter(entry => entry.family === "gathering" && !(entry.tags ?? []).includes("game-hunt"));
     const eligible = allEntries.filter(entry => (entry.biomes ?? []).some(row => selectedBiomes.includes(String(row))) && selectedResources.includes(String(entry.category)));
     if (!eligible.length) throw new Error("No gathering materials are configured for the selected Biomes and Resources.");
 
@@ -383,7 +383,7 @@ export class MaterialGenerationService {
     if (!selectedBiomes.length) throw new Error("Select at least one Game Hunt Biome.");
     if (!selectedAbundances.length) selectedAbundances.push("normal");
 
-    const allEntries = (await MaterialCatalogService.allEntries()).filter(entry => entry.family === "gathering" && (entry.tags ?? []).includes("game-hunt"));
+    const allEntries = (await MaterialCatalogService.installedEntries()).filter(entry => entry.family === "gathering" && (entry.tags ?? []).includes("game-hunt"));
     const entries = allEntries.filter(entry => (entry.biomes ?? []).some(row => selectedBiomes.includes(String(row))));
     if (!entries.length) throw new Error("No Game Hunt animals are configured for the selected Biomes.");
 
@@ -454,7 +454,7 @@ export class MaterialGenerationService {
     if (!game.user?.isGM) throw new Error("Only a GM can create generated loot folders.");
     if (!result?.items?.length) return { ...result, folder: null, createdItems: [] };
 
-    const documents = await MaterialCatalogService.materialDocumentsById({ ensureComplete: true });
+    const documents = await MaterialCatalogService.materialDocumentsById({ ensureComplete: false });
     const parent = await this.#ensureGeneratedRoot();
     const FolderClass = globalThis.Folder?.implementation ?? globalThis.Folder;
     const folder = await FolderClass.create({
