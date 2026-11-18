@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.1 - Canonical Artwork Library
+
+- Added the full project-owned library of **455 canonical WebP illustrations**: 257 Materials, 15 Meals, 43 Drinks, 82 Alchemy/Inscription Products, and 58 SRD Equipment base illustrations. `Iron_Ore.webp` is included.
+- Added five 512×512 transparent rank/rarity frames and **244 pre-rendered equipment images** for +0 through +3 variants, including gold framing for Legendary +3 Armor. Foundry Items point directly to finished files; no runtime compositing is required.
+- Replaced curated icon-candidate lists, Foundry/system icon-selection heuristics, bundled generic alternatives, and Material icon radio controls with explicit per-ID artwork mappings. Removed obsolete candidate catalogs and icon-choice logic; kept pre-v0.6.1 bundled image files only to preserve existing Character, Recipe and imported-Item image paths.
+- Applied the new presentation to all official Material, Culinary, Alchemy, Inscription and SRD Equipment Product creation and restore paths without altering D&D5e source Activities, recipe identities, or crafting mechanics.
+- Added a **one-time, GM-only, image-only migration** of existing installed managed Material/Product Items. It neither installs missing optional Content Packs nor touches Characters, active Projects, Knowledge, or custom World assets. The migration is retryable after errors and skips already-current and custom external images.
+- Retired persisted curated icon-choice configuration and candidates. External Recipe Transfer continues to preserve original and SRD base icon fallbacks, without depending on removed bundled generic images.
+- Updated manifest to `0.6.1`, targeting Foundry V14 / D&D5e 6.1.0 compatibility, preserving the existing 14.367 / 6.0.0 minimums. Runtime behavior must still be QA-tested in Foundry.
+
+
 ## 0.6.0 - Content Architecture, Optional Packs & Catalog UX
 
 - Separated the Crafting Core engine from Hammer/SRD content. A fresh World no longer treats embedded curated definitions as installed runtime content and starts with no forced Materials, Products, curated Recipes, or harvest catalog.

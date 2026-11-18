@@ -495,8 +495,8 @@ export class CuratedAlchemyService {
       name: entry.kind === "inscription" ? entry.name : (entry.name ?? item.name),
       folder: item.folder?.id ?? item.folder ?? null
     };
+    if (entry.icon) update.img = entry.icon;
     if (entry.kind === "inscription") {
-      update.img = entry.icon;
       update["system.description.value"] = this.#inscriptionDescription(entry, base);
       update["system.description.chat"] = "";
     } else if (entry?.variant?.type === "resistance") {

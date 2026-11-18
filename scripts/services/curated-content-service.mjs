@@ -1,3 +1,4 @@
+import { isLegacyCatalogArt } from "../data/canonical-icon-catalog.mjs";
 import { FLAGS, KNOWLEDGE_ICONS, MODULE_ID, SETTINGS } from "../constants.mjs";
 import { CURATED_CULINARY_RECIPES, CURATED_CULINARY_VERSION } from "../data/curated-culinary-catalog.mjs";
 import { CURATED_ALCOHOLIC_RECIPES, CURATED_NON_ALCOHOLIC_RECIPES, CURATED_DRINKS_VERSION } from "../data/curated-drinks-catalog.mjs";
@@ -179,6 +180,7 @@ function mergeProductPresentation(current, official, previousBaseline, entry) {
 
   if (baseline) {
     for (const path of paths) {
+      if (path === "img" && isLegacyCatalogArt(currentEditable.img)) continue;
       if (!sameValue(getPath(currentEditable, path), getPath(baseline, path))) {
         if (path === "rarity") next.system.rarities = rarityArray(getPath(currentEditable, path));
         else setPath(next, path === "name" || path === "img" ? path : `system.${path}`, getPath(currentEditable, path));
@@ -190,7 +192,7 @@ function mergeProductPresentation(current, official, previousBaseline, entry) {
   // v0.2.0-v0.2.2 pre-baseline recovery. Preserve obvious GM customizations while
   // treating the shipped legacy values as replaceable defaults.
   if (currentEditable.name && currentEditable.name !== entry.name) next.name = currentEditable.name;
-  if (currentEditable.img) next.img = currentEditable.img;
+  if (currentEditable.img && !isLegacyCatalogArt(currentEditable.img)) next.img = currentEditable.img;
   const officialDescription = editableProductSnapshot(official).description;
   if (!sameValue(currentEditable.description, officialDescription)) next.system.description = clone(currentEditable.description);
   if (Number(currentEditable.weight?.value) !== 0) next.system.weight = clone(currentEditable.weight);
@@ -264,7 +266,6 @@ export class CuratedContentService {
         culinaryVersion: 0,
         suppressedProducts: [],
         suppressedRecipes: [],
-        productIcons: {},
         productBaselines: {},
         recipeBaselines: {}
       }
@@ -278,14 +279,15 @@ export class CuratedContentService {
       culinaryVersion: Math.max(0, Number(source.culinaryVersion) || 0),
       suppressedProducts: [...new Set((source.suppressedProducts ?? []).map(String).filter(Boolean))],
       suppressedRecipes: [...new Set((source.suppressedRecipes ?? []).map(String).filter(Boolean))],
-      productIcons: source.productIcons && typeof source.productIcons === "object" ? clone(source.productIcons) : {},
       productBaselines: source.productBaselines && typeof source.productBaselines === "object" ? clone(source.productBaselines) : {},
       recipeBaselines: source.recipeBaselines && typeof source.recipeBaselines === "object" ? clone(source.recipeBaselines) : {}
     };
   }
 
   static async #saveState(state) {
-    await game.settings.set(MODULE_ID, SETTINGS.CURATED_CONTENT_STATE, clone(state));
+    const normalized = clone(state);
+    delete normalized.productIcons; // obsolete v0.6.0 icon-choice setting
+    await game.settings.set(MODULE_ID, SETTINGS.CURATED_CONTENT_STATE, normalized);
   }
 
   static installHooks() {
@@ -673,26 +675,6 @@ export class CuratedContentService {
     return { products, recipes };
   }
 
-  static async saveProductIconChoice(productId, path) {
-    if (!game.user?.isGM) throw new Error("Only a GM can change Curated Product presentation.");
-    const entry = CURATED_BY_PRODUCT_ID.get(String(productId));
-    if (!entry) throw new Error("Unknown Curated Product.");
-    const state = this.state();
-    const pack = this.productsPack();
-    const docs = pack ? await pack.getDocuments() : [];
-    const existing = docs.find(item => String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? "") === entry.productId) ?? null;
-    const allowed = new Set(entry.icons.map(String));
-    if (existing?.img) allowed.add(String(existing.img));
-    if (state.productIcons?.[entry.productId]) allowed.add(String(state.productIcons[entry.productId]));
-    if (!allowed.has(String(path))) throw new Error("Choose one of the curated icon options.");
-    state.productIcons[entry.productId] = String(path);
-    await this.#saveState(state);
-    await this.sync({ restore: false });
-    const refreshed = this.productsPack();
-    const refreshedDocs = refreshed ? await refreshed.getDocuments() : [];
-    return refreshedDocs.find(item => String(item.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? "") === entry.productId) ?? null;
-  }
-
   static async culinaryCatalogContext() {
     const state = this.state();
     const materials = await MaterialCatalogService.allEntries();
@@ -723,10 +705,7 @@ export class CuratedContentService {
       }, 0);
       const yieldCount = Math.max(1, Number(entry.yield) || 1);
       const buyPrice = priceFromCopper(Math.round((ingredientCostCopper * entry.priceMultiplier) / yieldCount));
-      const selectedIcon = String(state.productIcons?.[entry.productId] || item?.img || entry.icons[0]);
-      const iconPaths = entry.icons.includes(selectedIcon)
-        ? entry.icons.slice(0, 3)
-        : [selectedIcon, ...entry.icons.filter(icon => icon !== selectedIcon)].slice(0, 3);
+      const selectedIcon = item?.img && !isLegacyCatalogArt(item.img) ? String(item.img) : entry.icon;
       return {
         ...clone(entry),
         exists: Boolean(item),
@@ -736,7 +715,7 @@ export class CuratedContentService {
         benefitLabel: benefitLabel(entry),
         syncStatusLabel: ProductSourceService.statusLabel(item?.getFlag?.(MODULE_ID, FLAGS.PRODUCT_SYNC_STATUS) ?? (item ? ProductSourceService.STATUS.SYNCED : ProductSourceService.STATUS.SOURCE_MISSING)),
         yieldLabel: `${yieldCount} serving${yieldCount === 1 ? "" : "s"}`,
-        iconCandidates: iconPaths.map((icon, index) => ({ path: icon, index: index + 1, selected: icon === selectedIcon }))
+        canonicalIcon: entry.icon
       };
     });
 
@@ -786,12 +765,9 @@ export class CuratedContentService {
     return copper;
   }
 
-  static #selectedIcon(entry, state, existing=null) {
-    const stored = String(state.productIcons?.[entry.productId] ?? "");
-    if (entry.icons.includes(stored)) return stored;
+  static #selectedIcon(entry, existing=null) {
     const current = String(existing?.img ?? "");
-    if (current) return current;
-    return entry.icons[0];
+    return current && !isLegacyCatalogArt(current) ? current : entry.icon;
   }
 
   static #productDescription(entry) {
@@ -818,7 +794,7 @@ export class CuratedContentService {
     return {
       name: entry.name,
       type: "consumable",
-      img: this.#selectedIcon(entry, state, existing),
+      img: this.#selectedIcon(entry, existing),
       folder: folderId,
       system: {
         description: { value: this.#productDescription(entry), chat: "" },
@@ -855,7 +831,6 @@ export class CuratedContentService {
           [FLAGS.PRODUCT_DRINK_TYPE]: entry.drinkType ?? "",
           [FLAGS.PRODUCT_EFFECT_FAMILY]: entry.effectFamily ?? "",
           [FLAGS.PRODUCT_YIELD]: yieldCount,
-          [FLAGS.PRODUCT_ICON_CANDIDATES]: clone(entry.icons),
           [FLAGS.PRODUCT_MANAGED]: true
         }
       },

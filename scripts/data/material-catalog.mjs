@@ -35,7 +35,7 @@ const essence = (id, name, nature, {tags=[], quantity="1", sourceRules=null, fla
   ...(sourceRules ? {sourceRules} : {}), processedFrom: [], vendorAvailability: "", flavor
 });
 
-export const MATERIAL_CATALOG_VERSION = 11;
+export const MATERIAL_CATALOG_VERSION = 12;
 
 export const DEFAULT_MATERIALS = Object.freeze([
   // Aberration

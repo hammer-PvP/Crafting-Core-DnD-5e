@@ -70,14 +70,11 @@
       <details class="cc-material-group">
         <summary><span>{{label}}</span><small data-role="group-visible-count">{{count}} materials</small></summary>
         <div class="cc-material-table">
-          <div class="cc-material-table-head"><span>Material</span><span>Rarity</span><span>Chance</span><span>Qty</span><span>Icon</span><span></span></div>
+          <div class="cc-material-table-head"><span>Material</span><span>Rarity</span><span>Chance</span><span>Qty</span><span></span></div>
           {{#each materials}}
-          <div class="cc-material-table-row" data-material-row="{{id}}" data-current-icon="{{selectedIcon}}" data-search="{{searchText}}">
-            <span class="cc-material-name"><img src="{{selectedIcon}}" alt=""><span><strong>{{name}}</strong><small>{{sourceLabel}}</small></span></span>
+          <div class="cc-material-table-row" data-material-row="{{id}}" data-search="{{searchText}}">
+            <span class="cc-material-name"><img src="{{img}}" alt=""><span><strong>{{name}}</strong><small>{{sourceLabel}}</small></span></span>
             <span class="cc-rarity {{rarity}}">{{rarityLabel}}</span><span>{{chance}}%</span><span>{{quantity}}</span>
-            <span class="cc-icon-curation" role="radiogroup" aria-label="Icon choices for {{name}}">
-              {{#each iconCandidates}}<label class="cc-icon-choice {{#if selected}}selected{{/if}}" title="{{path}}"><input type="radio" name="material-icon-{{../id}}" value="{{path}}" data-action="choose-material-icon" data-material-id="{{../id}}" {{#if selected}}checked{{/if}}><img src="{{path}}" alt=""><small>{{index}}</small></label>{{/each}}
-            </span>
             <button type="button" class="cc-icon-button" data-action="edit-material" data-material-id="{{id}}" aria-label="Edit {{name}}"><i class="fa-solid fa-pen"></i></button>
           </div>
           {{/each}}

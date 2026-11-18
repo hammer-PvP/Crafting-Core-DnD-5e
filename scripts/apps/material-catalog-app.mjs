@@ -61,7 +61,7 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       private: materialPack?.metadata?.private !== false
     };
     const filtered = entries.filter(entry => this.#matches(entry, { includeSearch: false })).map(entry => {
-      const row = MaterialCatalogService.withIconChoices(entry);
+      const row = { ...entry, selectedIcon: entry.img };
       row.searchText = this.#searchText(entry);
       row.rarityLabel = MaterialCatalogService.rarityLabel(row.rarity);
       row.sourceLabel = row.managed ? "Content Pack" : "World";
@@ -159,7 +159,6 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       event.preventDefault();
       new MaterialEditorApp(button.dataset.materialId).render({ force: true });
     }));
-    root.querySelectorAll('[data-action="choose-material-icon"]').forEach(input => input.addEventListener("change", event => this.#chooseIcon(event)));
 
     for (const selector of ['[name="filter.family"]','[name="filter.nature"]','[name="filter.rarity"]']) {
       root.querySelector(selector)?.addEventListener("change", event => {
@@ -253,39 +252,6 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
     });
     const counter = root.querySelector("[data-role=material-visible-count]");
     if (counter) counter.textContent = String(shown);
-  }
-
-  async #chooseIcon(event) {
-    const input = event.currentTarget;
-    if (!input?.checked) return;
-    const row = input.closest(".cc-material-table-row");
-    const materialId = String(input.dataset.materialId ?? "");
-    const path = String(input.value ?? "");
-    const previousPath = String(row?.dataset.currentIcon ?? "");
-    const controls = [...(row?.querySelectorAll('[data-action="choose-material-icon"]') ?? [])];
-    const labels = [...(row?.querySelectorAll(".cc-icon-choice") ?? [])];
-
-    controls.forEach(control => control.disabled = true);
-    row?.classList.add("saving-icon");
-    try {
-      const saved = await MaterialCatalogService.saveIconChoice(materialId, path);
-      const savedPath = String(saved?.img ?? path);
-      const preview = row?.querySelector(".cc-material-name img");
-      if (preview && savedPath) preview.src = savedPath;
-      controls.forEach(control => { control.checked = control.value === savedPath; });
-      labels.forEach(label => label.classList.toggle("selected", label.querySelector("input")?.value === savedPath));
-      if (row) row.dataset.currentIcon = savedPath;
-      row?.classList.add("icon-saved");
-      setTimeout(() => row?.classList.remove("icon-saved"), 550);
-    } catch (error) {
-      console.error(`${MODULE_ID} | Material icon selection failed.`, error);
-      controls.forEach(control => { control.checked = control.value === previousPath; });
-      labels.forEach(label => label.classList.toggle("selected", label.querySelector("input")?.value === previousPath));
-      ui.notifications.error(error.message ?? "Crafting Core could not save that material icon.");
-    } finally {
-      row?.classList.remove("saving-icon");
-      controls.forEach(control => control.disabled = false);
-    }
   }
 
   async #sync(event) {
@@ -542,38 +508,6 @@ export class MaterialCatalogApp extends HandlebarsApplicationMixin(ApplicationV2
       ui.notifications.error(error.message ?? "Crafting Core could not restore Equipment Crafting.");
     } finally {
       this.#setMaintenanceButtonsDisabled(false);
-    }
-  }
-
-  async #chooseProductIcon(event) {
-    const input = event.currentTarget;
-    if (!input?.checked) return;
-    const row = input.closest(".cc-product-table-row");
-    const productId = String(input.dataset.productId ?? "");
-    const path = String(input.value ?? "");
-    const previousPath = String(row?.dataset.currentIcon ?? "");
-    const controls = [...(row?.querySelectorAll('[data-action="choose-product-icon"]') ?? [])];
-    const labels = [...(row?.querySelectorAll(".cc-icon-choice") ?? [])];
-    controls.forEach(control => control.disabled = true);
-    row?.classList.add("saving-icon");
-    try {
-      const saved = await CuratedContentService.saveProductIconChoice(productId, path);
-      const savedPath = String(saved?.img ?? path);
-      const preview = row?.querySelector(".cc-material-name img");
-      if (preview && savedPath) preview.src = savedPath;
-      controls.forEach(control => { control.checked = control.value === savedPath; });
-      labels.forEach(label => label.classList.toggle("selected", label.querySelector("input")?.value === savedPath));
-      if (row) row.dataset.currentIcon = savedPath;
-      row?.classList.add("icon-saved");
-      setTimeout(() => row?.classList.remove("icon-saved"), 550);
-    } catch (error) {
-      console.error(`${MODULE_ID} | Curated Product icon selection failed.`, error);
-      controls.forEach(control => { control.checked = control.value === previousPath; });
-      labels.forEach(label => label.classList.toggle("selected", label.querySelector("input")?.value === previousPath));
-      ui.notifications.error(error.message ?? "Crafting Core could not save that Product icon.");
-    } finally {
-      row?.classList.remove("saving-icon");
-      controls.forEach(control => control.disabled = false);
     }
   }
 

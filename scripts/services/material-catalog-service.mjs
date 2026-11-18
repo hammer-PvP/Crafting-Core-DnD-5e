@@ -6,7 +6,7 @@ import {
 } from "../constants.mjs";
 import { DEFAULT_MATERIALS, MATERIAL_CATALOG_VERSION } from "../data/material-catalog.mjs";
 import { CURATED_ALCHEMY_MATERIAL_IDS } from "../data/curated-alchemy-catalog.mjs";
-import { materialDefaultIcon, materialIconCandidates, materialLegacyCuratedDefault } from "../data/material-icon-catalog.mjs";
+import { canonicalMaterialIcon, isLegacyCatalogArt } from "../data/canonical-icon-catalog.mjs";
 import { CompendiumService } from "./compendium-service.mjs";
 import { MaterialOriginService } from "./material-origin-service.mjs";
 import { primaryRarity, rarityArray, rarityValues } from "../utils/dnd5e-data.mjs";
@@ -42,36 +42,6 @@ export class MaterialCatalogService {
   static rarityOptions({ includeAll=false }={}) {
     const options = this.RARITIES.map(value => ({ value, label: this.rarityLabel(value) }));
     return includeAll ? [{ value: "all", label: "All Rarities" }, ...options] : options;
-  }
-
-  static iconCandidatesFor(materialOrId) {
-    const material = typeof materialOrId === "object" && materialOrId ? materialOrId : null;
-    const id = String(material?.id ?? materialOrId ?? "");
-    const current = String(material?.img ?? "");
-    const curated = materialIconCandidates(id).slice(0, 3);
-
-    // A GM may have already chosen a custom presentation icon outside this curated shortlist.
-    // Preserve that choice by keeping it visible/selectable rather than silently replacing it.
-    if (current && current !== DEFAULT_MATERIAL_ICON && !curated.includes(current)) {
-      return [current, ...curated].slice(0, 3);
-    }
-    return curated.length ? curated : (current ? [current] : []);
-  }
-
-  static withIconChoices(material) {
-    const entry = foundry.utils.deepClone(material);
-    const candidates = this.iconCandidatesFor(entry);
-    const selected = candidates.includes(entry.img)
-      ? entry.img
-      : (candidates[0] ?? entry.img ?? DEFAULT_MATERIAL_ICON);
-    entry.iconCandidates = candidates.map((path, index) => ({
-      path,
-      index: index + 1,
-      selected: path === selected
-    }));
-    entry.selectedIcon = selected;
-    entry.hasIconCandidates = entry.iconCandidates.length > 0;
-    return entry;
   }
 
   static registerSettings() {
@@ -147,7 +117,7 @@ export class MaterialCatalogService {
         chance: override.chance ?? base.chance ?? economy[rarity]?.chance ?? 0,
         price: override.price ?? economy[rarity]?.price ?? 0,
         denomination: override.denomination ?? economy[rarity]?.denomination ?? "gp",
-        img: (override.img && String(override.img) !== DEFAULT_MATERIAL_ICON) ? override.img : (materialDefaultIcon(base.id) ?? DEFAULT_MATERIAL_ICON),
+        img: (override.img && !isLegacyCatalogArt(override.img)) ? override.img : (canonicalMaterialIcon(base.id) ?? DEFAULT_MATERIAL_ICON),
         managed: true,
         source: "builtin"
       };
@@ -169,7 +139,7 @@ export class MaterialCatalogService {
       const item = byId.get(material.id);
       if (!item) return material;
       const itemImg = String(item.img || "");
-      const img = itemImg && itemImg !== DEFAULT_MATERIAL_ICON ? itemImg : material.img;
+      const img = itemImg && !isLegacyCatalogArt(itemImg) ? itemImg : material.img;
       return {
         ...material,
         name: item.name,
@@ -212,7 +182,7 @@ export class MaterialCatalogService {
       entries.push(this.#normalizeMaterial({
         ...foundry.utils.deepClone(base),
         name: item.name,
-        img: itemImg && itemImg !== DEFAULT_MATERIAL_ICON ? itemImg : base.img,
+        img: itemImg && !isLegacyCatalogArt(itemImg) ? itemImg : base.img,
         packUuid: item.uuid,
         managed: true,
         source: "builtin",
@@ -428,18 +398,12 @@ export class MaterialCatalogService {
           [`flags.${MODULE_ID}.${FLAGS.CONTENT_ORIGIN}`]: "pack",
           [`flags.${MODULE_ID}.${FLAGS.MATERIAL_CATALOG_VERSION}`]: MATERIAL_CATALOG_VERSION
         };
-        // v0.0.19b visual migration:
-        // - generic pouch -> current curated default;
-        // - untouched v0.0.19a curated defaults may advance to the refined v0.0.19b default;
-        // - any explicit Catalog override or unrelated manual Compendium image remains authoritative.
+        // Canonical v0.6.1 assets replace any of the previous native/bundled
+        // curated choices. Never replace an explicitly customized external image.
         const explicitIconOverride = String(catalogOverrides?.[material.id]?.img ?? "").trim();
-        const legacyCuratedDefault = materialLegacyCuratedDefault(material.id);
-        const currentImg = String(item.img ?? "");
-        const mayAdvanceCuratedDefault = !explicitIconOverride
-          && legacyCuratedDefault
-          && currentImg === legacyCuratedDefault
-          && currentImg !== String(material.img ?? "");
-        if (!currentImg || currentImg === DEFAULT_MATERIAL_ICON || mayAdvanceCuratedDefault) update.img = material.img;
+        if (isLegacyCatalogArt(item.img) && (!explicitIconOverride || isLegacyCatalogArt(explicitIconOverride))) {
+          update.img = material.img;
+        }
         updates.push(update);
         progressIndex += 1;
         onProgress?.({ phase: "Preparing Materials", label: material.name, current: progressIndex, total: definitions.length, overallCurrent: progressIndex, overallTotal, stats: { created: creates.length, updated: updates.length } });
@@ -566,38 +530,6 @@ export class MaterialCatalogService {
     }
   }
 
-  static async saveIconChoice(id, img) {
-    if (!game.user.isGM) throw new Error("Only a GM can choose Crafting Core material icons.");
-    const entry = await this.getEntry(id);
-    if (!entry) throw new Error("Crafting material could not be resolved.");
-    const path = String(img ?? "").trim();
-    if (!path) throw new Error("Choose a valid Foundry Core icon.");
-
-    if (!entry.managed) return this.saveEntry(id, { img: path });
-
-    const curated = this.iconCandidatesFor(entry);
-    if (curated.length && !curated.includes(path)) throw new Error("That icon is not one of the curated choices for this material.");
-
-    const overrides = this.overrides();
-    overrides[entry.id] = { ...(overrides[entry.id] ?? {}), img: path };
-    await game.settings.set(MODULE_ID, SETTINGS.MATERIAL_OVERRIDES, overrides);
-
-    const pack = this.pack();
-    if (pack) {
-      const docs = await pack.getDocuments();
-      const item = docs.find(doc => String(doc.getFlag(MODULE_ID, FLAGS.MATERIAL_ID) ?? "") === entry.id);
-      if (item) {
-        const wasLocked = Boolean(pack.locked);
-        if (wasLocked) await pack.configure({ locked: false });
-        try { await item.update({ img: path }); }
-        finally { if (wasLocked) await pack.configure({ locked: true }); }
-      }
-    }
-
-    Hooks.callAll(`${MODULE_ID}.materialsChanged`, entry.id);
-    return this.getEntry(entry.id);
-  }
-
   static async migrateCuratedCatalogIfNeeded() {
     if (!game.user?.isGM) return { migrated: false };
     const pack = this.pack();
@@ -606,7 +538,7 @@ export class MaterialCatalogService {
     const needsMigration = docs.some(item => item.getFlag(MODULE_ID, FLAGS.MATERIAL_MANAGED)
       && (Number(item.getFlag(MODULE_ID, FLAGS.MATERIAL_CATALOG_VERSION) ?? 0) < MATERIAL_CATALOG_VERSION
         || !item.img
-        || String(item.img) === DEFAULT_MATERIAL_ICON));
+        || isLegacyCatalogArt(item.img)));
     if (!needsMigration) return { migrated: false, reason: "current" };
     const result = await this.sync();
     return { migrated: true, ...result };

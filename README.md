@@ -13,13 +13,24 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.6.0
-- **Foundry VTT:** minimum 14.367, verified 14.368
-- **D&D 5e:** 6.0.0-6.0.999, verified 6.0.1
+- **Crafting Core:** v0.6.1
+- **Foundry VTT:** minimum 14.367, verified target 14.370
+- **D&D 5e:** 6.0.0-6.1.999, verified target 6.1.0
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
 - **DnD 5e Item Creator:** optional for the core module; **0.7.1+ is required for the official persistent Curated Food and Alcohol Products**
 
 Crafting Core v0.6.0 separates the **crafting engine from optional content**. A fresh World starts with no forced Materials, Products, Recipes, or Hammer harvest catalog. GMs can build a complete World-owned crafting system from scratch, register existing D&D5e Items, or install optional Content Packs to reproduce the full curated setup used by the project. Existing Worlds migrate in-place: document IDs/UUIDs, Recipe/Product identities, learned Character knowledge, and active Projects are preserved.
+
+### v0.6.1 — Canonical Artwork Library
+
+Crafting Core now ships a complete, self-contained artwork library with **455 unique WebP source images** and **5 transparent equipment-border assets** supplied for the project. All **257 official Materials**, **15 Meals**, **43 Drinks**, **82 Alchemy/Inscription Products**, and **58 SRD Equipment illustrations** have a stable, explicit canonical asset assignment. The 58 equipment illustrations additionally provide **244 precomposed variant images** for +0/+1/+2/+3 crafting and the Legendary +3 Armor border.
+
+- The Material catalog now shows its one canonical illustration instead of a three-option icon selector. The old Foundry/bundled candidate maps, similarity matching, random-style distribution, and associated radio-choice UI are removed. Official products no longer persist candidate lists.
+- Images resolve under `modules/dnd5e-crafting-core/assets/canonical/`. Equipment variant Items use `assets/equipment-variants/`. The original border PNGs remain in `assets/borders/` as part of the project assets.
+- Legacy v0.6.0 files under `icons/` remain bundled strictly for backward compatibility with image references saved on existing Actors, Recipes and imported Items; they are no longer used for candidate selection or new curated content.
+- On the first GM login after upgrade, **only already installed official Material and Product Items** with legacy native/bundled art receive an **image-only migration**. Missing/removed optional Content Packs are **not** recreated; stable Item IDs, Recipes, Knowledge, Actor inventories, and active Projects remain unchanged. The operation is idempotent and protects custom art paths outside the former native/bundled roots.
+- Custom Materials/Products, imported Recipes, existing Actor-owned Items, and non-canonical third-party equipment retain their own icons. If you want to refresh published Recipe snapshots too, use the existing **Content Packs → Restore** actions intentionally; those perform their usual full curated synchronization.
+- The module no longer needs Plutonium, other modules, or external image files for its **official** Content Pack artwork. Source SRD data is still required for the functional rules/Activities of Alchemy items and the base Equipment Crafting library.
 
 ### v0.6.0 — Content Architecture & Catalog UX
 
@@ -209,8 +220,8 @@ This preserves the canonical D&D5e Item's Activities, Effects, uses, consumption
 
 An Inscription is the same functional SRD consumable presented and crafted in a different form. Crafting Core first persists the complete SRD clone and **only then** changes presentation such as name, icon, flavor, folder, and Crafting Core metadata. It does not transplant or reconstruct the Item's Activities.
 
-- **Basic** Inscriptions use a simple document icon and require 1 Work Period.
-- **Elaborate** Inscriptions use a more developed manuscript icon and require 2 Work Periods.
+- **Basic** Inscriptions use their own canonical inscription artwork and require 1 Work Period.
+- **Elaborate** Inscriptions use their own canonical inscription artwork and require 2 Work Periods.
 - **Elite** Inscriptions use a book/tome presentation and require 3 Work Periods.
 - Work cadence is Short Rest based. Extra Effort uses INT DC 12; success adds one extra progress beyond the normal Work Period.
 - Inscription crafting accepts **Calligrapher's Supplies OR Arcana**. Inscription Ink accepts **Calligrapher's Supplies OR Alchemist's Supplies**.
@@ -241,7 +252,7 @@ Crafting Core includes a GM-only **Recipe Transfer** workflow under **Game Setti
 - Imported Result Items are materialized in **Crafting Core - Products -> Custom Items**. Official Curated Products are never overwrite targets for imported custom content.
 - Existing Recipe/Result conflicts are reviewed explicitly: update, use existing, import a new copy/new Recipe ID, or skip.
 - Missing custom ingredient dependencies are reported before import and block that individual entry until the dependency exists in the destination World.
-- Icon portability uses a safe fallback chain: original resolvable icon -> compatible bundled asset when appropriate -> Base Item icon -> generic Item-type icon. Image binaries are not embedded into Recipe JSON files.
+- Icon portability for external Recipe Transfer uses this fallback chain: original resolvable icon -> Base Item icon -> generic Item-type icon. Canonical official artwork is bundled in the module, but image binaries are not embedded into Recipe JSON files.
 - Export uses a native **Save As** dialog where the browser supports it. The suggested filename is only a convenience; import validation never depends on the filename.
 
 ## Knowledge Lifecycle
@@ -333,7 +344,7 @@ The unit price is therefore:
 
 This lets crafted meals and drinks be produced in sensible quantities while taverns, vendors, loot, and Supplier-style inventories continue to buy, sell, and store individual Product units.
 
-All official Curated Product Recipes use **10 seconds** of crafting time. Each Product offers three curated icon candidates through the Materials & Products interface, mixing bundled Crafting Core artwork with compatible Foundry/D&D5e-native assets while preserving GM-selected icons. **Restore Curated Product Defaults** repairs missing official Products and matching Recipe Sources while preserving unrelated GM content. The restore is authoritative for Crafting Core-managed Curated definitions; duplicate/fork a Recipe to a new identity before restoring if you want to keep a permanent custom variant.
+All official Curated Product Recipes use **10 seconds** of crafting time. Each official Product has one canonical, project-owned image (v0.6.1), rather than three selectable candidates. **Restore Curated Product Defaults** repairs missing official Products and matching Recipe Sources while preserving unrelated GM content. The restore is authoritative for Crafting Core-managed Curated definitions; duplicate/fork a Recipe to a new identity before restoring if you want to keep a permanent custom variant.
 
 ## Creature Scanner and Harvest Profiles
 

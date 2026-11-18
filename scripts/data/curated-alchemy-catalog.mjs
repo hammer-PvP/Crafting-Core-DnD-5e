@@ -1,3 +1,4 @@
+import { canonicalAlchemyIcon } from "./canonical-icon-catalog.mjs";
 /**
  * Optional Curated Alchemy & Inscription catalog.
  *
@@ -6,7 +7,7 @@
  * of the same canonical SRD Item source, preserving native Activities, effects and consumption data.
  */
 
-export const CURATED_ALCHEMY_VERSION = 5;
+export const CURATED_ALCHEMY_VERSION = 6;
 
 export const CURATED_ALCHEMY_MATERIAL_IDS = Object.freeze(new Set([
   "creature-regenerative-ichor", "creature-venomous-ichor", "creature-corrosive-ichor", "creature-ooze-mucus",
@@ -17,21 +18,6 @@ export const CURATED_ALCHEMY_MATERIAL_IDS = Object.freeze(new Set([
   "gathering-stoneheart-morel", "gathering-worldroot-blossom", "gathering-astral-rose"
 ]));
 
-
-export const INSCRIPTION_ICONS = Object.freeze({
-  basic: "icons/sundries/documents/document-gold.webp",
-  elaborate: "icons/sundries/documents/document-bound-white.webp",
-  elite: "icons/sundries/books/book-open-purple.webp"
-});
-
-const ROOT = "modules/dnd5e-crafting-core/icons/products/drinks";
-export const INK_ICONS = Object.freeze({
-  common: `${ROOT}/drink-bottle-flask-black.webp`,
-  uncommon: `${ROOT}/drink-bottle-flask-green.webp`,
-  rare: `${ROOT}/drink-bottle-flask-blue.webp`,
-  veryRare: `${ROOT}/drink-bottle-flask-purple.webp`,
-  legendary: `${ROOT}/drink-bottle-flask-gold.webp`
-});
 
 const source = (pack, id, name) => ({ pack, id, name });
 const srd = (name, id, aliases=[]) => Object.freeze({
@@ -104,12 +90,12 @@ const canonical = (id, sourceKey, folderKey, { category="alchemy", subcategory="
 });
 const inscription = (id, name, sourceKey, tier, { subcategory="inscription", variant=null }={}) => ({
   id, productId: productId(id), kind: "inscription", name, sourceKey, tier,
-  icon: INSCRIPTION_ICONS[tier], folderKey: `inscription:${tier}`, category: "inscription", subcategory,
+  folderKey: `inscription:${tier}`, category: "inscription", subcategory,
   ...(variant ? { variant } : {})
 });
 const ink = (rarity, label, priceGp) => ({
   id: `inscription-ink-${rarity}`, productId: productId(`inscription-ink-${rarity}`), kind: "ink",
-  name: `${label} Inscription Ink`, rarity, priceGp, icon: INK_ICONS[rarity],
+  name: `${label} Inscription Ink`, rarity, priceGp, 
   folderKey: "inscription:inks", category: "inscription", subcategory: "ink"
 });
 
@@ -198,7 +184,9 @@ for (const [key, label] of resistanceTypes) {
   );
 }
 
-export const CURATED_ALCHEMY_PRODUCTS = Object.freeze(products.map(Object.freeze));
+export const CURATED_ALCHEMY_PRODUCTS = Object.freeze(products.map(entry => Object.freeze({
+  ...entry, icon: canonicalAlchemyIcon(entry.id)
+})));
 export const CURATED_ALCHEMY_PRODUCTS_BY_ID = new Map(CURATED_ALCHEMY_PRODUCTS.map(row => [row.productId, row]));
 
 const finalCheck = proficiencies => ({

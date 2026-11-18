@@ -20,6 +20,7 @@ import { CuratedEquipmentService } from "./services/curated-equipment-service.mj
 import { ProductSourceService } from "./services/product-source-service.mjs";
 import { ContentPackService } from "./services/content-pack-service.mjs";
 import { CatalogAuditService } from "./services/catalog-audit-service.mjs";
+import { CanonicalAssetsMigrationService } from "./services/canonical-assets-migration-service.mjs";
 
 let app = null;
 let generatorApp = null;
@@ -102,6 +103,7 @@ Hooks.once("init", () => {
   runInitStep("curated alchemy settings", () => CuratedAlchemyService.registerSettings());
   runInitStep("curated equipment settings", () => CuratedEquipmentService.registerSettings());
   runInitStep("content architecture settings", () => ContentPackService.registerSettings());
+  runInitStep("v0.6.1 canonical artwork migration setting", () => CanonicalAssetsMigrationService.registerSettings());
   runInitStep("Crafting Core settings menu", () => game.settings.registerMenu(MODULE_ID, "craftingCoreSettings", {
     name: "Crafting Core",
     label: "Configure Crafting Core",
@@ -156,6 +158,13 @@ Hooks.once("ready", async () => {
       if (contentMigration.migrated) console.info(`${MODULE_TITLE} | Content architecture migration complete:`, contentMigration);
     } catch (error) {
       console.error(`${MODULE_TITLE} | Content architecture migration failed.`, error);
+    }
+
+    try {
+      const assets = await CanonicalAssetsMigrationService.migrateInstalledOnce();
+      if (assets.migrated) console.info(`${MODULE_TITLE} | Canonical artwork v0.6.1 applied to installed Content Packs:`, assets);
+    } catch (error) {
+      console.error(`${MODULE_TITLE} | Canonical artwork migration failed; it will be retried on the next GM login.`, error);
     }
 
     try {

@@ -1,3 +1,4 @@
+import { canonicalEquipmentIcon } from "../data/canonical-icon-catalog.mjs";
 import { FLAGS, KNOWLEDGE_ICONS, MODULE_ID, SETTINGS } from "../constants.mjs";
 import { CompendiumService } from "./compendium-service.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
@@ -8,7 +9,7 @@ import { normalizeItemSourceForDnd5e6, rarityArray } from "../utils/dnd5e-data.m
 import { forcedDeletionMap } from "../utils/foundry-data.mjs";
 
 const SOURCE_PACK_ID = "dnd5e.equipment24";
-const VERSION = 3;
+const VERSION = 4;
 const WEAPON_TYPES = new Set(["simpleM", "simpleR", "martialM", "martialR"]);
 const ARMOR_TYPES = new Set(["light", "medium", "heavy", "shield"]);
 const MAGIC_COST = Object.freeze({ standard: { 1: 200, 2: 2000, 3: 20000 }, armor: { 1: 2000, 2: 20000, 3: 100000 } });
@@ -485,6 +486,7 @@ export class CuratedEquipmentService {
     for (const key of ["_id", "folder", "sort", "ownership", "_stats", "pack"]) delete data[key];
     data.folder = folderId;
     data.name = bonus ? `${base.name} +${bonus}` : base.name;
+    data.img = canonicalEquipmentIcon(base.name, bonus, category) ?? data.img;
     data.system ??= {};
     data.system.quantity = 1;
     const rarity = RARITY[category]?.[bonus] ?? "";

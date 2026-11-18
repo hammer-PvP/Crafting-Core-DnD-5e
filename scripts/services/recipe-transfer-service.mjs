@@ -405,9 +405,6 @@ export class RecipeTransferService {
     const original = String(result?.originalImg || result?.snapshot?.img || "").trim();
     if (original && await this.#assetExists(original)) return { path: original, source: "Original icon" };
 
-    const bundled = this.#bundledFallback(result);
-    if (bundled && await this.#assetExists(bundled)) return { path: bundled, source: "Crafting Core fallback" };
-
     const baseImg = await this.#baseItemImage(result);
     if (baseImg) return { path: baseImg, source: "Base Item icon" };
 
@@ -427,16 +424,6 @@ export class RecipeTransferService {
     } catch (_) {
       return false;
     }
-  }
-
-  static #bundledFallback(result={}) {
-    const flags = result?.snapshot?.flags?.[MODULE_ID] ?? {};
-    const subcategory = String(flags.productSubcategory || flags[FLAGS.PRODUCT_SUBCATEGORY] || "");
-    if (subcategory === "alcoholic-drink" || subcategory === "non-alcoholic-drink") {
-      return `modules/${MODULE_ID}/icons/products/drinks/drink-bottle-round-gold.webp`;
-    }
-    if (subcategory === "meal") return `modules/${MODULE_ID}/icons/products/meals/grilled-meal-plate-red-green.webp`;
-    return "";
   }
 
   static async #baseItemImage(result={}) {

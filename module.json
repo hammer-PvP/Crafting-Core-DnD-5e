@@ -2,7 +2,7 @@
   "id": "dnd5e-crafting-core",
   "title": "Crafting Core (DnD 5e)",
   "description": "A content-agnostic D&D5e crafting, harvesting, materials, Recipe Knowledge, flexible Ingredient Slots, and Project framework for Foundry VTT 14. Build a World catalog from scratch or install optional Hammer/SRD content packs for Materials, Culinary, Alchemy & Inscription, and +0/+1/+2/+3 Equipment crafting. Complete manual: https://github.com/hammer-PvP/Crafting-Core-DnD-5e/blob/main/docs/Crafting-Core-Complete-Manual.pdf",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "authors": [
     {
       "name": "Raphael Andrade"
@@ -16,7 +16,7 @@
   ],
   "compatibility": {
     "minimum": "14.367",
-    "verified": "14.368"
+    "verified": "14.370"
   },
   "relationships": {
     "systems": [
@@ -25,8 +25,8 @@
         "type": "system",
         "compatibility": {
           "minimum": "6.0.0",
-          "verified": "6.0.1",
-          "maximum": "6.0.999"
+          "verified": "6.1.0",
+          "maximum": "6.1.999"
         }
       }
     ]
@@ -48,6 +48,6 @@
   "readme": "README.md",
   "url": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e",
   "manifest": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e/releases/latest/download/module.json",
-  "download": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e/releases/download/v0.6.0/dnd5e-crafting-core.zip",
+  "download": "https://github.com/hammer-PvP/Crafting-Core-DnD-5e/releases/download/v0.6.1/dnd5e-crafting-core.zip",
   "socket": true
 }
