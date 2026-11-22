@@ -12,6 +12,7 @@ export class CharacterSheetService {
   static #artisanSignatures = new Map();
   static #patched = false;
   static #collapsed = new Map();
+  static #downtimeHourInputs = new Map();
 
   static patchDnd5eSheet() {
     if (this.#patched) return true;
@@ -87,6 +88,11 @@ export class CharacterSheetService {
     const preparedRecipes = recipes.map(recipe => CraftingService.prepareRecipeForActor(actor, recipe));
     const job = CraftingService.job(actor);
     const activeProject = job?.mode === "project" ? CraftingService.prepareProjectForActor(actor, job) : null;
+    if (activeProject && activeProject.downtimeActive) {
+      const max = Math.max(0, Number(activeProject.maxWorkHours) || 0);
+      const preferred = Number(this.#downtimeHourInputs.get(activeProject.id) ?? 1);
+      activeProject.selectedWorkHours = max ? Math.min(max, Math.max(1, Number.isSafeInteger(preferred) ? preferred : 1)) : 1;
+    }
     const key = sheet.id ?? actor.id;
 
     let selected = this.#selection.get(key);
@@ -193,6 +199,7 @@ export class CharacterSheetService {
 
     this.#bindTransientCraftInputs(root, app);
     this.#bindCollapsibleSections(root, app);
+    this.#bindDowntimeHourInputs(root, app);
 
     this.#bindAsync(root, app, "craft", async actor => {
       const sheetKey = app.id ?? actor.id;
@@ -224,7 +231,14 @@ export class CharacterSheetService {
       this.#clearTransientCraftState(stateKey);
       return result;
     });
-    this.#bindAsync(root, app, "work-project", actor => CraftingService.requestWorkOnProject(actor));
+    this.#bindAsync(root, app, "work-project", actor => {
+      const job = CraftingService.project(actor);
+      const hoursInput = root.querySelector('.crafting-core-tab [data-cc-downtime-hours]');
+      const hours = DowntimeService.active && hoursInput ? Number(hoursInput.value) : 1;
+      if (!Number.isSafeInteger(hours) || hours < 1) throw new Error("Enter a positive whole number of hours.");
+      if (hoursInput && job) this.#downtimeHourInputs.set(job.id, hours);
+      return CraftingService.requestWorkOnProject(actor, hours);
+    });
     this.#bindAsync(root, app, "resolve-checkpoint", actor => CraftingService.requestCheckpoint(actor));
     this.#bindAsync(root, app, "extra-effort", actor => CraftingService.requestExtraEffort(actor));
     this.#bindAsync(root, app, "final-project", actor => CraftingService.requestFinalCheck(actor));
@@ -287,6 +301,34 @@ export class CharacterSheetService {
         }
       });
     }
+  }
+
+  static #bindDowntimeHourInputs(root, app) {
+    const input = root.querySelector('.crafting-core-tab [data-cc-downtime-hours]');
+    if (!input || input.dataset.ccBound) return;
+    input.dataset.ccBound = "true";
+    const actor = app.actor ?? app.document;
+    const project = CraftingService.project(actor);
+    const rawMax = Number(input.max);
+    const max = Number.isSafeInteger(rawMax) ? Math.max(0, rawMax) : 0;
+    const work = root.querySelector('.crafting-core-tab [data-action="work-project"]');
+    const summary = root.querySelector('.crafting-core-tab [data-cc-downtime-preview]');
+    const sync = () => {
+      const hours = Number(input.value);
+      const valid = !input.disabled && max > 0 && Number.isSafeInteger(hours) && hours >= 1 && hours <= max;
+      if (work) work.disabled = !valid;
+      if (summary) summary.textContent = valid
+        ? `Work ${hours} h · Balance after: ${Math.max(0, DowntimeService.available(actor) - hours)} h`
+        : max ? `Select 1–${max} whole hours (maximum before the next checkpoint).` : "No Downtime hours are available.";
+      if (valid && project) this.#downtimeHourInputs.set(project.id, hours);
+    };
+    input.addEventListener("input", sync);
+    root.querySelector('.crafting-core-tab [data-cc-downtime-max]')?.addEventListener("click", event => {
+      event.preventDefault();
+      input.value = String(max);
+      sync();
+    });
+    sync();
   }
 
   static #bindCollapsibleSections(root, app) {

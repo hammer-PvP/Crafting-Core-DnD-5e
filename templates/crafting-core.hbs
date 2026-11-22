@@ -33,7 +33,7 @@
       {{#each recipes}}
       <button type="button" class="cc-recipe-nav {{#if selected}}active{{/if}}" data-recipe-id="{{id}}">
         <img src="{{img}}" alt="">
-        <span><strong>{{name}}</strong><small>{{publicationStatus}} · {{#if (eq craftingMode "project")}}{{project.requiredWork}} h{{else}}{{craftingHours}} h{{/if}}</small></span>
+        <span><strong>{{name}}</strong><small>{{publicationStatus}} · {{#if (eq craftingMode "project")}}{{project.requiredWork}} h{{else}}{{craftingSeconds}} sec{{/if}}</small></span>
       </button>
       {{else}}
       <div class="cc-empty-sidebar"><i class="fa-solid fa-scroll"></i><span>No Recipe Builder drafts.</span></div>
@@ -71,7 +71,7 @@
       {{/if}}
 
       <section class="cc-form-card">
-        <div class="cc-card-heading"><div><span class="cc-kicker">Recipe</span><h3>Identity & Crafting Mode</h3></div><small>Choose the simple legacy timer or a persistent work-period Project.</small></div>
+        <div class="cc-card-heading"><div><span class="cc-kicker">Recipe</span><h3>Identity & Crafting Mode</h3></div><small>Choose a short countdown in seconds or a persistent Project in crafting hours.</small></div>
         <div class="cc-grid two">
           <label><span>Name</span><input type="text" name="name" value="{{draft.name}}"></label>
           <label><span>Crafting Mode</span><select name="craftingMode" data-resolution-rerender>
@@ -80,7 +80,7 @@
           </select></label>
         </div>
         {{#if (eq draft.craftingMode "timed")}}
-        <label><span>Crafting Time (hours)</span><input type="number" min="0" step="any" name="craftingTime" value="{{draftCraftingHours}}"></label>
+        <label><span>Crafting Time (seconds)</span><input type="number" min="0" step="1" name="craftingTime" value="{{draftCraftingSeconds}}"><small>A brief countdown before the result is delivered. Project crafting uses hours instead.</small></label>
         {{/if}}
         <label class="cc-file-field"><span>Recipe Image</span><span><input type="text" name="img" value="{{draft.img}}"><button type="button" data-action="browse-image" data-target="img"><i class="fa-solid fa-folder-open"></i></button></span></label>
         <label class="cc-description-field"><span>Additional Description (optional)</span><textarea name="description" rows="4" placeholder="Optional lore, instructions, flavor, or crafting notes for this recipe.">{{draft.description}}</textarea><small>This text can be revealed to players independently through Player Visibility.</small></label>
@@ -130,9 +130,9 @@
 
       <section class="cc-form-card cc-progress-check-card">
         <div class="cc-card-heading"><div><span class="cc-kicker">Progress Checks</span><h3>Checks During the Project</h3></div><small>Failure always consumes that Work Attempt. Consequences decide whether the project merely stalls, regresses, or fails completely.</small></div>
-        <label class="cc-resolution-toggle"><input type="checkbox" name="requireProgressCheck" {{#if draft.project.progressCheck.hourlyRequired}}checked{{/if}}><span><strong>Require Progress Checks</strong><small>Default: an ability, skill or tool check each Crafting Hour. Specific Milestones can be used independently.</small></span></label>
+        <label class="cc-resolution-toggle"><input type="checkbox" name="requireProgressCheck" {{#if draft.project.progressCheck.hourlyRequired}}checked{{/if}}><span><strong>Require Progress Checks</strong><small>When Specific Milestones is off, this requires a check every crafting hour. When milestones are on, only their explicitly configured checks are used.</small></span></label>
         {{#if draft.project.workstation.required}}<p class="cc-inline-rule-note">Legacy recipe: a project-start workstation requirement is preserved for compatibility. New workstation requirements are configured on milestones only.</p>{{/if}}
-        <label class="cc-resolution-toggle"><input type="checkbox" name="specificMilestones" {{#if (eq draft.project.progressCheck.timing "milestones")}}checked{{/if}}><span><strong>Specific Milestones</strong><small>Each milestone independently requires a check, a suitable workstation, or both. Works even if hourly Progress Checks are disabled.</small></span></label>
+        <label class="cc-resolution-toggle"><input type="checkbox" name="specificMilestones" {{#if (eq draft.project.progressCheck.timing "milestones")}}checked{{/if}}><span><strong>Specific Milestones</strong><small>At exact hours of progress, each milestone may require a check, a suitable workstation, or both. Milestones replace hourly checks while enabled; a milestone never repeats automatically.</small></span></label>
         <div class="cc-grid two" data-progress-every {{#if (eq draft.project.progressCheck.timing "milestones")}}hidden{{else}}{{#unless draft.project.progressCheck.hourlyRequired}}hidden{{/unless}}{{/if}}>
           <label><span>Check</span><select name="progressCheck">
             <optgroup label="Ability Checks">{{#each craftingResolutionOptions.abilityOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.progressCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
@@ -149,10 +149,11 @@
             <div class="cc-checkpoint-heading"><strong>Checkpoint · {{hour}} h</strong><button type="button" data-action="remove-checkpoint" data-checkpoint-id="{{checkpointId}}"><i class="fa-solid fa-trash"></i> Remove</button></div>
             <label class="cc-resolution-toggle"><input type="checkbox" data-checkpoint-requires-check {{#if requiresCheck}}checked{{/if}}><span><strong>Require a Check</strong><small>Off allows a workstation-only milestone, without a roll.</small></span></label>
             <div class="cc-grid three">
-              <label><span>After Crafting Hours</span><input data-checkpoint-hour type="number" min="1" max="99" step="1" value="{{hour}}"></label>
+              <label><span>Checkpoint at Crafting Hour</span><input data-checkpoint-hour type="number" min="1" max="99" step="1" value="{{hour}}"></label>
               <label class="cc-checkpoint-check-field" {{#unless requiresCheck}}hidden{{/unless}}><span>Required Check</span><select data-checkpoint-check>{{#each checkOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
               <label class="cc-checkpoint-check-field" {{#unless requiresCheck}}hidden{{/unless}}><span>Difficulty Class (DC)</span><input data-checkpoint-dc type="number" min="1" max="40" step="1" value="{{dc}}"></label>
             </div>
+            <p class="cc-inline-rule-note" data-checkpoint-hour-explanation>At {{hour}} hours of progress, resolve this checkpoint before progressing beyond that hour. This is not a recurring interval.</p>
             <label class="cc-resolution-toggle"><input type="checkbox" data-checkpoint-station-required {{#if workstation.required}}checked{{/if}}><span><strong>Require Suitable Workstation at this checkpoint</strong><small>Access is checked at this milestone only; no project-wide workstation requirement.</small></span></label>
           </div>
           {{/each}}
@@ -232,7 +233,7 @@
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftCount" {{#if draft.playerVisibility.craftCount}}checked{{/if}}><span><strong>Craftable Count</strong><small>Reveal the N× counter beside known Recipes.</small></span></label>
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.proficiencies" {{#if draft.playerVisibility.proficiencies}}checked{{/if}}><span><strong>Relevant Proficiencies</strong><small>Reveal Skill/Tool requirements.</small></span></label>
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.attemptPolicy" {{#if draft.playerVisibility.attemptPolicy}}checked{{/if}}><span><strong>Who Can Attempt</strong><small>Reveal whether proficiency is required.</small></span></label>
-          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingTime" {{#if draft.playerVisibility.craftingTime}}checked{{/if}}><span><strong>Crafting Time / Cadence</strong><small>Reveal required Crafting Hours and rest cadence.</small></span></label>
+          <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.craftingTime" {{#if draft.playerVisibility.craftingTime}}checked{{/if}}><span><strong>Crafting Time / Cadence</strong><small>Reveal seconds for timed recipes, hours for projects, and rest cadence.</small></span></label>
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.projectProgress" {{#if draft.playerVisibility.projectProgress}}checked{{/if}}><span><strong>Current Project Progress</strong><small>Reveal exact current / total hours.</small></span></label>
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.progressCheck" {{#if draft.playerVisibility.progressCheck}}checked{{/if}}><span><strong>Progress Check</strong><small>Reveal the intermediate check and timing.</small></span></label>
           <label class="cc-visibility-toggle"><input type="checkbox" name="visibility.progressDC" {{#if draft.playerVisibility.progressDC}}checked{{/if}}><span><strong>Progress DC</strong><small>Reveal its exact DC.</small></span></label>

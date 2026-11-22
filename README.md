@@ -62,7 +62,7 @@ A saved draft is **not yet available to players**. Editing a published recipe al
 
 Project recipes may have **no progress checks**, require a check **every crafting hour**, or use **specific milestones**:
 
-- Add a milestone at a chosen hour of progress, such as **after 5 hours** in a 10-hour project.
+- Add a milestone at an **exact crafting hour**, such as **at 5 hours of progress** in a 10-hour project. The checkpoint must be resolved before advancing beyond hour 5; it is not a repeating five-hour interval.
 - Choose that milestone's ability, skill, tool, or saving throw and its **Difficulty Class (DC)**.
 - Add more milestones with **Add Checkpoint** when needed. Hourly checks are independent of the stage-based option; a station-only stage does not require enabling hourly checks.
 - At each milestone, independently enable **Require a Check** and/or **Require Suitable Workstation**. A milestone can require workstation access without any roll, and other milestones in the same recipe do not inherit that requirement. There is **no project-wide workstation setting for new recipes** and no fixed list of station types.
@@ -81,7 +81,7 @@ A required milestone must be resolved before the project continues past it, incl
 5. Start crafting. For a project, the sheet shows progress in **hours**, available actions, and any checks or requirements.
 6. Continue until all required work and checks are complete. The crafted item is then added according to the recipe's normal completion process.
 
-**Timed Crafting** uses a duration set by the recipe. **Crafting Projects** persist between sessions, remember reserved ingredients, and track their own progress and checks.
+**Timed Crafting** uses a short countdown configured in **seconds** (for example, 10 seconds). **Crafting Projects** use **hours**, persist between sessions, remember reserved ingredients, and track their own progress and checks.
 
 ## Crafting Hours, Rests, and Downtime
 
@@ -89,7 +89,7 @@ Projects use **crafting hours** as their progress unit. A 4-hour project needs f
 
 **During normal adventures:** each recipe uses its configured rest cadence. A qualifying **Long Rest** or **Short Rest** unlocks the next work opportunity; resting alone does not complete work automatically. **Extra Effort**, when enabled, can add progress after its check.
 
-**During Downtime:** the GM may grant hours to characters and activate **Downtime Mode**. While it is active, characters can spend their credited hours on projects without waiting for rests. Existing recipe checks and requirements still apply.
+**During Downtime:** the GM may grant hours to characters and activate **Downtime Mode**. While it is active, characters can spend their credited hours on projects without waiting for rests. Enter **Hours** to work (default 1), or click **MAX** to fill the greatest safe amount before the next checkpoint, the end of the project, or the available balance. A project without progress checks may be finished in a single operation if sufficient credit exists; hourly checks are still rolled separately. **Extra Effort is not available in Downtime**, but it remains available during rest-based crafting when a recipe enables it. Existing recipe checks, workstation requirements and final checks still apply.
 
 ### Downtime Manager — GM
 

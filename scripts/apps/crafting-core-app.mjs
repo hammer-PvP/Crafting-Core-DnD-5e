@@ -118,7 +118,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
         const pending = Boolean(source && !KnowledgeItemService.sameRecipeDefinition(recipe, source.recipe));
         return {
           ...recipe,
-          craftingHours: Math.round((Number(recipe.craftingTime) || 0) / 3600 * 1000000) / 1000000,
+          craftingSeconds: Math.max(0, Number(recipe.craftingTime) || 0),
           selected: recipe.id === this.selectedId,
           published: Boolean(source),
           pending,
@@ -160,7 +160,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       } : null,
       selectedPublishedIngredientRows,
       draft: foundry.utils.deepClone(this.draft),
-      draftCraftingHours: Math.round((Number(this.draft?.craftingTime) || 0) / 3600 * 1000000) / 1000000,
+      draftCraftingSeconds: Math.max(0, Number(this.draft?.craftingTime) || 0),
       ingredientEditorRows,
       editingExisting: Boolean(this.selectedId),
       published: Boolean(currentSource),
@@ -325,6 +325,15 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     root.querySelectorAll('[data-checkpoint-station-required]').forEach(box => box.addEventListener("change", () => {
       this.#syncDraftFromForm();
     }));
+    // Clarify absolute hour thresholds in place, with no editor rebuild or scroll jump.
+    root.querySelectorAll('[data-checkpoint-hour]').forEach(input => input.addEventListener("input", () => {
+      const card = input.closest('.cc-checkpoint-card');
+      const label = card?.querySelector('[data-checkpoint-hour-explanation]');
+      const hour = Number(input.value);
+      if (label) label.textContent = Number.isSafeInteger(hour) && hour > 0
+        ? `At ${hour} hours of progress, resolve this checkpoint before starting hour ${hour + 1}. This is not a recurring interval.`
+        : "Enter the exact crafting hour when this checkpoint must be resolved.";
+    }));
     updateProgressVisibility();
     root.querySelectorAll('[data-resolution-rerender]').forEach(input => input.addEventListener("change", () => {
       this.#syncDraftFromForm();
@@ -339,7 +348,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       milestones.push({ checkpointId: foundry.utils.randomID(16), hour,
         type: this.draft.project.progressCheck.type, id: this.draft.project.progressCheck.id,
         dc: this.draft.project.progressCheck.dc,
-        requiresCheck: Boolean(this.draft.project.progressCheck.hourlyRequired),
+        requiresCheck: true, // new milestone defaults to a check; GM may uncheck for workstation-only
         workstation: { required: false, name: "" } });
       this.draft.project.progressCheck.milestones = milestones;
       this.#rerenderPreservingScroll();
@@ -525,7 +534,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this.draft.description = root.querySelector('[name="description"]')?.value ?? this.draft.description ?? "";
     this.draft.craftingMode = root.querySelector('[name="craftingMode"]')?.value === "project" ? "project" : "timed";
     const craftingTimeInput = root.querySelector('[name="craftingTime"]');
-    if (craftingTimeInput) this.draft.craftingTime = Math.max(0, Math.round((Number(craftingTimeInput.value) || 0) * 3600));
+    if (craftingTimeInput) this.draft.craftingTime = Math.max(0, Math.round(Number(craftingTimeInput.value) || 0));
     const project = foundry.utils.deepClone(this.draft.project ?? {});
     const requiredWorkInput = root.querySelector('[name="requiredWork"]');
     const cadenceInput = root.querySelector('[name="projectCadence"]');

@@ -137,6 +137,40 @@ export class DowntimeService {
     return next;
   }
 
+  static async commitCraftingWork(actor, { requestId, recipeId, projectId, hours, nextProject }={}) {
+    const key = String(actor?.id ?? "");
+    const prior = this.#actorLocks.get(key) ?? Promise.resolve();
+    const run = prior.catch(() => {}).then(async () => {
+      this.#requireGM();
+      if (!this.active) throw new Error("Downtime was deactivated before the work was committed.");
+      if (!actor || actor.type !== "character" || !game.actors.get(actor.id)) throw new Error("Crafting Character not found.");
+      const amount = Number(hours);
+      if (!Number.isSafeInteger(amount) || amount < 1) throw new Error("Invalid Crafting hours.");
+      const transactionId = `craft:${String(requestId || "")}`;
+      if (!requestId) throw new Error("Crafting transaction requires an ID.");
+      const current = this.state(actor);
+      if (current.ledger.some(row => row.id === transactionId)) throw new Error("This Crafting request has already been committed.");
+      if (current.balance < amount) throw new Error("Insufficient Downtime hours.");
+      const job = actor.getFlag(MODULE_ID, FLAGS.CRAFTING_JOB);
+      if (job?.id !== String(projectId || "") || job.status !== "active" || job.phase !== "working") {
+        throw new Error("The Crafting Project changed before the hours could be committed.");
+      }
+      const now = Date.now();
+      const next = { ...current, balance: current.balance - amount, spent: current.spent + amount,
+        ledger: [...current.ledger, { id: transactionId, type: "spend", hours: amount,
+          reason: `Crafting project: ${String(recipeId ?? "")}`, at: now, userId: game.user.id }] };
+      await actor.update({
+        [`flags.${MODULE_ID}.${FLAGS.DOWNTIME}`]: next,
+        [`flags.${MODULE_ID}.${FLAGS.CRAFTING_JOB}`]: nextProject
+      });
+      Hooks.callAll(`${MODULE_ID}.downtimeChanged`, actor);
+      return next;
+    });
+    this.#actorLocks.set(key, run);
+    try { return await run; }
+    finally { if (this.#actorLocks.get(key) === run) this.#actorLocks.delete(key); }
+  }
+
   static async spendHour(actor, { requestId, recipeId }={}) {
     if (!this.active) return false;
     if (!requestId) throw new Error("A unique crafting request ID is required for Downtime spending.");

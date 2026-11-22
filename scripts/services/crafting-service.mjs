@@ -171,7 +171,7 @@ export class CraftingService {
     return this.#submitRequest(gm, payload);
   }
 
-  static async requestWorkOnProject(actor) {
+  static async requestWorkOnProject(actor, hours=1) {
     this.#assertCharacter(actor);
     const gm = this.#requireActiveGM();
     const project = this.project(actor);
@@ -180,7 +180,8 @@ export class CraftingService {
     const recipe = RecipeService.snapshot(project.recipe);
     const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
     if (this.#pendingCheckpoint(project, RecipeService.normalizeProject(recipe.project))) throw new Error("Resolve the pending checkpoint before continuing work.");
-    if (!(DowntimeService.active ? DowntimeService.canWork(actor) : project.workAvailable)) throw new Error(visibility.craftingTime
+    if (DowntimeService.active && !DowntimeService.canWork(actor)) throw new Error("No Downtime hours remain. Ask the GM to grant more crafting hours.");
+    if (!DowntimeService.active && !project.workAvailable) throw new Error(visibility.craftingTime
       ? `Another ${this.#cadenceLabel(project.cadence)} is required before more work can be performed.`
       : "Another work opportunity is required before more work can be performed.");
 
@@ -188,7 +189,14 @@ export class CraftingService {
     const projectConfig = RecipeService.normalizeProject(recipe.project);
     if (this.#pendingCheckpoint(project, projectConfig)) throw new Error("Resolve the pending checkpoint before continuing work.");
     const checkApplies = this.#progressCheckApplies(project, projectConfig);
+    const count = Number(hours);
+    if (!Number.isSafeInteger(count) || count < 1) throw new Error("Enter a positive whole number of crafting hours.");
+    if (DowntimeService.active) {
+      const limit = this.#maxDowntimeWorkHours(actor, project, projectConfig);
+      if (count > limit) throw new Error(`Only ${limit} crafting hour${limit === 1 ? "" : "s"} can be worked before the next mandatory checkpoint, or before credit runs out.`);
+    } else if (count !== 1) throw new Error("Working multiple hours requires active Downtime.");
     const payload = this.#baseRequest(REQUEST_PROJECT_WORK, actor, recipe.id, project.id);
+    payload.workHours = count;
     payload.rollMessageId = null;
     if (checkApplies) {
       const roll = await this.#performRoll(actor, recipe, projectConfig.progressCheck, "progress", payload.requestId, {
@@ -243,6 +251,7 @@ export class CraftingService {
     const recipe = RecipeService.snapshot(project.recipe);
     const config = RecipeService.normalizeProject(recipe.project);
     const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
+    if (DowntimeService.active) throw new Error("Extra Effort is not available during Downtime.");
     if (!config.extraEffort.enabled) throw new Error("This Recipe does not allow Extra Effort.");
     if (this.#pendingCheckpoint(project, config)) throw new Error("Resolve the pending checkpoint before Extra Effort.");
     if (!project.extraEffortAvailable) throw new Error("Extra Effort is not available for the current Crafting Hour.");
@@ -336,7 +345,7 @@ export class CraftingService {
     const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
     return {
       ...recipe,
-      craftingHours: Math.round((Number(recipe.craftingTime) || 0) / 3600 * 1000000) / 1000000,
+      craftingSeconds: Math.max(0, Number(recipe.craftingTime) || 0),
       playerVisibility: visibility,
       project,
       ingredientRows: rows,
@@ -375,7 +384,8 @@ export class CraftingService {
     const reserved = this.#reservedSummary(project.reservedMaterials ?? []);
     const downtimeActive = DowntimeService.active;
     const downtimeBalance = DowntimeService.available(actor);
-    const workAvailable = downtimeActive ? downtimeBalance > 0 : Boolean(project.workAvailable);
+    const maxWorkHours = downtimeActive ? this.#maxDowntimeWorkHours(actor, project, config) : 1;
+    const workAvailable = downtimeActive ? maxWorkHours > 0 : Boolean(project.workAvailable);
     const finalAvailable = Boolean(project.finalAvailable) || (downtimeActive && downtimeBalance > 0);
     const pendingCheckpoint = this.#pendingCheckpoint(project, config);
     const checkpointReady = Boolean(pendingCheckpoint && this.#checkpointReady(actor, project, pendingCheckpoint));
@@ -392,7 +402,7 @@ export class CraftingService {
     else if (project.phase === "readyFinal") {
       if (finalAvailable) stateLabel = visibility.craftingCheck ? "Ready for Final Check" : "Ready to Complete";
       else stateLabel = visibility.craftingTime ? `Waiting for ${this.#cadenceLabel(project.cadence)}` : "Not Available Yet";
-    } else if (project.extraEffortAvailable && config.extraEffort.enabled) stateLabel = visibility.extraEffort ? "Extra Effort Available" : "In Progress";
+    } else if (!downtimeActive && project.extraEffortAvailable && config.extraEffort.enabled) stateLabel = visibility.extraEffort ? "Extra Effort Available" : "In Progress";
     else if (workAvailable) stateLabel = "Work Available";
     else stateLabel = downtimeActive ? "Waiting for Downtime Credit" : visibility.craftingTime ? `Waiting for ${this.#cadenceLabel(project.cadence)}` : "Work Not Available Yet";
     return {
@@ -404,7 +414,7 @@ export class CraftingService {
       requiredWork,
       completedWork,
       progressPercent,
-      workAvailable, finalAvailable, downtimeActive, downtimeBalance,
+      workAvailable, finalAvailable, downtimeActive, downtimeBalance, maxWorkHours,
       pendingCheckpoint: checkpointDisplay, checkpointReady, milestoneRows,
       stateLabel,
       cadenceLabel: this.#cadenceLabel(project.cadence),
@@ -731,7 +741,14 @@ export class CraftingService {
     const recipe = RecipeService.snapshot(project.recipe);
     const config = RecipeService.normalizeProject(recipe.project);
     if (this.#pendingCheckpoint(project, config)) throw new Error("A checkpoint must be resolved before any more work.");
+    const count = Number(request.workHours ?? 1);
+    if (!Number.isSafeInteger(count) || count < 1) throw new Error("Invalid number of crafting hours.");
+    if (!DowntimeService.active && count !== 1) throw new Error("Multiple crafting hours require active Downtime.");
+    if (DowntimeService.active && count > this.#maxDowntimeWorkHours(actor, project, config)) throw new Error("Requested hours exceed the available Downtime or the next checkpoint.");
     const checkApplies = this.#progressCheckApplies(project, config);
+    // During Downtime, unrolled hours can be committed together as one Actor update.
+    // Hourly checks still require one separate character-sheet roll per hour.
+    if (DowntimeService.active && !checkApplies) return this.#executeDowntimeBatchWork(request, actor, project, recipe, config, count);
     const rollResult = checkApplies
       ? await this.#validateRoll(actor, recipe, requester, request, config.progressCheck, "progress", project.id)
       : { success: true, total: null, message: null };
@@ -742,6 +759,55 @@ export class CraftingService {
     project.updatedAt = this.serverTime();
     await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
     return this.#applyProgressAttempt(actor, project, recipe, { checkApplies, rollResult, initial: false });
+  }
+
+  static async #executeDowntimeBatchWork(request, actor, project, recipe, config, hours) {
+    if (!DowntimeService.active) throw new Error("Downtime is not active.");
+    if (this.#progressCheckApplies(project, config)) throw new Error("Hourly Progress Checks must be rolled separately.");
+    const limit = this.#maxDowntimeWorkHours(actor, project, config);
+    if (hours < 1 || hours > limit) throw new Error(`Work is limited to ${limit} h before the next checkpoint or available balance.`);
+    const start = Math.max(0, Number(project.completedWork) || 0);
+    const gained = this.#addMilestoneAwareProgress(project, config, hours);
+    // Downtime never offers Extra Effort. Existing recipe settings remain intact.
+    project.workAvailable = false;
+    project.extraEffortAvailable = false;
+    project.extraEffortUsedThisPeriod = false;
+    project.normalProgressThisPeriod = gained;
+    project.updatedAt = this.serverTime();
+    project.lastAttempt = { stage: "progress", success: true, hoursWorked: hours, at: this.serverTime(), downtime: true };
+    const checkpoint = this.#pendingCheckpoint(project, config);
+    const atEnd = project.completedWork >= project.requiredWork && !checkpoint;
+    if (atEnd) {
+      project.extraEffortAvailable = false;
+      project.phase = "readyFinal";
+      project.finalAvailable = true;
+    }
+    // One authenticated GM Actor update commits both the ledger debit and progress.
+    // Manager grants/revocations use the same per-Actor Downtime lock.
+    await DowntimeService.commitCraftingWork(actor, {
+      requestId: request.requestId, recipeId: recipe.id, projectId: project.id,
+      hours, nextProject: project
+    });
+    const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
+    const facts = [];
+    if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork} h`);
+    if (visibility.craftingTime) facts.push(`Downtime spent: ${hours} h`);
+    if (checkpoint) {
+      await this.#postProjectMessage(actor, recipe, "Checkpoint Reached", `Worked ${hours} h; checkpoint at ${checkpoint.hour} h is awaiting resolution.`);
+      return { outcome: "checkpoint-pending", project: this.prepareProjectForActor(actor, project),
+        feedback: this.#feedback("Checkpoint Reached", `Worked ${hours} h (${start} → ${project.completedWork} h). Resolve the checkpoint at ${checkpoint.hour} h before continuing.`, facts, "info", "fa-solid fa-flag") };
+    }
+    if (atEnd) {
+      if (!RecipeService.normalizeCraftingResolution(recipe.craftingResolution).check.required || project.finalPolicy?.automaticSuccess) {
+        return this.#completeProject(actor, project, recipe, { success: true }, { feedbackFacts: facts, completedBy: "downtime" });
+      }
+      await this.#postProjectMessage(actor, recipe, "Project Work Complete", `Worked ${hours} h. The Final Crafting Check is ready.`);
+      return { outcome: "ready-final", project: this.prepareProjectForActor(actor, project),
+        feedback: this.#feedback("Work Complete", `Worked ${hours} h. The project is ready for its Final Crafting Check.`, facts, "success", "fa-solid fa-hammer") };
+    }
+    await this.#postProjectMessage(actor, recipe, "Downtime Progress", `Worked ${hours} h on the Project.`);
+    return { outcome: "progress", project: this.prepareProjectForActor(actor, project),
+      feedback: this.#feedback("Downtime Work Complete", `Worked ${hours} h (${start} → ${project.completedWork} h).`, facts, "success", "fa-solid fa-hammer") };
   }
 
   static async #executeProjectCheckpoint(request) {
@@ -840,6 +906,7 @@ export class CraftingService {
 
     const recipe = RecipeService.snapshot(project.recipe);
     const config = RecipeService.normalizeProject(recipe.project);
+    if (DowntimeService.active) throw new Error("Extra Effort is not available during Downtime.");
     if (!config.extraEffort.enabled) throw new Error("This Recipe does not allow Extra Effort.");
     if (this.#pendingCheckpoint(project, config)) throw new Error("A checkpoint must be resolved before Extra Effort.");
     const rollResult = await this.#validateRoll(actor, recipe, requester, request, config.extraEffort, "extra", project.id);
@@ -982,7 +1049,7 @@ export class CraftingService {
       }
       if (failure.mode === "regress") project.completedWork = Math.max(0, Number(project.completedWork || 0) - failure.regressBy);
       project.workAvailable = false;
-      project.extraEffortAvailable = Boolean(config.extraEffort.enabled);
+      project.extraEffortAvailable = Boolean(config.extraEffort.enabled && !DowntimeService.active);
       project.extraEffortUsedThisPeriod = false;
       project.updatedAt = this.serverTime();
       project.normalProgressThisPeriod = 0;
@@ -997,7 +1064,7 @@ export class CraftingService {
         ? `Progress lost: ${failure.regressBy} Crafting Hour${failure.regressBy === 1 ? "" : "s"}`
         : "No progress was gained or lost.");
       if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork} h`);
-      if (config.extraEffort.enabled && visibility.extraEffort) facts.push("Extra Effort is available for this Crafting Hour.");
+      if (!DowntimeService.active && config.extraEffort.enabled && visibility.extraEffort) facts.push("Extra Effort is available for this Crafting Hour.");
       await this.#postProjectMessage(actor, recipe, visibility.progressCheck ? "Progress Check Failed" : "Project Work", detail);
       return {
         outcome: "progress-failure",
@@ -1012,13 +1079,13 @@ export class CraftingService {
 
     this.#addMilestoneAwareProgress(project, config, 1);
     project.workAvailable = false;
-    project.extraEffortAvailable = Boolean(config.extraEffort.enabled && project.completedWork < project.requiredWork);
+    project.extraEffortAvailable = Boolean(config.extraEffort.enabled && !DowntimeService.active && project.completedWork < project.requiredWork);
     project.extraEffortUsedThisPeriod = false;
     project.normalProgressThisPeriod = 1;
     project.updatedAt = this.serverTime();
     project.lastAttempt = { stage: "progress", success: true, total: rollResult.total, dc: checkApplies ? config.progressCheck.dc : null, at: this.serverTime(), initial };
     if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork} h`);
-    if (project.extraEffortAvailable && visibility.extraEffort) facts.push("Extra Effort is available for this Crafting Hour.");
+    if (!DowntimeService.active && project.extraEffortAvailable && visibility.extraEffort) facts.push("Extra Effort is available for this Crafting Hour.");
     if (this.#pendingCheckpoint(project, config)) {
       await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
       await this.#postProjectMessage(actor, recipe, "Checkpoint Reached", "A mandatory project checkpoint is ready for resolution.");
@@ -1287,6 +1354,19 @@ export class CraftingService {
       "Workstation Access Requested",
       "The request is waiting in Crafting Core → GM Manager → Workstation Access. The GM may grant access, then you can retry this action. No hours or materials were spent.",
       [], "info", "fa-solid fa-screwdriver-wrench") };
+  }
+
+  static #maxDowntimeWorkHours(actor, project, config) {
+    if (!DowntimeService.active || project?.phase !== "working") return 0;
+    if (this.#pendingCheckpoint(project, config)) return 0;
+    const completed = Math.max(0, Number(project.completedWork) || 0);
+    const required = Math.max(1, Number(project.requiredWork || config.requiredWork) || 1);
+    const next = config.progressCheck.required && config.progressCheck.timing === "milestones"
+      ? config.progressCheck.milestones.find(m => m.hour > completed && !this.#checkpointPassed(project, m, config)) : null;
+    const remaining = Math.max(0, Math.floor(Math.min(required - completed, (next?.hour ?? required) - completed)));
+    const available = Math.max(0, Math.floor(DowntimeService.available(actor)));
+    // A test on every hour cannot be bypassed by spending hours in a batch.
+    return Math.min(remaining, available, this.#progressCheckApplies(project, config) ? 1 : remaining);
   }
 
   static #progressCheckApplies(project, config) {

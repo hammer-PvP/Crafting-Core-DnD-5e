@@ -779,7 +779,7 @@ export class KnowledgeItemService {
         const cadence = project.cadence === "short" ? "Short Rest" : "Long Rest";
         lines.push(`<p><strong>Crafting Project:</strong> ${project.requiredWork} Crafting Hour${project.requiredWork === 1 ? "" : "s"} · ${cadence} cadence</p>`);
       } else {
-        lines.push(`<p><strong>Crafting Time:</strong> ${Math.round((Math.max(0, Number(recipe?.craftingTime) || 0) / 3600) * 1000000) / 1000000} hours</p>`);
+        lines.push(`<p><strong>Crafting Time:</strong> ${Math.max(0, Number(recipe?.craftingTime) || 0)} seconds</p>`);
       }
     }
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.2 - Timed Seconds, Downtime Batch Work & UI Polish
+
+- Timed crafting duration inputs, Recipe listings, player recipe details, and Knowledge Sources now display **seconds** again. Existing `craftingTime` values were already stored in seconds and are not migrated or multiplied; the player-facing countdown remains unchanged. Persistent Crafting Projects continue to use hours.
+- Restored distinctive **Crafting (bronze), Generate (green) and Downtime Manager (amber)** colors in the grouped Item Directory controls without reintroducing truncated labels or modifying buttons from other modules.
+- Clarified the editor labels for **Every Crafting Hour** versus **Specific Milestones**; each milestone indicates the exact hour at which its test/workstation must be resolved, not a recurring interval. These are presentation changes; existing configuration and failure outcomes remain intact.
+- Added a compact **Hours** field (default 1) and **MAX** action while Downtime is active. The active GM validates the requested amount against the credit balance, remaining project time, and the next pending checkpoint. Hourly Progress Checks are limited to one hour per action and cannot be skipped.
+- Multi-hour work without hourly checks is **committed atomically** on the Character Actor, updating the project and Downtime ledger together. The transaction is checked against the latest balance and project identity; repeated request IDs cannot debit twice. Milestone gates, workstation permissions, and final checks remain unchanged.
+- **Extra Effort** is now exclusively a rest-based crafting action. During Downtime its button, active-project summary and service action are unavailable, while Recipe settings remain stored for when Downtime ends.
+- Preserved existing recipes, learned knowledge, reserved materials, product output, and project snapshots. Added synthetic regression checks for hourly/milestone limits, multi-hour progress, completion, transaction deduplication, and Timed seconds. Live Foundry V14 testing remains required.
+
+
 ## 0.7.1 - Responsive Milestones & GM Workstation Access
 
 - Fixed the Recipe Editor so **Require Progress Checks** and **Specific Milestones** are immediate, independent checkboxes. Hourly checks remain the default when enabled; the Add Checkpoint button no longer depends on toggling a workstation control. Saved milestones remain available when the GM switches modes, without unnecessary full-window rerenders.
