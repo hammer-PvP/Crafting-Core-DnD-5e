@@ -21,9 +21,12 @@ import { ProductSourceService } from "./services/product-source-service.mjs";
 import { ContentPackService } from "./services/content-pack-service.mjs";
 import { CatalogAuditService } from "./services/catalog-audit-service.mjs";
 import { CanonicalAssetsMigrationService } from "./services/canonical-assets-migration-service.mjs";
+import { DowntimeService } from "./services/downtime-service.mjs";
+import { DowntimeManagerApp } from "./apps/downtime-manager-app.mjs";
 
 let app = null;
 let generatorApp = null;
+let downtimeManager = null;
 
 const SUPPORT_URL = "https://buymeacoffee.com/hammer.pvp";
 
@@ -53,9 +56,18 @@ function openMaterialGenerator() {
   }
 }
 
+function openDowntimeManager() {
+  if (!game.user?.isGM) return ui.notifications.warn("Only a GM can administer Crafting Downtime.");
+  downtimeManager ??= new DowntimeManagerApp();
+  downtimeManager.render({ force: true });
+  return downtimeManager;
+}
+
 const API = {
   open: openCraftingCore,
   openGenerator: openMaterialGenerator,
+  openDowntimeManager,
+  get downtime() { return game.user?.isGM ? DowntimeService : undefined; },
   crafting: CraftingService,
   knowledge: KnowledgeItemService,
   get recipes() { return game.user?.isGM ? RecipeService : undefined; },
@@ -104,6 +116,7 @@ Hooks.once("init", () => {
   runInitStep("curated equipment settings", () => CuratedEquipmentService.registerSettings());
   runInitStep("content architecture settings", () => ContentPackService.registerSettings());
   runInitStep("v0.6.1 canonical artwork migration setting", () => CanonicalAssetsMigrationService.registerSettings());
+  runInitStep("Downtime management settings", () => DowntimeService.registerSettings());
   runInitStep("Crafting Core settings menu", () => game.settings.registerMenu(MODULE_ID, "craftingCoreSettings", {
     name: "Crafting Core",
     label: "Configure Crafting Core",
@@ -280,7 +293,17 @@ function injectItemDirectoryButton(directoryApp, element) {
     openMaterialGenerator();
   });
 
-  wrapper.append(coreButton, generatorButton);
+  const downtimeButton = document.createElement("button");
+  downtimeButton.type = "button";
+  downtimeButton.className = "crafting-core-directory-button crafting-core-directory-downtime";
+  downtimeButton.dataset.tooltip = "Crafting Core — GM Downtime Manager";
+  downtimeButton.innerHTML = '<i class="fa-solid fa-hourglass-half" inert></i><span>Downtime</span>';
+  downtimeButton.addEventListener("click", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    openDowntimeManager();
+  });
+  wrapper.append(coreButton, generatorButton, downtimeButton);
   actions.append(wrapper);
 }
 

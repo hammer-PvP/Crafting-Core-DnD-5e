@@ -13,13 +13,22 @@ Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient
 
 ## Compatibility
 
-- **Crafting Core:** v0.6.1
+- **Crafting Core:** v0.6.2
 - **Foundry VTT:** minimum 14.367, verified target 14.370
 - **D&D 5e:** 6.0.0-6.1.999, verified target 6.1.0
 - **Item Piles:** optional integration for Item Pile generation and Token Harvest
 - **DnD 5e Item Creator:** optional for the core module; **0.7.1+ is required for the official persistent Curated Food and Alcohol Products**
 
 Crafting Core v0.6.0 separates the **crafting engine from optional content**. A fresh World starts with no forced Materials, Products, Recipes, or Hammer harvest catalog. GMs can build a complete World-owned crafting system from scratch, register existing D&D5e Items, or install optional Content Packs to reproduce the full curated setup used by the project. Existing Worlds migrate in-place: document IDs/UUIDs, Recipe/Product identities, learned Character knowledge, and active Projects are preserved.
+
+### v0.6.2 — Compact Character Crafting & Downtime Management
+
+- Character Crafting Projects now show their time/progress **in hours**, with the previous 1 Work Period mapped to 1 hour. Existing Recipe and Project numbers, including saved `requiredWork`/`completedWork`, are preserved in place. Timed Recipes continue using persisted seconds internally while the Builder displays hours (fractional hours supported).
+- Character crafting uses a compact, responsive, two-column Ingredient layout. Ingredient groups, the description, and Reserved Materials are independently collapsible; Fixed, OR, and Mix/Pool behavior is preserved. The sheet keeps material icons readable and records collapse state across sheet re-renders.
+- GMs can open **Downtime Manager** from the Item Directory. Configure eligible Actor folders / Group Actors; check individual Characters without losing list scroll position; grant N hours **per selected Character**; or revoke remaining credits safely. A transaction history on each Actor prevents loss of crafting history.
+- **Downtime Inactive** is the default: crafting works exactly as before via the Recipe's Long/Short Rest cadence, and credited hours remain frozen. **Downtime Active** explicitly unlocks spending each Character's available hours for Project work, one hour per normal attempt (including Project start), with all progress checks, Extra Effort, failure, and completion logic preserved. No historic credits or automatic rest credits are invented.
+- Run **Resync Material Sources** manually from Crafting Core settings to update existing inventory copies' canonical images, managed sources and metadata, including Vehicles, Containers, and unlinked Tokens. There is **no** automatic inventory scan. **Organize Equipment** is a separate manual folder-only maintenance operation, while new SRD Equipment installs use the organized folders automatically.
+- World of Warcraft, Phantyr, new Rule Profiles, and expanded Gathering & Harvesting are intentionally out of scope.
 
 ### v0.6.1 — Canonical Artwork Library
 
@@ -74,7 +83,7 @@ Crafting result dialogs are queued one at a time and stay above ordinary sheets 
 
 Recipes can model ingredient requirements as **Fixed**, **OR**, or **Mix / Pool** slots. OR alternatives may require different quantities; Mix / Pool slots let the crafter allocate any combination of the listed equivalent Materials to the required total. Project start freezes the actual allocation selected by the crafter.
 
-The optional **Equipment Crafting** library discovers mundane Weapons, Armor, Shields, and Ammunition directly from the installed D&D5e SRD 5.2 `equipment24` Compendium and creates +0 / +1 / +2 / +3 Products and Blueprint Recipes. Equipment Projects use 2 / 4 / 6 / 8 Long-Rest Work Periods, Constitution DC 12 Extra Effort (+1 additional progress on success), two relevant alternative tool proficiencies, and DC 13 retry-only finalization for non-proficient crafters. Ammunition is produced in batches of 10.
+The optional **Equipment Crafting** library discovers mundane Weapons, Armor, Shields, and Ammunition directly from the installed D&D5e SRD 5.2 `equipment24` Compendium and creates +0 / +1 / +2 / +3 Products and Blueprint Recipes. Equipment Projects use 2 / 4 / 6 / 8 crafting hours (Long Rest cadence by default), Constitution DC 12 Extra Effort (+1 additional progress on success), two relevant alternative tool proficiencies, and DC 13 retry-only finalization for non-proficient crafters. Ammunition is produced in batches of 10.
 
 ### Product source synchronization
 

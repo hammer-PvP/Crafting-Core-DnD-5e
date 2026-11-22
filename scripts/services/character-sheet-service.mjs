@@ -3,6 +3,7 @@ import { CraftingService } from "./crafting-service.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
 import { RecipeService } from "./recipe-service.mjs";
 import { ResultDialog } from "../ui/result-dialog.mjs";
+import { DowntimeService } from "./downtime-service.mjs";
 
 export class CharacterSheetService {
   static #selection = new Map();
@@ -10,6 +11,7 @@ export class CharacterSheetService {
   static #ingredientSelections = new Map();
   static #artisanSignatures = new Map();
   static #patched = false;
+  static #collapsed = new Map();
 
   static patchDnd5eSheet() {
     if (this.#patched) return true;
@@ -53,12 +55,15 @@ export class CharacterSheetService {
       if (actor?.type !== "character") return;
       const flagChanges = changes?.flags?.[MODULE_ID];
       if (!flagChanges) return;
-      const watched = [FLAGS.CRAFTING_JOB, FLAGS.LEARNED_RECIPES, FLAGS.KNOWN_RECIPES];
+      const watched = [FLAGS.CRAFTING_JOB, FLAGS.LEARNED_RECIPES, FLAGS.KNOWN_RECIPES, FLAGS.DOWNTIME];
       const relevant = watched.some(flag => (flag in flagChanges) || (`-=${flag}` in flagChanges));
       if (!relevant) return;
       this.#renderOpenCharacterSheets(actor);
     });
 
+    Hooks.on(`${MODULE_ID}.downtimeChanged`, () => {
+      for (const app of Object.values(ui.windows ?? {})) if (this.#isCharacterSheet(app)) app.render({ force: true });
+    });
     Hooks.on(`${MODULE_ID}.recipesChanged`, () => {
       for (const app of Object.values(ui.windows ?? {})) if (this.#isCharacterSheet(app)) app.render({ force: true });
     });
@@ -160,7 +165,9 @@ export class CharacterSheetService {
         selectedIsActiveProject,
         timedJob,
         hasActiveProject: Boolean(activeProject),
-        selectedCanStart: Boolean(selectedKnown && prepared?.canCraft && !busy),
+        selectedCanStart: Boolean(selectedKnown && prepared?.canCraft && !busy && (prepared.craftingMode !== "project" || !DowntimeService.active || DowntimeService.available(actor) > 0)),
+        downtimeActive: DowntimeService.active,
+        downtimeHours: DowntimeService.available(actor),
         selectedBlockedByOtherProject: Boolean(activeProject && prepared && activeProject.recipeId !== prepared.id)
       }
     };
@@ -185,6 +192,7 @@ export class CharacterSheetService {
     });
 
     this.#bindTransientCraftInputs(root, app);
+    this.#bindCollapsibleSections(root, app);
 
     this.#bindAsync(root, app, "craft", async actor => {
       const sheetKey = app.id ?? actor.id;
@@ -278,6 +286,27 @@ export class CharacterSheetService {
         }
       });
     }
+  }
+
+  static #bindCollapsibleSections(root, app) {
+    const actor = app.actor ?? app.document;
+    const prefix = `${app.id ?? actor?.id}:${this.#selection.get(app.id ?? actor?.id) ?? ""}:`;
+    const details = [...root.querySelectorAll(".crafting-core-tab details[data-cc-collapse]")];
+    for (const detail of details) {
+      const id = prefix + detail.dataset.ccCollapse;
+      if (this.#collapsed.has(id)) detail.open = !this.#collapsed.get(id);
+      detail.addEventListener("toggle", () => this.#collapsed.set(id, !detail.open));
+    }
+    root.querySelectorAll(".crafting-core-tab [data-cc-collapse-all]").forEach(button => {
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        const open = button.dataset.ccCollapseAll === "open";
+        for (const detail of details.filter(d => d.hasAttribute("data-cc-material-card"))) {
+          detail.open = open;
+          this.#collapsed.set(prefix + detail.dataset.ccCollapse, !open);
+        }
+      });
+    });
   }
 
   static async #ensureFreshSelection(app, actor, recipeId) {

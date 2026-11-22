@@ -99,9 +99,15 @@
         <small><strong>{{materialSources.linkedMaterials}}</strong> linked Materials · <strong>{{materialSources.creatureLinks}}</strong> Actor links</small>
       </div>
       <div class="cc-settings-admin-row">
-        <p>Rebuild the World-specific <strong>Material → Creature</strong> index from the current Harvest Profiles. This is a full rebuild: stale links are removed and current Compendium Actor UUIDs are written back to Materials.</p>
+        <p>Rebuild Material → Creature sources from the existing Harvest Profiles, then sync canonical icons and generated Material Sources into Character, vehicle, World Item, and unlinked-token inventories. This runs <strong>only when the GM clicks</strong>; it never scans on startup.</p>
         <div class="cc-settings-admin-actions">
-          <button type="button" data-action="resync-material-sources"><i class="fa-solid fa-arrows-rotate"></i> Resync Material Sources</button>
+          <button type="button" data-action="resync-material-sources"><i class="fa-solid fa-arrows-rotate"></i> Resync Material Sources &amp; Inventories</button>
+        </div>
+      </div>
+      <div class="cc-settings-admin-row">
+        <p>Organize existing curated Equipment Products and Blueprints into Simple/Martial, Melee/Ranged, Light/Medium/Heavy and Shields. Folder changes only; no Items are recreated.</p>
+        <div class="cc-settings-admin-actions">
+          <button type="button" data-action="organize-equipment"><i class="fa-solid fa-folder-tree"></i> Organize Equipment Folders</button>
         </div>
       </div>
     </section>

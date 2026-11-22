@@ -288,26 +288,86 @@ export class CuratedEquipmentService {
     return this.#balancedSlot({ label: spec.label, ids: spec.ids, quantity: Math.max(1, Math.round(cost / spec.unit)), materialDocs, slotId: `${seed}-enhancement` });
   }
 
-  static #productFolders() {
+  static #subfolders(prefix) {
     return [
-      { key: "equipment", name: "Equipment" },
-      { key: "equipment:weapons", name: "Weapons", parent: "equipment" },
-      { key: "equipment:armor", name: "Armor & Shields", parent: "equipment" },
-      { key: "equipment:ammo", name: "Ammunition", parent: "equipment" }
+      { key: `${prefix}:weapons`, name: "Weapons", parent: prefix },
+      { key: `${prefix}:weapons:simpleM`, name: "Simple Melee", parent: `${prefix}:weapons` },
+      { key: `${prefix}:weapons:simpleR`, name: "Simple Ranged", parent: `${prefix}:weapons` },
+      { key: `${prefix}:weapons:martialM`, name: "Martial Melee", parent: `${prefix}:weapons` },
+      { key: `${prefix}:weapons:martialR`, name: "Martial Ranged", parent: `${prefix}:weapons` },
+      { key: `${prefix}:armor`, name: "Armor & Shields", parent: prefix },
+      { key: `${prefix}:armor:light`, name: "Light Armor", parent: `${prefix}:armor` },
+      { key: `${prefix}:armor:medium`, name: "Medium Armor", parent: `${prefix}:armor` },
+      { key: `${prefix}:armor:heavy`, name: "Heavy Armor", parent: `${prefix}:armor` },
+      { key: `${prefix}:armor:shield`, name: "Shields", parent: `${prefix}:armor` },
+      { key: `${prefix}:ammo`, name: "Ammunition", parent: prefix }
     ];
   }
+  static #productFolders() { return [{ key: "equipment", name: "Equipment" }, ...this.#subfolders("equipment")]; }
   static #knowledgeFolders() {
     return [
       { key: "curated", name: "Crafting Core Curated" },
       { key: "curated:equipment", name: "Equipment", parent: "curated" },
-      { key: "curated:equipment:weapons", name: "Weapons", parent: "curated:equipment" },
-      { key: "curated:equipment:armor", name: "Armor & Shields", parent: "curated:equipment" },
-      { key: "curated:equipment:ammo", name: "Ammunition", parent: "curated:equipment" }
+      ...this.#subfolders("curated:equipment")
     ];
   }
-  static #folderKey(category, knowledge=false) {
-    const suffix = category === "weapon" ? "weapons" : category === "ammunition" ? "ammo" : "armor";
-    return knowledge ? `curated:equipment:${suffix}` : `equipment:${suffix}`;
+  static #folderKey(category, knowledge=false, item=null) {
+    const prefix = knowledge ? "curated:equipment" : "equipment";
+    if (category === "ammunition") return `${prefix}:ammo`;
+    if (category === "shield") return `${prefix}:armor:shield`;
+    const type = String(item?.system?.type?.value ?? "");
+    if (category === "weapon") return `${prefix}:weapons:${WEAPON_TYPES.has(type) ? type : "martialM"}`;
+    if (["light", "medium", "heavy"].includes(type)) return `${prefix}:armor:${type}`;
+    return `${prefix}:armor`;
+  }
+
+  /** Manual, folder-only cleanup of already installed curated Equipment and Blueprints. */
+  static async organizeInstalled({ onProgress=null }={}) {
+    if (!game.user?.isGM) throw new Error("Only a GM can organize curated Equipment.");
+    const productPack = ProductSourceService.productsPack();
+    const knowledgePack = KnowledgeItemService.pack();
+    if (!productPack) return { products: 0, blueprints: 0 };
+    const docs = await productPack.getDocuments();
+    const managed = docs.filter(d => String(d.getFlag(MODULE_ID, FLAGS.CONTENT_PACK_ID) ?? "") === "srd-equipment" && d.getFlag(MODULE_ID, FLAGS.PRODUCT_MANAGED));
+    if (!managed.length) return { products: 0, blueprints: 0 };
+    const prodFolders = await CompendiumService.ensurePackFolders(productPack, this.#productFolders());
+    const prodKeys = new Map();
+    const changes = [];
+    for (const d of managed) {
+      const cat = String(d.getFlag(MODULE_ID, FLAGS.PRODUCT_SUBCATEGORY) ?? "");
+      const key = this.#folderKey(cat, false, d);
+      const dest = prodFolders.get(key) ?? prodFolders.get("equipment");
+      const productId = String(d.getFlag(MODULE_ID, FLAGS.PRODUCT_ID) ?? "");
+      prodKeys.set(`equipment-recipe-${productId.replace(/^equipment-/, "")}`, key);
+      if (dest && d.folder?.id !== dest.id) changes.push({ _id:d.id, folder:dest.id });
+    }
+    await this.#updateFolderOnly(productPack, changes);
+    onProgress?.({ phase:"Organizing Products", label:`${changes.length} Equipment Products`, current:1,total:2,overallCurrent:1,overallTotal:2 });
+    let blueprintChanges = [];
+    if (knowledgePack) {
+      const knowledge = await knowledgePack.getDocuments();
+      const folders = await CompendiumService.ensurePackFolders(knowledgePack, this.#knowledgeFolders());
+      for (const item of knowledge) {
+        const id = String(item.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_RECIPE_ID) ?? "");
+        if (!id.startsWith("equipment-recipe-") || !prodKeys.has(id)) continue;
+        const productKey = prodKeys.get(id);
+        const knowledgeKey = productKey.replace(/^equipment/, "curated:equipment");
+        const dest = folders.get(knowledgeKey) ?? folders.get("curated:equipment");
+        if (dest && item.folder?.id !== dest.id) blueprintChanges.push({ _id:item.id, folder:dest.id });
+      }
+      await this.#updateFolderOnly(knowledgePack, blueprintChanges);
+    }
+    onProgress?.({ phase:"Organizing Blueprints", label:`${blueprintChanges.length} Equipment Blueprints`, current:2,total:2,overallCurrent:2,overallTotal:2 });
+    return { products: changes.length, blueprints: blueprintChanges.length };
+  }
+  static async #updateFolderOnly(pack, updates) {
+    if (!updates.length) return;
+    const wasLocked = Boolean(pack.locked);
+    if (wasLocked) await pack.configure({ locked:false });
+    try {
+      const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
+      for (let i=0;i<updates.length;i+=50) await ItemClass.updateDocuments(updates.slice(i,i+50), { pack:pack.collection });
+    } finally { if (wasLocked) await pack.configure({ locked:true }); }
   }
 
   static #productId(base, bonus) { return `equipment-${slug(base.system?.identifier || base.name)}-${bonus}`; }
@@ -544,7 +604,7 @@ export class CuratedEquipmentService {
       const ItemClass = CONFIG.Item.documentClass ?? Item.implementation ?? Item;
       for (const entry of entries) {
         const id = this.#productId(entry.base, entry.bonus);
-        const folder = folders.get(this.#folderKey(entry.category)) ?? folders.get("equipment") ?? null;
+        const folder = folders.get(this.#folderKey(entry.category, false, entry.base)) ?? folders.get("equipment") ?? null;
         const data = this.#productData(entry.base, entry.bonus, folder?.id ?? null);
         let item = byId.get(id) ?? null;
         if (!item) {
@@ -637,7 +697,7 @@ export class CuratedEquipmentService {
           uuid: existing.uuid, pack: pack.collection, sourceType: "Blueprint",
           publishedAt: Number(existing.getFlag(MODULE_ID, FLAGS.KNOWLEDGE_PUBLISHED_AT)) || Date.now(), updatedAt: Date.now()
         };
-        const folder = folders.get(this.#folderKey(entry.category, true)) ?? folders.get("curated:equipment") ?? null;
+        const folder = folders.get(this.#folderKey(entry.category, true, entry.base)) ?? folders.get("curated:equipment") ?? null;
         const data = KnowledgeItemService.knowledgeItemData(recipe, { folderId: folder?.id ?? null, published: true });
         data.flags[MODULE_ID] = {
           ...(data.flags[MODULE_ID] ?? {}), [FLAGS.CURATED]: true, [FLAGS.CURATED_ID]: recipe.id,

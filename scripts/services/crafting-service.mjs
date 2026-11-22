@@ -4,6 +4,7 @@ import { normalizeItemSourceForDnd5e6 } from "../utils/dnd5e-data.mjs";
 import { KnowledgeItemService } from "./knowledge-item-service.mjs";
 import { MaterialStackService } from "./material-stack-service.mjs";
 import { ProductSourceService } from "./product-source-service.mjs";
+import { DowntimeService } from "./downtime-service.mjs";
 
 const REQUEST_TIMED = "craft-request";
 const REQUEST_PROJECT_START = "craft-project-start";
@@ -19,6 +20,8 @@ export class CraftingService {
   static #pending = new Map();
   static #heartbeat = null;
   static #restHook = null;
+  static #actorLocks = new Map();
+  static #requestResults = new Map();
 
   static ready() {
     game.socket.on(SOCKET_CHANNEL, payload => this.#onSocket(payload));
@@ -128,6 +131,7 @@ export class CraftingService {
     if (!recipe) throw new Error(`${actor.name} has not learned this recipe.`);
     if (recipe.craftingMode !== "project") return this.#requestTimedCraft(actor, recipeId, ingredientSelection, customization);
     if (this.isBusy(actor)) throw new Error(`${actor.name} already has an active crafting project.`);
+    DowntimeService.requireHour(actor);
 
     const evaluation = this.evaluateResolution(actor, recipe);
     if (!evaluation.eligible) throw new Error(evaluation.publicBlockReason || `${actor.name} does not meet this recipe's requirements.`);
@@ -165,7 +169,7 @@ export class CraftingService {
     if (project.phase !== "working") throw new Error("This Project is not waiting for a Work Attempt.");
     const recipe = RecipeService.snapshot(project.recipe);
     const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
-    if (!project.workAvailable) throw new Error(visibility.craftingTime
+    if (!(DowntimeService.active ? DowntimeService.canWork(actor) : project.workAvailable)) throw new Error(visibility.craftingTime
       ? `Another ${this.#cadenceLabel(project.cadence)} is required before more work can be performed.`
       : "Another work opportunity is required before more work can be performed.");
 
@@ -196,7 +200,7 @@ export class CraftingService {
     const config = RecipeService.normalizeProject(recipe.project);
     const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
     if (!config.extraEffort.enabled) throw new Error("This Recipe does not allow Extra Effort.");
-    if (!project.extraEffortAvailable) throw new Error("Extra Effort is not available for the current Work Period.");
+    if (!project.extraEffortAvailable) throw new Error("Extra Effort is not available for the current Crafting Hour.");
 
     const payload = this.#baseRequest(REQUEST_PROJECT_EXTRA, actor, recipe.id, project.id);
     const roll = await this.#performRoll(actor, recipe, config.extraEffort, "extra", payload.requestId, {
@@ -217,7 +221,7 @@ export class CraftingService {
     if (project.phase !== "readyFinal") throw new Error("This Project is not ready for completion.");
     const recipe = RecipeService.snapshot(project.recipe);
     const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
-    if (!project.finalAvailable) throw new Error(visibility.craftingTime
+    if (!(project.finalAvailable || DowntimeService.canWork(actor))) throw new Error(visibility.craftingTime
       ? `Another ${this.#cadenceLabel(project.cadence)} is required before retrying completion.`
       : "Another work opportunity is required before retrying completion.");
 
@@ -286,6 +290,7 @@ export class CraftingService {
     const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
     return {
       ...recipe,
+      craftingHours: Math.round((Number(recipe.craftingTime) || 0) / 3600 * 1000000) / 1000000,
       playerVisibility: visibility,
       project,
       ingredientRows: rows,
@@ -298,7 +303,7 @@ export class CraftingService {
         progressFailureLabel: this.#failureLabel(project.progressCheck.failure, { revealPercent: visibility.progressFailurePercent }),
         extraEffortCheckLabel: RecipeService.checkLabel(project.extraEffort, actor),
         extraEffortFailureLabel: project.extraEffort.failure.mode === "regress"
-          ? `Regress ${project.extraEffort.failure.regressBy} Work Period${project.extraEffort.failure.regressBy === 1 ? "" : "s"}`
+          ? `Regress ${project.extraEffort.failure.regressBy} h of progress`
           : "No Extra Progress",
         finalFailureLabel: recipe.craftingMode === "project"
           ? this.#failureLabel(resolution.failure, { final: true, revealPercent: visibility.failurePercent })
@@ -318,13 +323,17 @@ export class CraftingService {
     const completedWork = Math.clamp(Number(project.completedWork) || 0, 0, requiredWork);
     const progressPercent = Math.clamp((completedWork / requiredWork) * 100, 0, 100);
     const reserved = this.#reservedSummary(project.reservedMaterials ?? []);
+    const downtimeActive = DowntimeService.active;
+    const downtimeBalance = DowntimeService.available(actor);
+    const workAvailable = downtimeActive ? downtimeBalance > 0 : Boolean(project.workAvailable);
+    const finalAvailable = Boolean(project.finalAvailable) || (downtimeActive && downtimeBalance > 0);
     let stateLabel = "In Progress";
     if (project.phase === "readyFinal") {
-      if (project.finalAvailable) stateLabel = visibility.craftingCheck ? "Ready for Final Check" : "Ready to Complete";
+      if (finalAvailable) stateLabel = visibility.craftingCheck ? "Ready for Final Check" : "Ready to Complete";
       else stateLabel = visibility.craftingTime ? `Waiting for ${this.#cadenceLabel(project.cadence)}` : "Not Available Yet";
     } else if (project.extraEffortAvailable && config.extraEffort.enabled) stateLabel = visibility.extraEffort ? "Extra Effort Available" : "In Progress";
-    else if (project.workAvailable) stateLabel = "Work Available";
-    else stateLabel = visibility.craftingTime ? `Waiting for ${this.#cadenceLabel(project.cadence)}` : "Work Not Available Yet";
+    else if (workAvailable) stateLabel = "Work Available";
+    else stateLabel = downtimeActive ? "Waiting for Downtime Credit" : visibility.craftingTime ? `Waiting for ${this.#cadenceLabel(project.cadence)}` : "Work Not Available Yet";
     return {
       ...project,
       recipe,
@@ -334,13 +343,14 @@ export class CraftingService {
       requiredWork,
       completedWork,
       progressPercent,
+      workAvailable, finalAvailable, downtimeActive, downtimeBalance,
       stateLabel,
       cadenceLabel: this.#cadenceLabel(project.cadence),
       progressCheckLabel: RecipeService.checkLabel(config.progressCheck, actor),
       progressFailureLabel: this.#failureLabel(config.progressCheck.failure, { revealPercent: visibility.progressFailurePercent }),
       extraEffortCheckLabel: RecipeService.checkLabel(config.extraEffort, actor),
       extraEffortFailureLabel: config.extraEffort.failure.mode === "regress"
-        ? `Regress ${config.extraEffort.failure.regressBy} Work Period${config.extraEffort.failure.regressBy === 1 ? "" : "s"}`
+        ? `Regress ${config.extraEffort.failure.regressBy} h of progress`
         : "No Extra Progress",
       extraEffortStateLabel: project.extraEffortAvailable ? "Extra Effort Available"
         : project.workAvailable ? "Complete normal work first"
@@ -493,6 +503,25 @@ export class CraftingService {
 
   static async #executeRequest(request) {
     if (!this.#isActiveGM()) throw new Error("Only the active GM may commit a crafting transaction.");
+    const actorId = String(request.actorId ?? "");
+    const requestId = String(request.requestId ?? "");
+    const previous = this.#actorLocks.get(actorId) ?? Promise.resolve();
+    const current = previous.catch(() => {}).then(async () => {
+      if (requestId && this.#requestResults.has(requestId)) return this.#requestResults.get(requestId);
+      const result = await this.#executeRequestUnlocked(request);
+      if (requestId) {
+        this.#requestResults.set(requestId, result);
+        if (this.#requestResults.size > 1000) this.#requestResults.delete(this.#requestResults.keys().next().value);
+      }
+      return result;
+    });
+    this.#actorLocks.set(actorId, current);
+    try { return await current; }
+    finally { if (this.#actorLocks.get(actorId) === current) this.#actorLocks.delete(actorId); }
+  }
+
+  static async #executeRequestUnlocked(request) {
+    if (!this.#isActiveGM()) throw new Error("Only the active GM may commit a crafting transaction.");
     if (request.action === REQUEST_TIMED) return this.#executeTimedCraft(request);
     if (request.action === REQUEST_PROJECT_START) return this.#executeProjectStart(request);
     if (request.action === REQUEST_PROJECT_WORK) return this.#executeProjectWork(request);
@@ -566,6 +595,7 @@ export class CraftingService {
   static async #executeProjectStart(request) {
     const { requester, actor } = this.#requestContext(request);
     if (this.isBusy(actor)) throw new Error(`${actor.name} already has an active crafting project.`);
+    DowntimeService.requireHour(actor);
     const recipe = KnowledgeItemService.recipeForActor(actor, String(request.recipeId ?? ""));
     if (!recipe || recipe.craftingMode !== "project") throw new Error("This is not an available Crafting Project recipe.");
     if (!recipe.result?.uuid && !recipe.result?.sourceUuid && !recipe.result?.fallbackUuid && !recipe.result?.snapshot) throw new Error("The recipe has no result Item configured.");
@@ -590,8 +620,18 @@ export class CraftingService {
     const snapshot = RecipeService.snapshot(recipe);
     // Projects intentionally freeze the Product definition when the Project begins. This keeps
     // existing/in-progress Projects stable while future Projects use the newest synchronized source.
-    const frozenResult = await ProductSourceService.freezeResult(recipe.result);
-    if (snapshot.result) snapshot.result.snapshot = frozenResult.data;
+    let frozenResult;
+    try {
+      frozenResult = await ProductSourceService.freezeResult(recipe.result);
+      if (snapshot.result) snapshot.result.snapshot = frozenResult.data;
+      await DowntimeService.spendHour(actor, { requestId: request.requestId, recipeId: recipe.id });
+    } catch (error) {
+      // In particular, a GM may revoke hours while the character is choosing
+      // materials or resolving a check. Don't strand those reserved ingredients.
+      try { await this.#refundReservedMaterials(actor, reservedMaterials, 0); }
+      catch (refundError) { console.error(`${MODULE_ID} | Failed to refund Project startup materials.`, refundError); }
+      throw error;
+    }
     const project = {
       mode: "project", id: foundry.utils.randomID(20), status: "active", phase: "working",
       recipeId: recipe.id, recipeName: recipe.name, recipe: snapshot,
@@ -612,13 +652,14 @@ export class CraftingService {
     const { requester, actor } = this.#requestContext(request);
     const project = this.project(actor);
     if (!project || project.id !== String(request.projectId ?? "") || project.status !== "active") throw new Error("The active Crafting Project changed.");
-    if (project.phase !== "working" || !project.workAvailable) throw new Error("No Work Attempt is currently available for this Project.");
+    if (project.phase !== "working" || !(DowntimeService.active ? DowntimeService.canWork(actor) : project.workAvailable)) throw new Error("No Work Attempt is currently available for this Project.");
     const recipe = RecipeService.snapshot(project.recipe);
     const config = RecipeService.normalizeProject(recipe.project);
     const checkApplies = this.#progressCheckApplies(project, config);
     const rollResult = checkApplies
       ? await this.#validateRoll(actor, recipe, requester, request, config.progressCheck, "progress", project.id)
       : { success: true, total: null, message: null };
+    await DowntimeService.spendHour(actor, { requestId: request.requestId, recipeId: recipe.id });
     project.workAvailable = false;
     project.extraEffortAvailable = false;
     project.extraEffortUsedThisPeriod = false;
@@ -659,16 +700,16 @@ export class CraftingService {
       project.lastAttempt = { stage: "extra", success: false, total: rollResult.total, dc: config.extraEffort.dc, at: this.serverTime() };
       await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
       if (visibility.extraEffortFailure) facts.push(failure.mode === "regress"
-        ? `Progress lost: ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}`
+        ? `Progress lost: ${failure.regressBy} Crafting Hour${failure.regressBy === 1 ? "" : "s"}`
         : "Extra progress: +0");
       if (visibility.extraEffort) {
         facts.push(`Normal Work: +${normalProgress}`);
         facts.push("Extra Effort: +0");
-        facts.push(`Total this Work Period: +${normalProgress}`);
+        facts.push(`Total this hour: +${normalProgress}`);
       }
-      if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork}`);
+      if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork} h`);
       await this.#postProjectMessage(actor, recipe, "Extra Effort Failed", failure.mode === "regress"
-        ? `The Project regressed by ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}.`
+        ? `The Project regressed by ${failure.regressBy} Crafting Hour${failure.regressBy === 1 ? "" : "s"}.`
         : "The additional effort produced no extra progress.");
       return {
         outcome: "extra-failure",
@@ -692,9 +733,9 @@ export class CraftingService {
       const extraProgress = project.completedWork - before;
       facts.push(`Normal Work: +${normalProgress}`);
       facts.push(`Extra Effort: +${extraProgress}`);
-      facts.push(`Total this Work Period: +${normalProgress + extraProgress}`);
+      facts.push(`Total this hour: +${normalProgress + extraProgress}`);
     }
-    if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork}`);
+    if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork} h`);
 
     if (project.completedWork >= project.requiredWork) {
       project.extraEffortAvailable = false;
@@ -729,12 +770,15 @@ export class CraftingService {
     const { requester, actor } = this.#requestContext(request);
     const project = this.project(actor);
     if (!project || project.id !== String(request.projectId ?? "") || project.status !== "active") throw new Error("The active Crafting Project changed.");
-    if (project.phase !== "readyFinal" || !project.finalAvailable) throw new Error("The Final Crafting Check is not currently available.");
+    if (project.phase !== "readyFinal" || !(project.finalAvailable || DowntimeService.canWork(actor))) throw new Error("The Final Crafting Check is not currently available.");
     const recipe = RecipeService.snapshot(project.recipe);
     const resolution = RecipeService.normalizeCraftingResolution(recipe.craftingResolution);
     if (!resolution.check.required || project.finalPolicy?.automaticSuccess) return this.#completeProject(actor, project, recipe);
     const finalCheck = this.#projectFinalCheck(project, recipe);
     const rollResult = await this.#validateRoll(actor, recipe, requester, request, finalCheck, "final", project.id);
+    if (DowntimeService.active && !project.finalAvailable) {
+      await DowntimeService.spendHour(actor, { requestId: request.requestId, recipeId: recipe.id });
+    }
     project.finalAvailable = false;
     project.updatedAt = this.serverTime();
     if (rollResult.success) return this.#completeProject(actor, project, recipe, rollResult);
@@ -776,22 +820,22 @@ export class CraftingService {
       await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
       const detail = visibility.progressFailure
         ? (failure.mode === "regress"
-          ? `The Project regressed by ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}.`
+          ? `The Project regressed by ${failure.regressBy} Crafting Hour${failure.regressBy === 1 ? "" : "s"}.`
           : "The Project did not advance.")
         : "The Work Attempt failed.";
       if (visibility.progressFailure) facts.push(failure.mode === "regress"
-        ? `Progress lost: ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}`
+        ? `Progress lost: ${failure.regressBy} Crafting Hour${failure.regressBy === 1 ? "" : "s"}`
         : "No progress was gained or lost.");
-      if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork}`);
-      if (config.extraEffort.enabled && visibility.extraEffort) facts.push("Extra Effort is available for this Work Period.");
+      if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork} h`);
+      if (config.extraEffort.enabled && visibility.extraEffort) facts.push("Extra Effort is available for this Crafting Hour.");
       await this.#postProjectMessage(actor, recipe, visibility.progressCheck ? "Progress Check Failed" : "Project Work", detail);
       return {
         outcome: "progress-failure",
         project: this.prepareProjectForActor(actor, project),
-        feedback: this.#feedback("Work Period Failed",
+        feedback: this.#feedback("Crafting Hour Failed",
           visibility.progressFailure
             ? (failure.mode === "regress" ? "The work attempt failed and the Project lost progress." : "The work attempt failed. The opportunity was spent, but the Project did not advance or regress.")
-            : "The Work Period was unsuccessful.",
+            : "The Crafting Hour was unsuccessful.",
           facts, failure.mode === "regress" && visibility.progressFailure ? "warning" : "info", "fa-solid fa-hammer")
       };
     }
@@ -804,8 +848,8 @@ export class CraftingService {
     project.normalProgressThisPeriod = 1;
     project.updatedAt = this.serverTime();
     project.lastAttempt = { stage: "progress", success: true, total: rollResult.total, dc: checkApplies ? config.progressCheck.dc : null, at: this.serverTime(), initial };
-    if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork}`);
-    if (project.extraEffortAvailable && visibility.extraEffort) facts.push("Extra Effort is available for this Work Period.");
+    if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork} h`);
+    if (project.extraEffortAvailable && visibility.extraEffort) facts.push("Extra Effort is available for this Crafting Hour.");
 
     if (project.completedWork >= project.requiredWork) {
       project.extraEffortAvailable = false;
@@ -821,7 +865,7 @@ export class CraftingService {
       return {
         outcome: "ready-final",
         project: this.prepareProjectForActor(actor, project),
-        feedback: this.#feedback("Work Period Successful",
+        feedback: this.#feedback("Crafting Hour Successful",
           visibility.craftingCheck ? "The required work is complete. The Project is ready for its Final Crafting Check." : "The required project work is complete.",
           facts, "success", "fa-solid fa-hammer")
       };
@@ -832,7 +876,7 @@ export class CraftingService {
     return {
       outcome: "progress",
       project: this.prepareProjectForActor(actor, project),
-      feedback: this.#feedback("Work Period Successful", "The work attempt succeeded and the Project advanced.", facts, "success", "fa-solid fa-hammer")
+      feedback: this.#feedback("Crafting Hour Successful", "The work attempt succeeded and the Project advanced.", facts, "success", "fa-solid fa-hammer")
     };
   }
 
@@ -860,10 +904,10 @@ export class CraftingService {
       project.extraEffortUsedThisPeriod = false;
       project.updatedAt = this.serverTime();
       await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
-      if (visibility.failure) facts.push(`Progress lost: ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}`);
-      if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork}`);
+      if (visibility.failure) facts.push(`Progress lost: ${failure.regressBy} Crafting Hour${failure.regressBy === 1 ? "" : "s"}`);
+      if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork} h`);
       await this.#postProjectMessage(actor, recipe, visibility.craftingCheck ? "Final Check Failed" : "Completion Attempt", visibility.failure
-        ? `The Project regressed by ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}.`
+        ? `The Project regressed by ${failure.regressBy} Crafting Hour${failure.regressBy === 1 ? "" : "s"}.`
         : "The completion attempt failed.");
       return {
         outcome: "final-regress",
@@ -882,7 +926,7 @@ export class CraftingService {
     if (visibility.failure) facts.push(visibility.craftingTime
       ? `Another ${this.#cadenceLabel(project.cadence)} is required before retrying.`
       : "Another work opportunity is required before retrying.");
-    if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork}`);
+    if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork} h`);
     await this.#postProjectMessage(actor, recipe, visibility.craftingCheck ? "Final Check Failed" : "Completion Attempt", visibility.failure
       ? (visibility.craftingTime
         ? `Another ${this.#cadenceLabel(project.cadence)} is required before a new Final Check attempt.`
@@ -984,7 +1028,7 @@ export class CraftingService {
   }
 
   static async #onRestCompleted(actor, result, config) {
-    if (!actor || actor.type !== "character") return;
+    if (!actor || actor.type !== "character" || DowntimeService.active) return;
     const project = this.project(actor);
     if (!project || project.status !== "active") return;
     const restType = String(result?.type || config?.type || "");
@@ -998,7 +1042,7 @@ export class CraftingService {
   }
 
   static async #executeRestUnlock(payload) {
-    if (!this.#isActiveGM()) return false;
+    if (!this.#isActiveGM() || DowntimeService.active) return false;
     const actor = game.actors.get(String(payload.actorId ?? ""));
     if (!actor || actor.type !== "character") return false;
     const project = this.project(actor);
@@ -1371,7 +1415,7 @@ export class CraftingService {
 
   static #failureLabel(failure, { final=false, revealPercent=true }={}) {
     if (!failure) return "No consequence";
-    if (failure.mode === "regress") return `Regress ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}`;
+    if (failure.mode === "regress") return `Regress ${failure.regressBy} Crafting Hour${failure.regressBy === 1 ? "" : "s"}`;
     if (failure.mode === "failProject") {
       if (!failure.loseMaterials) return "Fail Project · materials returned";
       return revealPercent ? `Fail Project · lose ${failure.lossPercent}% materials` : "Fail Project · lose some materials";

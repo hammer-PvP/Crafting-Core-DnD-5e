@@ -3,6 +3,8 @@ import { HarvestProfileService } from "../services/harvest-profile-service.mjs";
 import { GearNormalizationService } from "../services/gear-normalization-service.mjs";
 import { RecipeTransferApp } from "./recipe-transfer-app.mjs";
 import { MaterialSourceService } from "../services/material-source-service.mjs";
+import { InventoryResyncService } from "../services/inventory-resync-service.mjs";
+import { CuratedEquipmentService } from "../services/curated-equipment-service.mjs";
 import { OperationProgressApp } from "../ui/operation-progress.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -153,6 +155,7 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
     });
 
     root.querySelector('[data-action="resync-material-sources"]')?.addEventListener("click", event => this.#resyncMaterialSources(event));
+    root.querySelector('[data-action="organize-equipment"]')?.addEventListener("click", event => this.#organizeEquipment(event));
 
     root.querySelector('[data-action="open-recipe-export"]')?.addEventListener("click", event => {
       event.preventDefault();
@@ -177,14 +180,21 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
       const result = await OperationProgressApp.run({
         title: "Crafting Core — Resync Material Sources",
         initial: { phase: "Resolving Materials", label: "Preparing the reverse Material source index…" },
-        task: report => MaterialSourceService.rebuild({ onProgress: report }),
+        task: async report => {
+          const sources = await MaterialSourceService.rebuild({ onProgress: report });
+          const inventory = await InventoryResyncService.sync({ onProgress: report });
+          return { ...sources, inventory };
+        },
         summarize: result => ({
           message: "Material Sources resynchronized successfully.",
           summary: [
             { label: "Materials", value: result.materials ?? 0 },
             { label: "Linked Materials", value: result.linkedMaterials ?? 0 },
             { label: "Creature Links", value: result.creatureLinks ?? 0 },
-            { label: "Harvest Profiles", value: result.profiles ?? 0 }
+            { label: "Harvest Profiles", value: result.profiles ?? 0 },
+            { label: "Inventories Synced", value: result.inventory?.updated ?? 0 },
+            { label: "Icons Updated", value: result.inventory?.icons ?? 0 },
+            { label: "Source Descriptions", value: result.inventory?.sources ?? 0 }
           ]
         })
       });
@@ -200,6 +210,23 @@ export class CraftingCoreSettingsApp extends HandlebarsApplicationMixin(Applicat
         button.innerHTML = old;
       }
     }
+  }
+
+  async #organizeEquipment(event) {
+    event.preventDefault();
+    if (OperationProgressApp.busy) return ui.notifications.warn("Crafting Core is already running maintenance.");
+    try {
+      const result = await OperationProgressApp.run({
+        title: "Crafting Core — Organize Equipment",
+        initial: { phase:"Preparing Equipment", label:"Identifying installed managed Equipment…" },
+        task: report => CuratedEquipmentService.organizeInstalled({ onProgress:report }),
+        summarize: result => ({
+          message:"Equipment folders organized without recreating Items.",
+          summary:[{ label:"Products Moved", value:result.products }, { label:"Blueprints Moved", value:result.blueprints }]
+        })
+      });
+      if (result) ui.notifications.info(`Equipment organized: ${result.products} Products and ${result.blueprints} Blueprints moved.`);
+    } catch (error) { console.error(`${MODULE_ID} | Equipment organization failed.`,error); ui.notifications.error(error.message); }
   }
 
   #moveScanner(id, delta) {

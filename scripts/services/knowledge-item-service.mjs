@@ -756,7 +756,7 @@ export class KnowledgeItemService {
       let text;
       if (recipe?.craftingMode === "project") {
         if (resolution.failure.mode === "noProgress") text = "The Project stays ready; another compatible rest unlocks a new Final Check attempt.";
-        else if (resolution.failure.mode === "regress") text = `Regress ${resolution.failure.regressBy} Work Period${resolution.failure.regressBy === 1 ? "" : "s"}.`;
+        else if (resolution.failure.mode === "regress") text = `Regress ${resolution.failure.regressBy} Crafting Hour${resolution.failure.regressBy === 1 ? "" : "s"}.`;
         else {
           text = "The Project fails.";
           if (resolution.failure.loseMaterials) text += visibility.failurePercent
@@ -777,23 +777,23 @@ export class KnowledgeItemService {
       if (recipe?.craftingMode === "project") {
         const project = RecipeService.normalizeProject(recipe?.project);
         const cadence = project.cadence === "short" ? "Short Rest" : "Long Rest";
-        lines.push(`<p><strong>Crafting Project:</strong> ${project.requiredWork} Work Period${project.requiredWork === 1 ? "" : "s"} · ${cadence} cadence</p>`);
+        lines.push(`<p><strong>Crafting Project:</strong> ${project.requiredWork} Crafting Hour${project.requiredWork === 1 ? "" : "s"} · ${cadence} cadence</p>`);
       } else {
-        lines.push(`<p><strong>Crafting Time:</strong> ${Math.max(0, Number(recipe?.craftingTime) || 0)} seconds</p>`);
+        lines.push(`<p><strong>Crafting Time:</strong> ${Math.round((Math.max(0, Number(recipe?.craftingTime) || 0) / 3600) * 1000000) / 1000000} hours</p>`);
       }
     }
 
     if (recipe?.craftingMode === "project") {
       const project = RecipeService.normalizeProject(recipe?.project);
       if (visibility.progressCheck && project.progressCheck.required) {
-        const timing = project.progressCheck.timing === "midpoint" ? "Midpoint only" : "Every Work Period";
+        const timing = project.progressCheck.timing === "midpoint" ? "Midpoint only" : "Every Crafting Hour";
         const dc = visibility.progressDC ? ` · DC ${project.progressCheck.dc}` : "";
         lines.push(`<p><strong>Progress Check:</strong> ${escape(RecipeService.checkLabel(project.progressCheck))}${dc} · ${timing}</p>`);
       }
       if (visibility.progressFailure && project.progressCheck.required) {
         const failure = project.progressCheck.failure;
         let text = "No progress on failure.";
-        if (failure.mode === "regress") text = `Regress ${failure.regressBy} Work Period${failure.regressBy === 1 ? "" : "s"}.`;
+        if (failure.mode === "regress") text = `Regress ${failure.regressBy} Crafting Hour${failure.regressBy === 1 ? "" : "s"}.`;
         if (failure.mode === "failProject") {
           text = "The Project fails.";
           if (failure.loseMaterials) text += visibility.progressFailurePercent
@@ -804,11 +804,11 @@ export class KnowledgeItemService {
         lines.push(`<p><strong>Progress Failure:</strong> ${escape(text)}</p>`);
       }
       if (visibility.extraEffort && project.extraEffort.enabled) {
-        let text = `One Extra Effort attempt is available after each normal Work Attempt. Success grants +${project.extraEffort.progressGain} Work Progress.`;
+        let text = `One Extra Effort attempt is available after each normal Work Attempt. Success grants +${project.extraEffort.progressGain} h of Progress.`;
         if (visibility.extraEffortCheck) text += ` Check: ${RecipeService.checkLabel(project.extraEffort)}`;
         if (visibility.extraEffortCheck && visibility.extraEffortDC) text += ` · DC ${project.extraEffort.dc}`;
         if (visibility.extraEffortFailure) text += project.extraEffort.failure.mode === "regress"
-          ? ` · Failure regresses ${project.extraEffort.failure.regressBy} Work Period${project.extraEffort.failure.regressBy === 1 ? "" : "s"}.`
+          ? ` · Failure regresses ${project.extraEffort.failure.regressBy} Crafting Hour${project.extraEffort.failure.regressBy === 1 ? "" : "s"}.`
           : " · Failure grants no extra progress.";
         lines.push(`<p><strong>Extra Effort:</strong> ${escape(text)}</p>`);
       }

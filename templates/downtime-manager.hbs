@@ -1,0 +1,35 @@
+<div class="cc-downtime-root">
+  <header class="cc-downtime-head">
+    <div><h2><i class="fa-solid fa-hourglass-half"></i> Downtime Management</h2><small>Grant hours per Character · Pause or enable independent crafting time</small></div>
+    <span class="cc-downtime-state {{#if active}}enabled{{/if}}">{{#if active}}ACTIVE{{else}}INACTIVE{{/if}}</span>
+  </header>
+  <div class="cc-downtime-mode">
+    <div><strong>{{#if active}}Downtime is Active{{else}}Normal Campaign{{/if}}</strong><small>{{#if active}}Characters can spend credited hours without waiting for rests.{{else}}Crafting follows each Recipe's existing rest cadence. Unused hours stay frozen.{{/if}}</small></div>
+    <button type="button" data-action="toggle-downtime"><i class="fa-solid fa-power-off"></i> {{#if active}}End Downtime{{else}}Activate Downtime{{/if}}</button>
+  </div>
+  {{#if hasFilters}}
+  <details class="cc-downtime-filters"><summary><i class="fa-solid fa-filter"></i> Eligible Characters — Folders & Groups (GM Settings)</summary>
+    <div class="cc-downtime-filter-grid">
+      <fieldset><legend>Actor Folders</legend><small>No selections = no folder restriction. With groups selected, matching either filter is enough.</small>
+        {{#each folders}}<label><input type="checkbox" data-cc-folder value="{{id}}" {{#if selected}}checked{{/if}}>{{name}}</label>{{/each}}
+      </fieldset>
+      <fieldset><legend>D&amp;D5e Groups / Parties</legend><small>Uses memberships of Group Actors already in the World.</small>
+        {{#each groups}}<label><input type="checkbox" data-cc-group value="{{id}}" {{#if selected}}checked{{/if}}>{{name}}</label>{{/each}}
+      </fieldset>
+    </div>
+  </details>
+  {{/if}}
+  <div class="cc-downtime-list-toolbar"><strong>Characters ({{count}})</strong><span><b data-cc-selected-count>{{selectedCount}}</b> selected</span>
+    <button type="button" data-action="select-all">Select All</button><button type="button" data-action="clear">Clear</button></div>
+  <div class="cc-downtime-list" data-cc-downtime-list>
+    {{#each characters}}
+      <label class="cc-downtime-character"><input type="checkbox" data-cc-character value="{{id}}" {{#if selected}}checked{{/if}}><img src="{{img}}" alt=""><strong>{{name}}</strong><small>{{folder}}</small><b data-cc-balance="{{id}}">{{balance}} h</b></label>
+    {{else}}<p>No Characters match the selected folders or groups.</p>{{/each}}
+  </div>
+  <footer class="cc-downtime-operations">
+    <div><label for="cc-downtime-grant-hours">Hours per selected Character</label><input id="cc-downtime-grant-hours" type="number" min="1" max="1000000" step="1" name="grantHours" value="30"></div>
+    <button type="button" data-action="grant" {{#unless selectedCount}}disabled{{/unless}}><i class="fa-solid fa-plus"></i> Grant Hours</button>
+    <button type="button" class="cc-downtime-revoke" data-action="revoke" {{#unless selectedCount}}disabled{{/unless}}><i class="fa-solid fa-arrow-rotate-left"></i> Revoke / Zero Balance</button>
+    <small>Grant 30 h to three selected Characters = <b>+30 h to each</b>, not 10 h each. Revocation affects unused hours only.</small>
+  </footer>
+</div>

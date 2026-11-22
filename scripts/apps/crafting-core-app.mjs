@@ -108,6 +108,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
         const pending = Boolean(source && !KnowledgeItemService.sameRecipeDefinition(recipe, source.recipe));
         return {
           ...recipe,
+          craftingHours: Math.round((Number(recipe.craftingTime) || 0) / 3600 * 1000000) / 1000000,
           selected: recipe.id === this.selectedId,
           published: Boolean(source),
           pending,
@@ -149,6 +150,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       } : null,
       selectedPublishedIngredientRows,
       draft: foundry.utils.deepClone(this.draft),
+      draftCraftingHours: Math.round((Number(this.draft?.craftingTime) || 0) / 3600 * 1000000) / 1000000,
       ingredientEditorRows,
       editingExisting: Boolean(this.selectedId),
       published: Boolean(currentSource),
@@ -462,7 +464,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     this.draft.description = root.querySelector('[name="description"]')?.value ?? this.draft.description ?? "";
     this.draft.craftingMode = root.querySelector('[name="craftingMode"]')?.value === "project" ? "project" : "timed";
     const craftingTimeInput = root.querySelector('[name="craftingTime"]');
-    if (craftingTimeInput) this.draft.craftingTime = Math.max(0, Math.floor(Number(craftingTimeInput.value) || 0));
+    if (craftingTimeInput) this.draft.craftingTime = Math.max(0, Math.round((Number(craftingTimeInput.value) || 0) * 3600));
     const project = foundry.utils.deepClone(this.draft.project ?? {});
     const requiredWorkInput = root.querySelector('[name="requiredWork"]');
     const cadenceInput = root.querySelector('[name="projectCadence"]');

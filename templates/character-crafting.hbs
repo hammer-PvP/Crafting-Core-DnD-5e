@@ -31,6 +31,7 @@
         {{/if}}
       </header>
 
+      {{#if ../craftingCore.downtimeActive}}<div class="cc-sheet-downtime-summary"><i class="fa-solid fa-hourglass-half"></i> Downtime active · <strong>{{../craftingCore.downtimeHours}} h available</strong></div>{{/if}}
       {{#if ../craftingCore.selectedStale}}
       <div class="cc-recipe-stale-note"><i class="fa-solid fa-arrows-rotate"></i><span>A newer published revision exists. This view is intentionally holding the version you were reading; Craft or Start Project will reload it before any transaction.</span></div>
       {{/if}}
@@ -38,27 +39,28 @@
       <div class="cc-recipe-stale-note"><i class="fa-solid fa-book-bookmark"></i><span>The published source is unavailable. This Character retains the learned Recipe as Legacy Knowledge and can continue crafting from the frozen learned definition.</span></div>
       {{/if}}
 
-      {{#if playerVisibility.description}}{{#if description}}<section class="cc-profession-block"><h3>Description</h3><p class="cc-sheet-description">{{description}}</p></section>{{/if}}{{/if}}
+      {{#if playerVisibility.description}}{{#if description}}<details class="cc-profession-block cc-sheet-disclosure" data-cc-collapse="description"><summary>Description <i class="fa-solid fa-chevron-down"></i></summary><p class="cc-sheet-description">{{description}}</p></details>{{/if}}{{/if}}
 
       {{#if ../craftingCore.selectedIsActiveProject}}
         {{#with ../craftingCore.activeProject}}
         <section class="cc-profession-block cc-project-status-block">
-          <div class="cc-profession-block-heading"><div><span class="cc-kicker">Project Status</span><h3>{{stateLabel}}</h3></div><strong>{{#if visibility.projectProgress}}{{completedWork}} / {{requiredWork}}{{else}}In Progress{{/if}}</strong></div>
+          <div class="cc-profession-block-heading"><div><span class="cc-kicker">Project Status</span><h3>{{stateLabel}}</h3></div><strong>{{#if visibility.projectProgress}}{{completedWork}} / {{requiredWork}} h{{else}}In Progress{{/if}}</strong></div>
           {{#if visibility.projectProgress}}<div class="cc-project-progress-track"><span style="width: {{progressPercent}}%"></span></div>{{/if}}
-          {{#if visibility.craftingTime}}<div class="cc-inline-fact"><span>Work Cadence</span><strong>{{cadenceLabel}}</strong></div>{{/if}}
+          {{#if visibility.craftingTime}}<div class="cc-inline-fact"><span>Work Availability</span><strong>{{#if downtimeActive}}Downtime · {{downtimeBalance}} h available{{else}}{{cadenceLabel}}{{/if}}</strong></div>{{/if}}
           {{#if artisanSignature.text}}<div class="cc-inline-fact"><span>Artisan Signature</span><strong>{{artisanSignature.text}} · {{#if (eq artisanSignature.position "after")}}After{{else}}Before{{/if}}</strong></div>{{/if}}
         </section>
 
         {{#if visibility.ingredients}}
-        <section class="cc-profession-block"><h3>Reserved Materials</h3><div class="cc-sheet-ingredients cc-reserved-materials">
+        <details class="cc-profession-block cc-sheet-disclosure" data-cc-collapse="reserved-materials"><summary>Reserved Materials <i class="fa-solid fa-chevron-down"></i></summary><div class="cc-sheet-ingredients cc-reserved-materials cc-sheet-ingredients-grid">
           {{#each reservedMaterials}}<div class="cc-sheet-ingredient"><img src="{{img}}" alt=""><span>{{name}}</span><strong>{{#if ../visibility.ingredientQuantities}}×{{quantity}}{{else}}Reserved{{/if}}</strong><i class="fa-solid fa-lock"></i></div>{{/each}}
-        </div></section>
+        </div></details>
         {{/if}}
 
+        <div class="cc-crafting-info-grid">
         {{#if visibility.progressCheck}}{{#if config.progressCheck.required}}
         <section class="cc-profession-block"><h3>Progress Check</h3>
           <div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>Check</span><strong>{{progressCheckLabel}}{{#if visibility.progressDC}} · DC {{config.progressCheck.dc}}{{/if}}</strong></div>
-          <div class="cc-sheet-resolution-row"><i class="fa-solid fa-route"></i><span>When</span><strong>{{#if (eq config.progressCheck.timing "midpoint")}}Midpoint Only{{else}}Every Work Period{{/if}}</strong></div>
+          <div class="cc-sheet-resolution-row"><i class="fa-solid fa-route"></i><span>When</span><strong>{{#if (eq config.progressCheck.timing "midpoint")}}Midpoint Only{{else}}Every Hour of Work{{/if}}</strong></div>
           {{#if visibility.progressFailure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{progressFailureLabel}}</strong></div>{{/if}}
         </section>
         {{/if}}{{/if}}
@@ -66,7 +68,7 @@
         {{#if visibility.extraEffort}}{{#if config.extraEffort.enabled}}
         <section class="cc-profession-block cc-extra-effort-block"><h3>Extra Effort</h3>
           {{#if visibility.extraEffortCheck}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-person-running"></i><span>Check</span><strong>{{extraEffortCheckLabel}}{{#if visibility.extraEffortDC}} · DC {{config.extraEffort.dc}}{{/if}}</strong></div>{{/if}}
-          <div class="cc-sheet-resolution-row"><i class="fa-solid fa-forward"></i><span>Success</span><strong>+{{config.extraEffort.progressGain}} Work Progress</strong></div>
+          <div class="cc-sheet-resolution-row"><i class="fa-solid fa-forward"></i><span>Success</span><strong>+{{config.extraEffort.progressGain}} h Progress</strong></div>
           {{#if visibility.extraEffortFailure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{extraEffortFailureLabel}}</strong></div>{{/if}}
         </section>
         {{/if}}{{/if}}
@@ -78,14 +80,15 @@
         </section>
         {{/if}}{{/if}}
 
+        </div>
         <div class="cc-project-actions">
           {{#if (eq phase "working")}}
             {{#if workAvailable}}<button type="button" class="cc-sheet-craft" data-action="work-project"><i class="fa-solid fa-hammer"></i> Work on Project</button>
-            {{else}}<button type="button" class="cc-sheet-craft" disabled><i class="fa-solid fa-moon"></i> {{#if visibility.craftingTime}}Waiting for {{cadenceLabel}}{{else}}Work Not Available Yet{{/if}}</button>{{/if}}
+            {{else}}<button type="button" class="cc-sheet-craft" disabled><i class="fa-solid fa-moon"></i> {{#if visibility.craftingTime}}{{#if downtimeActive}}Awaiting Downtime Hours{{else}}Waiting for {{cadenceLabel}}{{/if}}{{else}}Work Not Available Yet{{/if}}</button>{{/if}}
           {{else}}
             {{#if (eq phase "readyFinal")}}
               {{#if finalAvailable}}<button type="button" class="cc-sheet-craft" data-action="final-project"><i class="fa-solid {{#if manualFinalRequired}}fa-dice-d20{{else}}fa-hammer{{/if}}"></i> {{#if manualFinalRequired}}{{#if visibility.craftingCheck}}Attempt Final Check{{else}}Complete Project{{/if}}{{else}}Complete Project{{/if}}</button>
-              {{else}}<button type="button" class="cc-sheet-craft" disabled><i class="fa-solid fa-moon"></i> {{#if visibility.craftingTime}}Waiting for {{cadenceLabel}}{{else}}Not Available Yet{{/if}}</button>{{/if}}
+              {{else}}<button type="button" class="cc-sheet-craft" disabled><i class="fa-solid fa-moon"></i> {{#if visibility.craftingTime}}{{#if downtimeActive}}Awaiting Downtime Hours{{else}}Waiting for {{cadenceLabel}}{{/if}}{{else}}Not Available Yet{{/if}}</button>{{/if}}
             {{/if}}
           {{/if}}
           {{#if (eq phase "working")}}{{#if config.extraEffort.enabled}}
@@ -100,29 +103,38 @@
         {{/with}}
       {{else}}
         {{#if playerVisibility.ingredients}}
-        <section class="cc-profession-block"><h3>Ingredients</h3><div class="cc-sheet-ingredients">
-          {{#each ingredientRows}}
-            {{#if (eq mode "fixed")}}
-            <div class="cc-sheet-ingredient {{#unless sufficient}}missing{{/unless}} {{#unless ../playerVisibility.ingredientQuantities}}quantities-hidden{{/unless}}"><img src="{{img}}" alt=""><span class="cc-sheet-ingredient-copy"><strong>{{name}}</strong>{{#if roleLabel}}<small>{{roleLabel}}</small>{{/if}}</span><strong>{{#if ../playerVisibility.ingredientQuantities}}{{available}} / {{quantity}}{{else}}{{#if sufficient}}Available{{else}}Missing{{/if}}{{/if}}</strong><i class="fa-solid {{#if sufficient}}fa-check{{else}}fa-xmark{{/if}}"></i></div>
-            {{else}}
-            <div class="cc-sheet-ingredient-slot {{mode}} {{#unless sufficient}}missing{{/unless}}">
-              <div class="cc-sheet-ingredient-slot-heading"><span><strong>{{label}}</strong> · {{modeLabel}}{{#if (eq mode "pool")}} · choose {{quantity}} total{{/if}}</span><i class="fa-solid {{#if sufficient}}fa-check{{else}}fa-xmark{{/if}}"></i></div>
-              {{#each options}}
-                {{#if (eq ../mode "or")}}
-                <label class="cc-sheet-ingredient-option {{#unless sufficient}}missing{{/unless}}"><input type="radio" name="cc-or-{{../slotId}}" data-cc-or-slot="{{../slotId}}" value="{{optionId}}" {{#if selected}}checked{{/if}} {{#unless sufficient}}disabled{{/unless}}><img src="{{img}}" alt=""><span>{{name}}</span><strong>{{#if ../../playerVisibility.ingredientQuantities}}{{available}} / {{quantity}}{{else}}{{#if sufficient}}Available{{else}}Missing{{/if}}{{/if}}</strong></label>
-                {{else}}
-                <label class="cc-sheet-ingredient-option"><img src="{{img}}" alt=""><span>{{name}}</span><strong>{{#if ../../playerVisibility.ingredientQuantities}}Available {{available}}{{else}}{{#if available}}Available{{else}}Missing{{/if}}{{/if}}</strong><input class="cc-pool-quantity" type="number" min="0" max="{{available}}" step="1" value="{{selectedQuantity}}" data-cc-pool-slot="{{../slotId}}" data-option-id="{{optionId}}"></label>
-                {{/if}}
-              {{/each}}
-            </div>
-            {{/if}}
-          {{/each}}
-        </div></section>
+        <section class="cc-profession-block cc-sheet-material-section">
+          <div class="cc-sheet-material-title"><h3>Ingredients</h3><div>
+            <button type="button" data-cc-collapse-all="open"><i class="fa-solid fa-angles-down"></i> Expand All</button>
+            <button type="button" data-cc-collapse-all="close"><i class="fa-solid fa-angles-up"></i> Collapse All</button>
+          </div></div>
+          <div class="cc-sheet-ingredients cc-sheet-ingredients-grid">
+            {{#each ingredientRows}}
+            <details class="cc-ingredient-card {{#unless sufficient}}missing{{/unless}}" data-cc-collapse="ingredient-{{slotId}}" data-cc-material-card {{#unless sufficient}}open{{/unless}}>
+              <summary><span class="cc-ingredient-card-title">{{#if (eq mode "fixed")}}{{#if roleLabel}}{{roleLabel}}{{else}}{{name}}{{/if}}{{else}}{{label}}{{/if}}</span><span class="cc-ingredient-card-meta">{{#if (eq mode "pool")}}Choose {{quantity}} · {{/if}}{{modeLabel}} · {{#if sufficient}}Ready{{else}}Missing{{/if}}</span><i class="fa-solid {{#if sufficient}}fa-check-circle{{else}}fa-circle-exclamation{{/if}}"></i><i class="fa-solid fa-chevron-down cc-collapse-arrow"></i></summary>
+              <div class="cc-ingredient-card-body">
+              {{#if (eq mode "fixed")}}
+                <div class="cc-sheet-ingredient {{#unless sufficient}}missing{{/unless}} {{#unless ../playerVisibility.ingredientQuantities}}quantities-hidden{{/unless}}"><img src="{{img}}" alt=""><span class="cc-sheet-ingredient-copy"><strong>{{name}}</strong></span><strong>{{#if ../playerVisibility.ingredientQuantities}}{{available}} / {{quantity}}{{else}}{{#if sufficient}}Available{{else}}Missing{{/if}}{{/if}}</strong><i class="fa-solid {{#if sufficient}}fa-check{{else}}fa-xmark{{/if}}"></i></div>
+              {{else}}
+                {{#each options}}
+                  {{#if (eq ../mode "or")}}
+                  <label class="cc-sheet-ingredient-option {{#unless sufficient}}missing{{/unless}}"><input type="radio" name="cc-or-{{../slotId}}" data-cc-or-slot="{{../slotId}}" value="{{optionId}}" {{#if selected}}checked{{/if}} {{#unless sufficient}}disabled{{/unless}}><img src="{{img}}" alt=""><span>{{name}}</span><strong>{{#if ../../playerVisibility.ingredientQuantities}}{{available}} / {{quantity}}{{else}}{{#if sufficient}}Available{{else}}Missing{{/if}}{{/if}}</strong></label>
+                  {{else}}
+                  <label class="cc-sheet-ingredient-option cc-sheet-pool-option"><img src="{{img}}" alt=""><span>{{name}}</span><strong>{{#if ../../playerVisibility.ingredientQuantities}}Available {{available}}{{else}}{{#if available}}Available{{else}}Missing{{/if}}{{/if}}</strong><input class="cc-pool-quantity" type="number" min="0" max="{{available}}" step="1" value="{{selectedQuantity}}" data-cc-pool-slot="{{../slotId}}" data-option-id="{{optionId}}"></label>
+                  {{/if}}
+                {{/each}}
+              {{/if}}
+              </div>
+            </details>
+            {{/each}}
+          </div>
+        </section>
         {{/if}}
 
+        <div class="cc-crafting-info-grid">
         <section class="cc-profession-block"><h3>Requirements</h3>
           {{#if playerVisibility.output}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-box-open"></i><span>Output</span><strong>{{result.name}}{{#if result.quantity}} ×{{result.quantity}}{{/if}}</strong></div>{{/if}}
-          {{#if playerVisibility.craftingTime}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-clock"></i><span>{{#if (eq craftingMode "project")}}Project Time{{else}}Crafting Time{{/if}}</span><strong>{{#if (eq craftingMode "project")}}{{project.requiredWork}} Work Period{{#unless (eq project.requiredWork 1)}}s{{/unless}} · {{projectDisplay.cadenceLabel}}{{else}}{{craftingTime}} sec{{/if}}</strong></div>{{/if}}
+          {{#if playerVisibility.craftingTime}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-clock"></i><span>{{#if (eq craftingMode "project")}}Project Time{{else}}Crafting Time{{/if}}</span><strong>{{#if (eq craftingMode "project")}}{{project.requiredWork}} h · {{projectDisplay.cadenceLabel}}{{else}}{{craftingHours}} h{{/if}}</strong></div>{{/if}}
           {{#if playerVisibility.proficiencies}}{{#if resolution.proficiencyRows.length}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-screwdriver-wrench"></i><span>Relevant Proficiency</span><strong>{{#each resolution.proficiencyRows}}{{label}}{{#unless @last}}{{#if (eq ../resolution.proficiencyMatch "all")}} + {{else}} or {{/if}}{{/unless}}{{/each}}</strong></div>{{/if}}{{/if}}
           {{#if playerVisibility.attemptPolicy}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-user-check"></i><span>Who Can Attempt</span><strong>{{#if (eq resolution.attemptPolicy "requiresProficiency")}}Requires relevant proficiency{{else}}Anyone{{/if}}</strong></div>{{/if}}
           {{#if playerVisibility.proficiencies}}{{#if resolution.proficiencyRows.length}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-award"></i><span>If Proficient</span><strong>{{#if (eq resolution.proficientPolicy "automaticSuccess")}}Automatic final success{{else}}Roll normally{{/if}}</strong></div>{{/if}}{{/if}}
@@ -130,12 +142,14 @@
         </section>
 
         {{#if (eq craftingMode "project")}}
-          {{#if playerVisibility.progressCheck}}{{#if project.progressCheck.required}}<section class="cc-profession-block"><h3>Progress Checks</h3><div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>Check</span><strong>{{projectDisplay.progressCheckLabel}}{{#if playerVisibility.progressDC}} · DC {{project.progressCheck.dc}}{{/if}}</strong></div><div class="cc-sheet-resolution-row"><i class="fa-solid fa-route"></i><span>When</span><strong>{{#if (eq project.progressCheck.timing "midpoint")}}Midpoint Only{{else}}Every Work Period{{/if}}</strong></div>{{#if playerVisibility.progressFailure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{projectDisplay.progressFailureLabel}}</strong></div>{{/if}}</section>{{/if}}{{/if}}
+          {{#if playerVisibility.progressCheck}}{{#if project.progressCheck.required}}<section class="cc-profession-block"><h3>Progress Checks</h3><div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>Check</span><strong>{{projectDisplay.progressCheckLabel}}{{#if playerVisibility.progressDC}} · DC {{project.progressCheck.dc}}{{/if}}</strong></div><div class="cc-sheet-resolution-row"><i class="fa-solid fa-route"></i><span>When</span><strong>{{#if (eq project.progressCheck.timing "midpoint")}}Midpoint Only{{else}}Every Hour of Work{{/if}}</strong></div>{{#if playerVisibility.progressFailure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{projectDisplay.progressFailureLabel}}</strong></div>{{/if}}</section>{{/if}}{{/if}}
         {{/if}}
 
-        {{#if playerVisibility.extraEffort}}{{#if project.extraEffort.enabled}}<section class="cc-profession-block cc-extra-effort-block"><h3>Extra Effort</h3>{{#if playerVisibility.extraEffortCheck}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-person-running"></i><span>Check</span><strong>{{projectDisplay.extraEffortCheckLabel}}{{#if playerVisibility.extraEffortDC}} · DC {{project.extraEffort.dc}}{{/if}}</strong></div>{{/if}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-forward"></i><span>Success</span><strong>+{{project.extraEffort.progressGain}} Work Progress</strong></div>{{#if playerVisibility.extraEffortFailure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{projectDisplay.extraEffortFailureLabel}}</strong></div>{{/if}}</section>{{/if}}{{/if}}
+        {{#if playerVisibility.extraEffort}}{{#if project.extraEffort.enabled}}<section class="cc-profession-block cc-extra-effort-block"><h3>Extra Effort</h3>{{#if playerVisibility.extraEffortCheck}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-person-running"></i><span>Check</span><strong>{{projectDisplay.extraEffortCheckLabel}}{{#if playerVisibility.extraEffortDC}} · DC {{project.extraEffort.dc}}{{/if}}</strong></div>{{/if}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-forward"></i><span>Success</span><strong>+{{project.extraEffort.progressGain}} h Progress</strong></div>{{#if playerVisibility.extraEffortFailure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{projectDisplay.extraEffortFailureLabel}}</strong></div>{{/if}}</section>{{/if}}{{/if}}
 
         {{#if playerVisibility.craftingCheck}}{{#if resolution.check.required}}<section class="cc-profession-block"><h3>Final Crafting Check</h3><div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>Check</span><strong>{{#if resolution.automaticSuccess}}Automatic Success{{else}}{{resolution.checkLabel}}{{#if playerVisibility.craftingDC}} · DC {{resolution.check.dc}}{{/if}}{{/if}}</strong></div>{{#if playerVisibility.failure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{projectDisplay.finalFailureLabel}}</strong></div>{{/if}}</section>{{/if}}{{/if}}
+
+        </div>
 
         {{#if artisanSignature.enabled}}
         <section class="cc-profession-block cc-artisan-signature-block">

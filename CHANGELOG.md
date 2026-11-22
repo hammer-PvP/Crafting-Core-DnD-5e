@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.2 - Compact Character Crafting & Downtime Hours
+
+- Reorganized the Character-sheet Crafting Project view into a responsive two-column ingredient grid with individually collapsible groups, expandable descriptions and Reserved Materials, and compact Requirements / Progress / Extra Effort / Final Check cards. Ingredient icons remain readable at their prior size, and existing Fixed, Choose One, Mix/Pool selection and reservation mechanics remain unchanged.
+- Standardized visible Project time and progress in **crafting hours**. Legacy Work Period counts map 1:1 to hours without replacing or rebuilding recipes, active projects, frozen snapshots, Knowledge, or persisted `requiredWork` / `completedWork` data. Normal campaign progress still follows each existing Recipe's configured Long/Short Rest cadence; Extra Effort and all existing checks/failures remain intact.
+- Added an optional **GM-only Downtime Manager** launcher in the Item Directory. GMs can configure eligible Character Actor folders and D&D5e Groups/Parties, select Characters in a compact scroll-preserving list, grant a chosen number of hours **to each selected Character**, view balances, and revoke unused credit with confirmation. Changes are recorded in an Actor-scoped transaction ledger.
+- Added a global **Downtime Active** gate. When inactive, hours stay frozen and crafting uses normal rest authorization; when activated by the GM, Characters with credited hours can progress Projects without waiting for rests, spending one hour per normal work attempt. Extra Effort can award additional progress but never charges another hour. Starting a Project counts as its initial work attempt. No rest automatically creates Downtime credits.
+- Kept timed crafting recipes in their existing second-based persisted representation, but displayed/edited their durations in hours (including fractional hours) so old short recipes retain their running time. Downtime hour spending is scoped to persistent Crafting Projects, not the timed crafting timer.
+- Extended the existing GM-only **Resync Material Sources** button to synchronize canonical icons and managed source descriptions/metadata on pre-existing Character/NPC/Vehicle inventories, World Items, and unlinked Token inventories. This is manual and idempotent: it does not scan on startup or replace externally customized icons.
+- Added **Organize Equipment** maintenance for SRD Equipment Products and Blueprint Knowledge, splitting Weapons into Simple/Martial Melee/Ranged and Armor into Light/Medium/Heavy/Shields. Existing document identities/UUIDs and Recipe definitions are preserved; new Equipment installations use the same folder structure.
+- Added per-Actor request serialization, transaction ID deduplication, and safeguards for revoked hours during Project startup. No World of Warcraft, Phantyr, expanded Gathering/Harvesting, or new content packs are part of this release.
+- Retained Foundry V14 and D&D5e 6.1.x compatibility targets. Static/synthetic tests pass; interactive verification in a live Foundry World is still required before calling this patch stable.
+
+
 ## 0.6.1 - Canonical Artwork Library
 
 - Added the full project-owned library of **455 canonical WebP illustrations**: 257 Materials, 15 Meals, 43 Drinks, 82 Alchemy/Inscription Products, and 58 SRD Equipment base illustrations. `Iron_Ore.webp` is included.

@@ -281,7 +281,7 @@
   width: 100%;
   flex: 1 0 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, .78fr);
+  grid-template-columns: repeat(3,minmax(0,1fr));
   gap: 6px;
   margin-top: 6px;
 }
@@ -2216,3 +2216,87 @@
   .cc-content-pack-grid { grid-template-columns: 1fr; }
   .cc-content-catalog-tabs-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
 }
+
+/* v0.6.2 — Crafting workspace compactness: never shrink inventory artwork. */
+.crafting-core-tab .cc-profession-detail { container-type: inline-size; padding: 9px; }
+.crafting-core-tab .cc-profession-block { margin-top: 7px; padding: 8px; }
+.crafting-core-tab .cc-sheet-disclosure > summary { display:flex; align-items:center; justify-content:space-between; gap:8px; cursor:pointer; list-style:none; color:var(--dnd5e-color-gold,#b59b61); font-size:11px; font-weight:800; text-transform:uppercase; }
+.crafting-core-tab .cc-sheet-disclosure > summary::-webkit-details-marker { display:none; }
+.crafting-core-tab .cc-sheet-disclosure[open] > summary > i { transform:rotate(180deg); }
+.crafting-core-tab .cc-sheet-disclosure > .cc-sheet-description { margin-top:8px; }
+.crafting-core-tab .cc-sheet-ingredients-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:5px 0; align-items:start; }
+.crafting-core-tab .cc-sheet-material-title { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.crafting-core-tab .cc-sheet-material-title > h3 { margin:0; font-size:11px; color:var(--dnd5e-color-gold,#b59b61); text-transform:uppercase; }
+.crafting-core-tab .cc-sheet-material-title > div { display:flex; gap:4px; }
+.crafting-core-tab [data-cc-collapse-all] { border:1px solid rgba(181,155,97,.2); background:rgba(255,255,255,.03); color:inherit; min-height:26px; padding:3px 7px; font-size:10px; }
+.crafting-core-tab .cc-ingredient-card { min-width:0; border:1px solid rgba(181,155,97,.22); border-radius:5px; background:rgba(255,255,255,.018); overflow:hidden; }
+.crafting-core-tab .cc-ingredient-card.missing { border-color:rgba(214,107,107,.30); }
+.crafting-core-tab .cc-ingredient-card > summary { list-style:none; display:grid; grid-template-columns:minmax(0,1fr) auto auto; column-gap:7px; align-items:center; cursor:pointer; padding:8px; min-height:46px; }
+.crafting-core-tab .cc-ingredient-card > summary::-webkit-details-marker { display:none; }
+.crafting-core-tab .cc-ingredient-card-title { min-width:0; font-size:11px; font-weight:800; overflow-wrap:anywhere; }
+.crafting-core-tab .cc-ingredient-card-meta { font-size:9px; color:var(--dnd5e-color-gold,#b59b61); grid-column:1; }
+.crafting-core-tab .cc-ingredient-card > summary > i.fa-check-circle { color:#a5dd93; grid-column:2; grid-row:1/3; }
+.crafting-core-tab .cc-ingredient-card > summary > i.fa-circle-exclamation { color:#f0abab; grid-column:2; grid-row:1/3; }
+.crafting-core-tab .cc-ingredient-card .cc-collapse-arrow { grid-column:3; grid-row:1/3; font-size:10px; opacity:.6; }
+.crafting-core-tab .cc-ingredient-card[open] > summary .cc-collapse-arrow { transform:rotate(180deg); }
+.crafting-core-tab .cc-ingredient-card-body { padding:4px 7px 7px; border-top:1px solid rgba(255,255,255,.055); display:grid; gap:4px; min-width:0; }
+.crafting-core-tab .cc-ingredient-card .cc-sheet-ingredient { grid-template-columns:36px minmax(0,1fr) auto 12px; gap:6px; padding:4px; background:transparent; }
+.crafting-core-tab .cc-ingredient-card .cc-sheet-ingredient img,
+.crafting-core-tab .cc-reserved-materials .cc-sheet-ingredient img,
+.crafting-core-tab .cc-ingredient-card .cc-sheet-ingredient-option img { width:36px; height:36px; object-fit:cover; border-radius:4px; }
+.crafting-core-tab .cc-ingredient-card .cc-sheet-ingredient-option { display:grid; grid-template-columns:16px 36px minmax(0,1fr) auto; gap:5px; min-height:42px; padding:3px; align-items:center; }
+.crafting-core-tab .cc-ingredient-card .cc-sheet-ingredient-option > span { min-width:0; overflow-wrap:anywhere; }
+.crafting-core-tab .cc-ingredient-card .cc-sheet-pool-option { grid-template-columns:36px minmax(0,1fr) auto 50px; }
+.crafting-core-tab .cc-ingredient-card .cc-sheet-pool-option .cc-pool-quantity { width:48px; min-width:0; }
+.crafting-core-tab .cc-crafting-info-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; align-items:start; }
+.crafting-core-tab .cc-crafting-info-grid > .cc-profession-block { margin:0; min-width:0; }
+.crafting-core-tab .cc-sheet-resolution-row { min-width:0; }
+.crafting-core-tab .cc-sheet-resolution-row strong { overflow-wrap:anywhere; }
+.crafting-core-tab .cc-reserved-materials .cc-sheet-ingredient { grid-template-columns:36px minmax(0,1fr) auto 12px; min-width:0; gap:6px; }
+.crafting-core-tab .cc-reserved-materials .cc-sheet-ingredient span { min-width:0; overflow-wrap:anywhere; }
+.crafting-core-tab .cc-sheet-downtime-summary { display:flex; gap:6px; align-items:center; flex-wrap:wrap; padding:6px 8px; margin-top:6px; border:1px solid rgba(91,158,98,.25); border-radius:4px; background:rgba(40,100,65,.12); font-size:11px; }
+.crafting-core-tab .cc-sheet-downtime-summary > i { color:#a5dd93; }
+@container (max-width: 555px) {
+  .crafting-core-tab .cc-sheet-ingredients-grid, .crafting-core-tab .cc-crafting-info-grid { grid-template-columns:minmax(0,1fr); }
+}
+@media (max-width: 790px) {
+  .crafting-core-tab .cc-sheet-material-title { flex-wrap:wrap; }
+}
+
+/* v0.6.2 — GM Downtime Manager. Compact checkboxes intentionally never re-render. */
+.cc-downtime-manager .window-content { overflow:hidden; }
+.cc-downtime-root { display:flex; flex-direction:column; gap:9px; padding:12px; height:100%; min-height:0; }
+.cc-downtime-head, .cc-downtime-mode, .cc-downtime-list-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.cc-downtime-head h2 { font-size:17px; margin:0; }
+.cc-downtime-head small, .cc-downtime-mode small { display:block; opacity:.64; margin-top:3px; font-size:11px; }
+.cc-downtime-state { font-size:10px; font-weight:800; letter-spacing:.05em; padding:5px 9px; border-radius:4px; border:1px solid rgba(180,180,180,.3); }
+.cc-downtime-state.enabled { border-color:rgba(91,158,98,.52); color:#9fe1a7; }
+.cc-downtime-mode { padding:10px; border:1px solid var(--cc-border-soft,rgba(181,155,97,.2)); border-radius:5px; background:rgba(255,255,255,.025); }
+.cc-downtime-mode button { flex:none; padding:7px 12px; }
+.cc-downtime-filters { border:1px solid var(--cc-border-soft,rgba(181,155,97,.2)); border-radius:4px; padding:7px; }
+.cc-downtime-filters summary { font-size:11px; font-weight:700; cursor:pointer; }
+.cc-downtime-filter-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding-top:8px; }
+.cc-downtime-filter-grid fieldset { display:grid; align-content:start; gap:5px; margin:0; padding:6px; min-width:0; max-height:155px; overflow-y:auto; }
+.cc-downtime-filter-grid fieldset small { opacity:.65; font-size:9px; }
+.cc-downtime-filter-grid label { display:flex; align-items:center; gap:6px; font-size:11px; cursor:pointer; }
+.cc-downtime-list-toolbar { font-size:11px; }
+.cc-downtime-list-toolbar span { margin-left:auto; opacity:.72; }
+.cc-downtime-list-toolbar button { font-size:10px; padding:3px 8px; min-height:25px; }
+.cc-downtime-list { min-height:100px; flex:1 1 auto; overflow-y:auto; border:1px solid var(--cc-border-soft,rgba(181,155,97,.2)); border-radius:4px; }
+.cc-downtime-character { display:grid; grid-template-columns:18px 30px minmax(0,1fr) minmax(55px,.45fr) 65px; align-items:center; gap:8px; padding:5px 10px; border-bottom:1px solid rgba(255,255,255,.045); cursor:pointer; font-size:11px; }
+.cc-downtime-character:hover { background:rgba(255,255,255,.04); }
+.cc-downtime-character img { width:30px; height:30px; border-radius:4px; object-fit:cover; }
+.cc-downtime-character strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cc-downtime-character small { opacity:.6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cc-downtime-character b { text-align:right; }
+.cc-downtime-operations { display:grid; grid-template-columns:minmax(140px,1fr) auto auto; gap:9px; align-items:end; padding-top:8px; border-top:1px solid var(--cc-border-soft,rgba(181,155,97,.2)); }
+.cc-downtime-operations > div { display:grid; gap:4px; }
+.cc-downtime-operations label { font-size:11px; }
+.cc-downtime-operations input { width:100%; }
+.cc-downtime-operations small { grid-column:1/-1; opacity:.7; font-size:10px; }
+.cc-downtime-operations button { min-height:32px; }
+.cc-downtime-revoke { border-color:rgba(214,107,107,.45)!important; }
+@media (max-width:600px) { .cc-downtime-operations { grid-template-columns:1fr 1fr; } .cc-downtime-operations > div { grid-column:1/-1; } .cc-downtime-character { grid-template-columns:16px 28px minmax(0,1fr) 54px; } .cc-downtime-character small { display:none; } }
+
+.crafting-core-directory-downtime { border-color:rgba(181,155,97,.48); background:linear-gradient(180deg,rgba(70,51,20,.92),rgba(41,32,20,.95)); }
+.crafting-core-directory-downtime > i { color:#e5bb73; }
