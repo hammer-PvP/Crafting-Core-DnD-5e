@@ -22,6 +22,7 @@ import { ContentPackService } from "./services/content-pack-service.mjs";
 import { CatalogAuditService } from "./services/catalog-audit-service.mjs";
 import { CanonicalAssetsMigrationService } from "./services/canonical-assets-migration-service.mjs";
 import { DowntimeService } from "./services/downtime-service.mjs";
+import { WorkstationAccessService } from "./services/workstation-access-service.mjs";
 import { DowntimeManagerApp } from "./apps/downtime-manager-app.mjs";
 
 let app = null;
@@ -117,6 +118,7 @@ Hooks.once("init", () => {
   runInitStep("content architecture settings", () => ContentPackService.registerSettings());
   runInitStep("v0.6.1 canonical artwork migration setting", () => CanonicalAssetsMigrationService.registerSettings());
   runInitStep("Downtime management settings", () => DowntimeService.registerSettings());
+  runInitStep("Workstation access settings", () => WorkstationAccessService.registerSettings());
   runInitStep("Crafting Core settings menu", () => game.settings.registerMenu(MODULE_ID, "craftingCoreSettings", {
     name: "Crafting Core",
     label: "Configure Crafting Core",
@@ -275,7 +277,7 @@ function injectItemDirectoryButton(directoryApp, element) {
   coreButton.type = "button";
   coreButton.className = "crafting-core-directory-button crafting-core-directory-main";
   coreButton.dataset.tooltip = "Open Crafting Core";
-  coreButton.innerHTML = '<i class="fa-solid fa-hammer" inert></i><span>Crafting Core</span>';
+  coreButton.innerHTML = '<i class="fa-solid fa-hammer" inert></i><span>Crafting</span>';
   coreButton.addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();
@@ -297,7 +299,7 @@ function injectItemDirectoryButton(directoryApp, element) {
   downtimeButton.type = "button";
   downtimeButton.className = "crafting-core-directory-button crafting-core-directory-downtime";
   downtimeButton.dataset.tooltip = "Crafting Core — GM Downtime Manager";
-  downtimeButton.innerHTML = '<i class="fa-solid fa-hourglass-half" inert></i><span>Downtime</span>';
+  downtimeButton.innerHTML = '<i class="fa-solid fa-hourglass-half" inert></i><span>Downtime Manager</span>';
   downtimeButton.addEventListener("click", event => {
     event.preventDefault();
     event.stopPropagation();

@@ -61,7 +61,7 @@
         <section class="cc-profession-block"><h3>Progress Check</h3>
           {{#if (eq config.progressCheck.timing "milestones")}}
           <div class="cc-sheet-resolution-row"><i class="fa-solid fa-route"></i><span>When</span><strong>Specific Milestones</strong></div>
-          {{#each milestoneRows}}<div class="cc-sheet-resolution-row"><i class="fa-solid {{#if passed}}fa-check-circle{{else if pending}}fa-dice-d20{{else}}fa-clock{{/if}}"></i><span>After {{hour}} h{{#if workstation.required}} · {{workstationLabel}}{{/if}}</span><strong>{{checkLabel}}{{#if ../visibility.progressDC}} · DC {{dc}}{{/if}} · {{#if passed}}Passed{{else if pending}}Pending{{else}}Upcoming{{/if}}</strong></div>{{/each}}
+          {{#each milestoneRows}}<div class="cc-sheet-resolution-row"><i class="fa-solid {{#if passed}}fa-check-circle{{else if pending}}fa-dice-d20{{else}}fa-clock{{/if}}"></i><span>After {{hour}} h{{#if workstation.required}} · {{workstationLabel}}{{/if}}</span><strong>{{checkLabel}}{{#if requiresCheck}}{{#if ../visibility.progressDC}} · DC {{dc}}{{/if}}{{/if}} · {{#if passed}}Passed{{else if pending}}Pending{{else}}Upcoming{{/if}}</strong></div>{{/each}}
           {{else}}
           <div class="cc-sheet-resolution-row"><i class="fa-solid fa-route"></i><span>When</span><strong>Every Crafting Hour</strong></div>
           <div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>Check</span><strong>{{progressCheckLabel}}{{#if visibility.progressDC}} · DC {{config.progressCheck.dc}}{{/if}}</strong></div>
@@ -91,15 +91,15 @@
 
         </div>
         {{#if pendingCheckpoint}}
-        <div class="cc-sheet-checkpoint-notice"><strong><i class="fa-solid fa-dice-d20"></i> Mandatory Checkpoint — {{pendingCheckpoint.hour}} h</strong>
-        {{#if visibility.progressCheck}}<p>{{pendingCheckpoint.checkLabel}}{{#if visibility.progressDC}} · DC {{pendingCheckpoint.dc}}{{/if}}</p>{{/if}}
+        <div class="cc-sheet-checkpoint-notice"><strong><i class="fa-solid {{#if pendingCheckpoint.requiresCheck}}fa-dice-d20{{else}}fa-screwdriver-wrench{{/if}}"></i> Mandatory Checkpoint — {{pendingCheckpoint.hour}} h</strong>
+        {{#if pendingCheckpoint.requiresCheck}}{{#if visibility.progressCheck}}<p>{{pendingCheckpoint.checkLabel}}{{#if visibility.progressDC}} · DC {{pendingCheckpoint.dc}}{{/if}}</p>{{/if}}{{else}}<p>No roll required for this stage.</p>{{/if}}
         {{#if pendingCheckpoint.workstation.required}}<p><i class="fa-solid fa-screwdriver-wrench"></i> Suitable Workstation: {{pendingCheckpoint.workstationLabel}} · GM confirmation required</p>{{/if}}
         {{#if checkpointReady}}<p>Resolve this checkpoint before advancing the project. No extra hour is charged for the first attempt.</p>
         {{else}}<p>Another rest or Downtime hour is required to retry this checkpoint.</p>{{/if}}</div>
         {{/if}}
         <div class="cc-project-actions">
           {{#if pendingCheckpoint}}
-            {{#if checkpointReady}}<button type="button" class="cc-sheet-craft" data-action="resolve-checkpoint"><i class="fa-solid fa-dice-d20"></i> Resolve Checkpoint</button>
+            {{#if checkpointReady}}<button type="button" class="cc-sheet-craft" data-action="resolve-checkpoint"><i class="fa-solid {{#if pendingCheckpoint.requiresCheck}}fa-dice-d20{{else}}fa-screwdriver-wrench{{/if}}"></i> {{#if pendingCheckpoint.requiresCheck}}Resolve Checkpoint{{else}}Continue at Workstation{{/if}}</button>
             {{else}}<button type="button" class="cc-sheet-craft" disabled><i class="fa-solid fa-hourglass-half"></i> Checkpoint Awaiting Opportunity</button>{{/if}}
           {{else}}
           {{#if (eq phase "working")}}
@@ -168,7 +168,7 @@
           <section class="cc-profession-block"><h3>Progress Checks</h3>
           {{#if (eq project.progressCheck.timing "milestones")}}
             <div class="cc-sheet-resolution-row"><i class="fa-solid fa-route"></i><span>When</span><strong>Specific Milestones</strong></div>
-            {{#each projectDisplay.milestoneRows}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>After {{hour}} h{{#if workstation.required}} · {{workstationLabel}}{{/if}}</span><strong>{{checkLabel}}{{#if ../playerVisibility.progressDC}} · DC {{dc}}{{/if}}</strong></div>{{/each}}
+            {{#each projectDisplay.milestoneRows}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>After {{hour}} h{{#if workstation.required}} · {{workstationLabel}}{{/if}}</span><strong>{{checkLabel}}{{#if requiresCheck}}{{#if ../playerVisibility.progressDC}} · DC {{dc}}{{/if}}{{/if}}</strong></div>{{/each}}
           {{else}}
             <div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>Check</span><strong>{{projectDisplay.progressCheckLabel}}{{#if playerVisibility.progressDC}} · DC {{project.progressCheck.dc}}{{/if}}</strong></div>
             <div class="cc-sheet-resolution-row"><i class="fa-solid fa-route"></i><span>When</span><strong>Every Crafting Hour</strong></div>

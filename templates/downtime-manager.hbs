@@ -7,6 +7,29 @@
     <div><strong>{{#if active}}Downtime is Active{{else}}Normal Campaign{{/if}}</strong><small>{{#if active}}Characters can spend credited hours without waiting for rests.{{else}}Crafting follows each Recipe's existing rest cadence. Unused hours stay frozen.{{/if}}</small></div>
     <button type="button" data-action="toggle-downtime"><i class="fa-solid fa-power-off"></i> {{#if active}}End Downtime{{else}}Activate Downtime{{/if}}</button>
   </div>
+  <section class="cc-workstation-access">
+    <details class="cc-workstation-panel" {{#if workstationRequestCount}}open{{/if}}>
+      <summary><i class="fa-solid fa-screwdriver-wrench"></i> Workstation Access <strong class="cc-pending-count">{{workstationRequestCount}} pending</strong></summary>
+      <p class="hint">Access is a simple yes/no permission per Character. Previously authorized Characters craft without asking. Access works during normal play and Downtime alike.</p>
+      {{#if workstationRequestCount}}
+      <div class="cc-workstation-requests">
+        {{#each workstationRequests}}
+        <div class="cc-workstation-request">
+          <img src="{{img}}" alt="">
+          <div><strong>{{actorName}}</strong><small>{{recipeName}} · {{stage}}</small></div>
+          <button type="button" data-action="approve-station-request" data-request-key="{{key}}"><i class="fa-solid fa-check"></i> Grant</button>
+          <button type="button" data-action="deny-station-request" data-request-key="{{key}}"><i class="fa-solid fa-ban"></i> Deny</button>
+        </div>
+        {{/each}}
+      </div>
+      {{else}}<p class="hint">No pending workstation requests.</p>{{/if}}
+      <div class="cc-workstation-operations">
+        <span>Select Characters below to grant or revoke permission in bulk.</span>
+        <button type="button" data-action="grant-station"><i class="fa-solid fa-check"></i> Grant Selected</button>
+        <button type="button" data-action="revoke-station"><i class="fa-solid fa-ban"></i> Revoke Selected</button>
+      </div>
+    </details>
+  </section>
   {{#if hasFilters}}
   <details class="cc-downtime-filters"><summary><i class="fa-solid fa-filter"></i> Eligible Characters — Folders & Groups (GM Settings)</summary>
     <div class="cc-downtime-filter-grid">
@@ -23,7 +46,7 @@
     <button type="button" data-action="select-all">Select All</button><button type="button" data-action="clear">Clear</button></div>
   <div class="cc-downtime-list" data-cc-downtime-list>
     {{#each characters}}
-      <label class="cc-downtime-character"><input type="checkbox" data-cc-character value="{{id}}" {{#if selected}}checked{{/if}}><img src="{{img}}" alt=""><strong>{{name}}</strong><small>{{folder}}</small><b data-cc-balance="{{id}}">{{balance}} h</b></label>
+      <label class="cc-downtime-character"><input type="checkbox" data-cc-character value="{{id}}" {{#if selected}}checked{{/if}}><img src="{{img}}" alt=""><strong>{{name}}</strong><small>{{folder}}</small><span class="cc-station-status {{#if stationAccess}}is-authorized{{/if}}" title="Workstation Access">{{#if stationAccess}}<i class="fa-solid fa-screwdriver-wrench"></i> Allowed{{else}}—{{/if}}</span><b data-cc-balance="{{id}}">{{balance}} h</b></label>
     {{else}}<p>No Characters match the selected folders or groups.</p>{{/each}}
   </div>
   <footer class="cc-downtime-operations">

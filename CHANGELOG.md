@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.1 - Responsive Milestones & GM Workstation Access
+
+- Fixed the Recipe Editor so **Require Progress Checks** and **Specific Milestones** are immediate, independent checkboxes. Hourly checks remain the default when enabled; the Add Checkpoint button no longer depends on toggling a workstation control. Saved milestones remain available when the GM switches modes, without unnecessary full-window rerenders.
+- Workstation requirements for new recipes now live **only on individual milestones**. Every milestone may require a check (with its own type and DC), a generic suitable workstation, or both. No workstation-type registry, dropdown or name reference is created. Previously published 0.7.0 recipes and active project snapshots with project-start workstation requirements remain supported for compatibility.
+- Added **Workstation Access** to the existing GM Downtime Manager: grants/revocations by Character, compact bulk selection, folder/group filters and pending requests visible in the same panel. Previously authorized characters proceed without creating requests. Requests from unauthorized characters remain pending until the GM grants or denies access, with no approval pop-ups or duplicate pending records.
+- Workstation access is stored in a GM-controlled **World setting** keyed by Actor ID rather than a player-editable Actor flag. The GM checks access again when committing the crafting operation. A pending request never spends crafting time or materials.
+- Adjusted the Character Crafting tab to distinguish workstation-only milestones from rolled tests. Milestone gates still stop normal progress, Extra Effort and Downtime at each required stage, without bypassing pending checks or workstations.
+- Grouped Item Directory controls into a responsive, neutral Crafting / Generate / Downtime Manager layout; kept native Foundry and third-party controls independent.
+- Updated the README as a user guide to reflect workstation authorization and stage-based requirements. No WoW, Phantyr, content-pack redesign or Gathering/Harvesting changes. Syntax and synthetic tests passed; manual tests in a live Foundry World remain necessary.
+
 ## 0.7.0 - Specific Project Checkpoints, Suitable Workstations & Beginner Guide
 
 - Added **Specific Milestones** to persistent Project recipes: GMs can define multiple mandatory checks at distinct absolute Crafting Hour thresholds, each with its own ability/skill/tool/saving throw and DC. Existing failure outcomes remain available and configured on the Project.

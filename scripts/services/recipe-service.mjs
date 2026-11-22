@@ -292,10 +292,13 @@ export class RecipeService {
     // A legacy midpoint is a single fixed milestone. The marker stays stable across
     // re-serialization so older projects can preserve midpointPassed without replaying it.
     const legacyMidpoint = progressCheck.timing === "midpoint" || Boolean(progressCheck.legacyMidpoint);
-    const rawMilestones = progressCheck.timing === "midpoint" && !Array.isArray(progressCheck.milestones)
+    // Legacy midpoint data can have an absent OR empty milestones array.
+    // Do not accidentally drop that mandatory checkpoint when normalizing.
+    const storedMilestones = Array.isArray(progressCheck.milestones) ? progressCheck.milestones : [];
+    const rawMilestones = legacyMidpoint && Boolean(progressCheck.required) && !storedMilestones.length
       ? [{ checkpointId: "legacy-midpoint", hour: Math.ceil(requiredWork / 2), type: checkType,
            id: progressCheck.id || "smith", dc: progressCheck.dc || 10 }]
-      : Array.isArray(progressCheck.milestones) ? progressCheck.milestones : [];
+      : storedMilestones;
     const milestones = rawMilestones.map((row, index) => {
       const type = ["ability", "skill", "tool", "save"].includes(String(row?.type)) ? String(row.type) : checkType;
       const station = row?.workstation && typeof row.workstation === "object" ? row.workstation : {};
@@ -303,9 +306,10 @@ export class RecipeService {
         checkpointId: String(row?.checkpointId || `checkpoint-${index + 1}`),
         hour: Number(row?.hour),
         type,
+        requiresCheck: row?.requiresCheck !== false, // legacy checkpoints always require their check
         id: String(row?.id || progressCheck.id || "smith"),
         dc: Math.clamp(Math.floor(Number(row?.dc) || 10), 1, 40),
-        workstation: { required: Boolean(station.required), name: String(station.name || "").trim().slice(0, 120) }
+        workstation: { required: Boolean(station.required), name: "" }
       };
     }).filter(row => Number.isInteger(row.hour) && row.hour >= 1 && row.hour <= requiredWork)
       .sort((a, b) => a.hour - b.hour);
@@ -316,7 +320,14 @@ export class RecipeService {
       if (uniqueHours.has(row.hour) || uniqueIds.has(row.checkpointId)) return false;
       uniqueHours.add(row.hour); uniqueIds.add(row.checkpointId); return true;
     });
+    // Older recipes may have a project-wide station prerequisite. Preserve it
+    // only for historical recipes; all new workstation requirements belong to
+    // individual milestones in the Recipe Editor.
     const station = source.workstation && typeof source.workstation === "object" ? source.workstation : {};
+    const hourlyRequired = typeof progressCheck.hourlyRequired === "boolean"
+      ? progressCheck.hourlyRequired : Boolean(progressCheck.required && progressCheck.timing !== "milestones" && progressCheck.timing !== "midpoint");
+    const milestonesEnabled = typeof progressCheck.milestonesEnabled === "boolean"
+      ? progressCheck.milestonesEnabled : Boolean(progressCheck.required && ["milestones", "midpoint"].includes(progressCheck.timing));
     const extraSource = source.extraEffort && typeof source.extraEffort === "object" ? source.extraEffort : {};
     const extraType = ["ability", "skill", "tool", "save"].includes(String(extraSource.type))
       ? String(extraSource.type)
@@ -327,10 +338,11 @@ export class RecipeService {
     return {
       requiredWork,
       cadence: source.cadence === "short" ? "short" : "long",
-      workstation: { required: Boolean(station.required), name: String(station.name || "").trim().slice(0, 120) },
+      workstation: { required: Boolean(station.required), name: "" },
       progressCheck: {
-        required: Boolean(progressCheck.required),
-        timing: ["midpoint", "milestones"].includes(progressCheck.timing) ? "milestones" : "every",
+        required: Boolean(hourlyRequired || milestonesEnabled),
+        hourlyRequired, milestonesEnabled,
+        timing: milestonesEnabled ? "milestones" : "every",
         legacyMidpoint,
         milestones: normalizedMilestones,
         type: checkType,

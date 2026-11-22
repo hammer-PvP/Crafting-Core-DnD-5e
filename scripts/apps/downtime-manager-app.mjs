@@ -1,5 +1,6 @@
 import { MODULE_ID } from "../constants.mjs";
 import { DowntimeService } from "../services/downtime-service.mjs";
+import { WorkstationAccessService } from "../services/workstation-access-service.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -17,6 +18,7 @@ export class DowntimeManagerApp extends HandlebarsApplicationMixin(ApplicationV2
   filters = null;
   #busy = false;
   #scrollTop = 0;
+  #workstationHook = null;
 
   async _prepareContext() {
     if (!game.user?.isGM) throw new Error("Only GMs may open Downtime Manager.");
@@ -26,6 +28,11 @@ export class DowntimeManagerApp extends HandlebarsApplicationMixin(ApplicationV2
       .sort((a,b) => a.name.localeCompare(b.name));
     const groupOptions = DowntimeService.groups().map(g => ({ id: g.id, name: g.name, selected: this.filters.groups.includes(g.id) }));
     const characters = DowntimeService.characters(this.filters);
+    const workstationRequests = WorkstationAccessService.pendingList().map(row => {
+      const actor = game.actors.get(row.actorId);
+      return { ...row, actorName: actor?.name || "Unknown Character", img: actor?.img || "icons/svg/mystery-man.svg",
+        stage: row.scope === "checkpoint" ? "Crafting checkpoint" : "Project start" };
+    });
     // Don't silently select newly visible Actors after filtering.
     const visibleIds = new Set(characters.map(a => a.id));
     return {
@@ -36,8 +43,9 @@ export class DowntimeManagerApp extends HandlebarsApplicationMixin(ApplicationV2
       characters: characters.map(actor => ({
         id: actor.id, name: actor.name, img: actor.img,
         folder: actor.folder?.name || "Unfiled", balance: DowntimeService.available(actor),
-        selected: this.selected.has(actor.id)
+        selected: this.selected.has(actor.id), stationAccess: WorkstationAccessService.hasAccess(actor)
       })),
+      workstationRequests, workstationRequestCount: workstationRequests.length,
       count: characters.length,
       selectedCount: [...this.selected].filter(id => visibleIds.has(id)).length
     };
@@ -45,6 +53,11 @@ export class DowntimeManagerApp extends HandlebarsApplicationMixin(ApplicationV2
 
   _onRender() {
     const root = this.element;
+    if (!this.#workstationHook) this.#workstationHook = Hooks.on(`${MODULE_ID}.workstationChanged`, () => {
+      if (!this.element?.isConnected || this.#busy) return;
+      this.#scrollTop = this.element.querySelector("[data-cc-downtime-list]")?.scrollTop ?? this.#scrollTop;
+      this.render({ force: true });
+    });
     const list = root.querySelector("[data-cc-downtime-list]");
     if (list) list.scrollTop = this.#scrollTop;
     list?.addEventListener("scroll", () => { this.#scrollTop = list.scrollTop; }, { passive: true });
@@ -90,6 +103,53 @@ export class DowntimeManagerApp extends HandlebarsApplicationMixin(ApplicationV2
     });
     root.querySelector('[data-action="grant"]')?.addEventListener("click", () => void this.#adjust("grant"));
     root.querySelector('[data-action="revoke"]')?.addEventListener("click", () => void this.#adjust("revoke"));
+    root.querySelector('[data-action="grant-station"]')?.addEventListener("click", () => void this.#setStationAccess(true));
+    root.querySelector('[data-action="revoke-station"]')?.addEventListener("click", () => void this.#setStationAccess(false));
+    root.querySelectorAll('[data-action="approve-station-request"]').forEach(button => button.addEventListener("click", () => {
+      void this.#resolveStationRequest(button.dataset.requestKey, true);
+    }));
+    root.querySelectorAll('[data-action="deny-station-request"]').forEach(button => button.addEventListener("click", () => {
+      void this.#resolveStationRequest(button.dataset.requestKey, false);
+    }));
+  }
+
+  async #setStationAccess(allowed) {
+    if (this.#busy) return;
+    const root = this.element;
+    const actors = [...root.querySelectorAll('input[data-cc-character]:checked')]
+      .map(input => game.actors.get(input.value)).filter(Boolean);
+    if (!actors.length) return ui.notifications.warn("Select one or more Characters first.");
+    this.#busy = true;
+    this.#scrollTop = root.querySelector("[data-cc-downtime-list]")?.scrollTop ?? 0;
+    try {
+      const changed = await WorkstationAccessService.setAccess(actors, allowed);
+      ui.notifications.info(`${allowed ? "Granted" : "Revoked"} workstation access for ${changed} Characters.`);
+      await this.render({ force: true });
+    } catch (error) { ui.notifications.error(error.message); }
+    finally { this.#busy = false; }
+  }
+
+  async #resolveStationRequest(key, allowed) {
+    if (this.#busy) return;
+    const row = WorkstationAccessService.requests()[String(key)];
+    if (!row) return ui.notifications.warn("This workstation request is no longer pending.");
+    const actor = game.actors.get(row.actorId);
+    if (!actor) return ui.notifications.warn("The requested Character no longer exists.");
+    this.#busy = true;
+    this.#scrollTop = this.element.querySelector("[data-cc-downtime-list]")?.scrollTop ?? 0;
+    try {
+      if (allowed) await WorkstationAccessService.setAccess([actor], true);
+      else await WorkstationAccessService.deny([key]);
+      ui.notifications.info(allowed ? `${actor.name} may use a suitable workstation.` : `Workstation request for ${actor.name} denied.`);
+      await this.render({ force: true });
+    } catch (error) { ui.notifications.error(error.message); }
+    finally { this.#busy = false; }
+  }
+
+  async close(options={}) {
+    if (this.#workstationHook) Hooks.off(`${MODULE_ID}.workstationChanged`, this.#workstationHook);
+    this.#workstationHook = null;
+    return super.close(options);
   }
 
   async #adjust(type) {

@@ -96,7 +96,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       ...saveOptions.map(o => ({ ...o, label: `Saving Throw · ${o.label}` }))
     ];
     const milestoneRows = (this.draft?.project?.progressCheck?.milestones ?? []).map((m, index) => ({
-      ...m, index,
+      ...m, index, requiresCheck: m.requiresCheck !== false,
       checkOptions: checkOptions.map(o => ({ ...o, selected: o.value === `${m.type}:${m.id}` }))
     }));
     const ingredientEditorRows = (this.draft?.ingredients ?? []).map((row, index) => {
@@ -296,6 +296,36 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       if (!current || oldDefaults.has(current)) this.draft.knowledge.img = KNOWLEDGE_ICONS[event.currentTarget.value] ?? DEFAULT_KNOWLEDGE_ICON;
       this.#rerenderPreservingScroll();
     });
+    // These checkboxes only reveal/hide existing DOM sections. Do not rebuild the
+    // entire Recipe Editor just to show Add Checkpoint (nor change scroll position).
+    const updateProgressVisibility = () => {
+      const required = Boolean(root.querySelector('[name="requireProgressCheck"]')?.checked);
+      const specific = Boolean(root.querySelector('[name="specificMilestones"]')?.checked);
+      const settings = root.querySelector('[data-progress-check-settings]');
+      const every = root.querySelector('[data-progress-every]');
+      const milestoneSection = root.querySelector('[data-progress-milestones]');
+      const failure = root.querySelector('[data-progress-check-failure]');
+      if (settings) settings.hidden = false;
+      if (every) every.hidden = specific || !required;
+      if (milestoneSection) milestoneSection.hidden = !specific;
+      const milestoneChecks = [...root.querySelectorAll('[data-checkpoint-requires-check]')]
+        .some(input => input.checked);
+      if (failure) failure.hidden = !required && !(specific && milestoneChecks);
+    };
+    for (const name of ["requireProgressCheck", "specificMilestones"]) {
+      root.querySelector(`[name="${name}"]`)?.addEventListener("change", () => {
+        updateProgressVisibility(); this.#syncDraftFromForm();
+      });
+    }
+    root.querySelectorAll('[data-checkpoint-requires-check]').forEach(box => box.addEventListener("change", () => {
+      box.closest('.cc-checkpoint-card')?.querySelectorAll('.cc-checkpoint-check-field')
+        .forEach(label => { label.hidden = !box.checked; });
+      updateProgressVisibility(); this.#syncDraftFromForm();
+    }));
+    root.querySelectorAll('[data-checkpoint-station-required]').forEach(box => box.addEventListener("change", () => {
+      this.#syncDraftFromForm();
+    }));
+    updateProgressVisibility();
     root.querySelectorAll('[data-resolution-rerender]').forEach(input => input.addEventListener("change", () => {
       this.#syncDraftFromForm();
       this.#rerenderPreservingScroll();
@@ -308,7 +338,9 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       if (!hour) return ui.notifications.warn("Every Crafting Hour already has a checkpoint.");
       milestones.push({ checkpointId: foundry.utils.randomID(16), hour,
         type: this.draft.project.progressCheck.type, id: this.draft.project.progressCheck.id,
-        dc: this.draft.project.progressCheck.dc, workstation: { required: false, name: "" } });
+        dc: this.draft.project.progressCheck.dc,
+        requiresCheck: Boolean(this.draft.project.progressCheck.hourlyRequired),
+        workstation: { required: false, name: "" } });
       this.draft.project.progressCheck.milestones = milestones;
       this.#rerenderPreservingScroll();
     });
@@ -501,14 +533,14 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (cadenceInput) project.cadence = cadenceInput.value === "short" ? "short" : "long";
     project.progressCheck ??= {};
     const requireProgressInput = root.querySelector('[name="requireProgressCheck"]');
-    if (requireProgressInput) project.progressCheck.required = Boolean(requireProgressInput.checked);
-    const progressTimingInput = root.querySelector('[name="progressCheckTiming"]');
-    if (progressTimingInput) project.progressCheck.timing = progressTimingInput.value === "milestones" ? "milestones" : "every";
-    const projectStationRequired = root.querySelector('[name="projectWorkstationRequired"]');
-    project.workstation ??= {};
-    if (projectStationRequired) project.workstation.required = projectStationRequired.checked;
-    const projectStationName = root.querySelector('[name="projectWorkstationName"]');
-    if (projectStationName) project.workstation.name = projectStationName.value.trim();
+    if (requireProgressInput) project.progressCheck.hourlyRequired = Boolean(requireProgressInput.checked);
+    const specificInput = root.querySelector('[name="specificMilestones"]');
+    if (specificInput) project.progressCheck.milestonesEnabled = Boolean(specificInput.checked);
+    project.progressCheck.required = Boolean(project.progressCheck.hourlyRequired || project.progressCheck.milestonesEnabled);
+    project.progressCheck.timing = project.progressCheck.milestonesEnabled ? "milestones" : "every";
+    // Do not add/edit a project-wide workstation flag: workstations are
+    // exclusively selectable on individual milestones for new recipes.
+    // A pre-existing legacy global requirement is retained for old recipes.
     const milestoneCards = root.querySelectorAll('.cc-checkpoint-card[data-checkpoint-id]');
     if (milestoneCards.length) project.progressCheck.milestones = Array.from(milestoneCards, card => {
       const old = project.progressCheck.milestones?.find(m => m.checkpointId === card.dataset.checkpointId) ?? {};
@@ -517,11 +549,9 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
         checkpointId: card.dataset.checkpointId,
         hour: Number(card.querySelector('[data-checkpoint-hour]')?.value ?? old.hour),
         type, id,
+        requiresCheck: Boolean(card.querySelector('[data-checkpoint-requires-check]')?.checked),
         dc: Number(card.querySelector('[data-checkpoint-dc]')?.value ?? old.dc),
-        workstation: {
-          required: Boolean(card.querySelector('[data-checkpoint-station-required]')?.checked),
-          name: String(card.querySelector('[data-checkpoint-station-name]')?.value ?? old.workstation?.name ?? "").trim()
-        }
+        workstation: { required: Boolean(card.querySelector('[data-checkpoint-station-required]')?.checked), name: "" }
       };
     });
     const progressCheckInput = root.querySelector('[name="progressCheck"]');
@@ -708,8 +738,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
   #validateMilestoneInputs() {
     const root = this.element;
     if (root?.querySelector('[name="craftingMode"]')?.value !== "project") return;
-    if (!root?.querySelector('[name="requireProgressCheck"]')?.checked) return;
-    if (root.querySelector('[name="progressCheckTiming"]')?.value !== "milestones") return;
+    if (!root.querySelector('[name="specificMilestones"]')?.checked) return;
     const total = Number(root.querySelector('[name="requiredWork"]')?.value);
     const cards = Array.from(root.querySelectorAll('.cc-checkpoint-card[data-checkpoint-id]'));
     if (!cards.length) throw new Error("Add at least one checkpoint for Specific Milestones.");
@@ -720,7 +749,10 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
       if (!Number.isInteger(hour) || hour < 1 || hour > total || hours.has(hour)) {
         throw new Error("Checkpoint hours must be unique whole numbers within the project duration.");
       }
-      if (!Number.isInteger(dc) || dc < 1 || dc > 40) throw new Error("Checkpoint DC must be between 1 and 40.");
+      const requiresCheck = card.querySelector('[data-checkpoint-requires-check]')?.checked;
+      const requiresStation = card.querySelector('[data-checkpoint-station-required]')?.checked;
+      if (!requiresCheck && !requiresStation) throw new Error("Each checkpoint must require a Check, a Suitable Workstation, or both.");
+      if (requiresCheck && (!Number.isInteger(dc) || dc < 1 || dc > 40)) throw new Error("Checkpoint DC must be between 1 and 40.");
       hours.add(hour);
     }
   }
@@ -739,7 +771,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     if (this.draft.craftingMode === "project") {
       const project = RecipeService.normalizeProject(this.draft.project);
       if (project.progressCheck.required && project.progressCheck.timing === "milestones" && !project.progressCheck.milestones.length) throw new Error("Specific Milestones require at least one checkpoint.");
-      if (project.progressCheck.required && !project.progressCheck.id) throw new Error("Choose a valid Progress Check.");
+      if (project.progressCheck.hourlyRequired && !project.progressCheck.id) throw new Error("Choose a valid Progress Check.");
       if (project.extraEffort.enabled && !project.extraEffort.id) throw new Error("Choose a valid Extra Effort Check.");
     }
   }

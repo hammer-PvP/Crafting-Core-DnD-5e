@@ -53,7 +53,7 @@ Open **Crafting Core → New Recipe Draft** and fill in the sections you need:
 2. **Who Can Craft:** choose eligible skill or tool proficiencies, access requirements, and any final crafting check.
 3. **Ingredients and Result:** choose the items consumed and the item produced. Ingredient groups can be fixed, offer a choice, or allow a mix of equivalent materials.
 4. **Crafting Time:** choose a timed craft or a persistent project measured in crafting hours.
-5. **Optional Project Rules:** set the rest cadence, progress checks, Extra Effort, failure consequences, and any workstation requirement.
+5. **Optional Project Rules:** set the rest cadence, progress checks, Extra Effort and failure consequences. For specific milestones, choose whether each stage requires a check, suitable workstation access, or both.
 6. **Save Draft**, review it, and **Publish to Private Compendium** when ready.
 
 A saved draft is **not yet available to players**. Editing a published recipe also does not change the live version until you publish its update.
@@ -64,8 +64,9 @@ Project recipes may have **no progress checks**, require a check **every craftin
 
 - Add a milestone at a chosen hour of progress, such as **after 5 hours** in a 10-hour project.
 - Choose that milestone's ability, skill, tool, or saving throw and its **Difficulty Class (DC)**.
-- Add more milestones with **Add Checkpoint** when needed.
-- Optionally require a **Suitable Workstation**, such as a forge, workshop, or laboratory. The GM confirms that the required workstation is available when the relevant work is attempted.
+- Add more milestones with **Add Checkpoint** when needed. Hourly checks are independent of the stage-based option; a station-only stage does not require enabling hourly checks.
+- At each milestone, independently enable **Require a Check** and/or **Require Suitable Workstation**. A milestone can require workstation access without any roll, and other milestones in the same recipe do not inherit that requirement. There is **no project-wide workstation setting for new recipes** and no fixed list of station types.
+- If a step requires a workstation, the character uses any prior GM authorization. Otherwise a request appears in **Downtime Manager → Workstation Access**; the player can retry after access is granted. A blocked request does not consume time or materials.
 
 A required milestone must be resolved before the project continues past it, including when Extra Effort would otherwise grant additional progress. Extra progress beyond a milestone is held until the check passes. A failed checkpoint follows the configured project failure consequence; retrying a stalled checkpoint requires another work opportunity. Progress-check failure outcomes, Extra Effort, and the optional Final Crafting Check remain separate settings.
 
@@ -102,6 +103,10 @@ Open **Downtime** from the Item Directory.
 6. Use **Revoke / Zero Balance**, with confirmation, if you want to cancel unused credits. Already completed crafting and spent hours are not reversed.
 
 The Manager does not need to advance the global game clock to represent a narrative downtime period.
+
+### Workstation Access — GM
+
+Open **Downtime Manager → Workstation Access**. Select eligible characters using the same compact list and folder/group filters, then use **Grant Selected** or **Revoke Selected**. Access is a simple **yes/no permission** for each character; you do not need to create a workstation or choose a type. A character with prior access can complete workstation-required steps immediately, without a request. Other characters may request access while crafting. Their requests stay in this Manager for the GM to **Grant** or **Deny**, including when multiple players are crafting at once. Requests do not open approval dialogs and do not spend crafting hours or materials. Workstation access works in either campaign mode and is not tied to Downtime credits.
 
 ## Gathering and Harvesting — GM
 

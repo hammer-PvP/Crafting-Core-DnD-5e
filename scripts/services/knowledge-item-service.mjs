@@ -789,17 +789,21 @@ export class KnowledgeItemService {
         if (project.progressCheck.timing === "milestones") {
           lines.push("<p><strong>Progress Checks:</strong> Specific Milestones</p>");
           for (const checkpoint of project.progressCheck.milestones) {
-            const dc = visibility.progressDC ? ` · DC ${checkpoint.dc}` : "";
-            const station = checkpoint.workstation.required ? ` · Requires ${checkpoint.workstation.name || "Suitable Workstation"}` : "";
-            lines.push(`<p>${escape(`After ${checkpoint.hour} h · ${RecipeService.checkLabel(checkpoint)}${dc}${station}`)}</p>`);
+            const check = checkpoint.requiresCheck
+              ? `${RecipeService.checkLabel(checkpoint)}${visibility.progressDC ? ` · DC ${checkpoint.dc}` : ""}`
+              : "No check";
+            const station = checkpoint.workstation.required ? " · Requires Suitable Workstation" : "";
+            lines.push(`<p>${escape(`After ${checkpoint.hour} h · ${check}${station}`)}</p>`);
           }
         } else {
           const dc = visibility.progressDC ? ` · DC ${project.progressCheck.dc}` : "";
           lines.push(`<p><strong>Progress Check:</strong> ${escape(RecipeService.checkLabel(project.progressCheck))}${dc} · Every Crafting Hour</p>`);
         }
       }
+      // Older recipes with a project-wide station requirement keep their
+      // historical start restriction, but new recipes express it per milestone.
       if (project.workstation.required) {
-        lines.push(`<p><strong>Suitable Workstation:</strong> ${escape(project.workstation.name || "Suitable Workstation")} · GM confirmation required before project start.</p>`);
+        lines.push("<p><strong>Legacy workstation requirement:</strong> GM access required at project start.</p>");
       }
       if (visibility.progressFailure && project.progressCheck.required) {
         const failure = project.progressCheck.failure;
