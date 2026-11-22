@@ -59,11 +59,20 @@
         <div class="cc-crafting-info-grid">
         {{#if visibility.progressCheck}}{{#if config.progressCheck.required}}
         <section class="cc-profession-block"><h3>Progress Check</h3>
+          {{#if (eq config.progressCheck.timing "milestones")}}
+          <div class="cc-sheet-resolution-row"><i class="fa-solid fa-route"></i><span>When</span><strong>Specific Milestones</strong></div>
+          {{#each milestoneRows}}<div class="cc-sheet-resolution-row"><i class="fa-solid {{#if passed}}fa-check-circle{{else if pending}}fa-dice-d20{{else}}fa-clock{{/if}}"></i><span>After {{hour}} h{{#if workstation.required}} · {{workstationLabel}}{{/if}}</span><strong>{{checkLabel}}{{#if ../visibility.progressDC}} · DC {{dc}}{{/if}} · {{#if passed}}Passed{{else if pending}}Pending{{else}}Upcoming{{/if}}</strong></div>{{/each}}
+          {{else}}
+          <div class="cc-sheet-resolution-row"><i class="fa-solid fa-route"></i><span>When</span><strong>Every Crafting Hour</strong></div>
           <div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>Check</span><strong>{{progressCheckLabel}}{{#if visibility.progressDC}} · DC {{config.progressCheck.dc}}{{/if}}</strong></div>
-          <div class="cc-sheet-resolution-row"><i class="fa-solid fa-route"></i><span>When</span><strong>{{#if (eq config.progressCheck.timing "midpoint")}}Midpoint Only{{else}}Every Hour of Work{{/if}}</strong></div>
+          {{/if}}
           {{#if visibility.progressFailure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{progressFailureLabel}}</strong></div>{{/if}}
         </section>
         {{/if}}{{/if}}
+
+        {{#if config.workstation.required}}
+        <section class="cc-profession-block"><h3>Suitable Workstation</h3><div class="cc-sheet-resolution-row"><i class="fa-solid fa-screwdriver-wrench"></i><span>Required</span><strong>{{#if config.workstation.name}}{{config.workstation.name}}{{else}}Suitable Workstation{{/if}}</strong></div><div class="cc-sheet-resolution-row"><i class="fa-solid fa-user-shield"></i><span>GM Confirmation</span><strong>{{#if workstationApproved}}Approved at project start{{else}}Required{{/if}}</strong></div></section>
+        {{/if}}
 
         {{#if visibility.extraEffort}}{{#if config.extraEffort.enabled}}
         <section class="cc-profession-block cc-extra-effort-block"><h3>Extra Effort</h3>
@@ -81,7 +90,18 @@
         {{/if}}{{/if}}
 
         </div>
+        {{#if pendingCheckpoint}}
+        <div class="cc-sheet-checkpoint-notice"><strong><i class="fa-solid fa-dice-d20"></i> Mandatory Checkpoint — {{pendingCheckpoint.hour}} h</strong>
+        {{#if visibility.progressCheck}}<p>{{pendingCheckpoint.checkLabel}}{{#if visibility.progressDC}} · DC {{pendingCheckpoint.dc}}{{/if}}</p>{{/if}}
+        {{#if pendingCheckpoint.workstation.required}}<p><i class="fa-solid fa-screwdriver-wrench"></i> Suitable Workstation: {{pendingCheckpoint.workstationLabel}} · GM confirmation required</p>{{/if}}
+        {{#if checkpointReady}}<p>Resolve this checkpoint before advancing the project. No extra hour is charged for the first attempt.</p>
+        {{else}}<p>Another rest or Downtime hour is required to retry this checkpoint.</p>{{/if}}</div>
+        {{/if}}
         <div class="cc-project-actions">
+          {{#if pendingCheckpoint}}
+            {{#if checkpointReady}}<button type="button" class="cc-sheet-craft" data-action="resolve-checkpoint"><i class="fa-solid fa-dice-d20"></i> Resolve Checkpoint</button>
+            {{else}}<button type="button" class="cc-sheet-craft" disabled><i class="fa-solid fa-hourglass-half"></i> Checkpoint Awaiting Opportunity</button>{{/if}}
+          {{else}}
           {{#if (eq phase "working")}}
             {{#if workAvailable}}<button type="button" class="cc-sheet-craft" data-action="work-project"><i class="fa-solid fa-hammer"></i> Work on Project</button>
             {{else}}<button type="button" class="cc-sheet-craft" disabled><i class="fa-solid fa-moon"></i> {{#if visibility.craftingTime}}{{#if downtimeActive}}Awaiting Downtime Hours{{else}}Waiting for {{cadenceLabel}}{{/if}}{{else}}Work Not Available Yet{{/if}}</button>{{/if}}
@@ -91,13 +111,14 @@
               {{else}}<button type="button" class="cc-sheet-craft" disabled><i class="fa-solid fa-moon"></i> {{#if visibility.craftingTime}}{{#if downtimeActive}}Awaiting Downtime Hours{{else}}Waiting for {{cadenceLabel}}{{/if}}{{else}}Not Available Yet{{/if}}</button>{{/if}}
             {{/if}}
           {{/if}}
-          {{#if (eq phase "working")}}{{#if config.extraEffort.enabled}}
+          {{/if}}
+          {{#if (eq phase "working")}}{{#unless pendingCheckpoint}}{{#if config.extraEffort.enabled}}
             {{#if extraEffortAvailable}}
               <button type="button" class="cc-sheet-craft cc-extra-effort-action" data-action="extra-effort"><i class="fa-solid fa-person-running"></i> Extra Effort</button>
             {{else}}
               <button type="button" class="cc-sheet-craft cc-extra-effort-action" disabled><i class="fa-solid fa-person-running"></i> {{extraEffortStateLabel}}</button>
             {{/if}}
-          {{/if}}{{/if}}
+          {{/if}}{{/unless}}{{/if}}
           <button type="button" class="cc-project-cancel" data-action="cancel-project"><i class="fa-solid fa-ban"></i> Cancel Project</button>
         </div>
         {{/with}}
@@ -142,7 +163,19 @@
         </section>
 
         {{#if (eq craftingMode "project")}}
-          {{#if playerVisibility.progressCheck}}{{#if project.progressCheck.required}}<section class="cc-profession-block"><h3>Progress Checks</h3><div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>Check</span><strong>{{projectDisplay.progressCheckLabel}}{{#if playerVisibility.progressDC}} · DC {{project.progressCheck.dc}}{{/if}}</strong></div><div class="cc-sheet-resolution-row"><i class="fa-solid fa-route"></i><span>When</span><strong>{{#if (eq project.progressCheck.timing "midpoint")}}Midpoint Only{{else}}Every Hour of Work{{/if}}</strong></div>{{#if playerVisibility.progressFailure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{projectDisplay.progressFailureLabel}}</strong></div>{{/if}}</section>{{/if}}{{/if}}
+          {{#if project.workstation.required}}<section class="cc-profession-block"><h3>Suitable Workstation</h3><div class="cc-sheet-resolution-row"><i class="fa-solid fa-screwdriver-wrench"></i><span>Required</span><strong>{{#if project.workstation.name}}{{project.workstation.name}}{{else}}Suitable Workstation{{/if}}</strong></div><div class="cc-sheet-resolution-row"><i class="fa-solid fa-user-shield"></i><span>Approval</span><strong>GM confirmation</strong></div></section>{{/if}}
+          {{#if playerVisibility.progressCheck}}{{#if project.progressCheck.required}}
+          <section class="cc-profession-block"><h3>Progress Checks</h3>
+          {{#if (eq project.progressCheck.timing "milestones")}}
+            <div class="cc-sheet-resolution-row"><i class="fa-solid fa-route"></i><span>When</span><strong>Specific Milestones</strong></div>
+            {{#each projectDisplay.milestoneRows}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>After {{hour}} h{{#if workstation.required}} · {{workstationLabel}}{{/if}}</span><strong>{{checkLabel}}{{#if ../playerVisibility.progressDC}} · DC {{dc}}{{/if}}</strong></div>{{/each}}
+          {{else}}
+            <div class="cc-sheet-resolution-row"><i class="fa-solid fa-dice-d20"></i><span>Check</span><strong>{{projectDisplay.progressCheckLabel}}{{#if playerVisibility.progressDC}} · DC {{project.progressCheck.dc}}{{/if}}</strong></div>
+            <div class="cc-sheet-resolution-row"><i class="fa-solid fa-route"></i><span>When</span><strong>Every Crafting Hour</strong></div>
+          {{/if}}
+          {{#if playerVisibility.progressFailure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{projectDisplay.progressFailureLabel}}</strong></div>{{/if}}
+          </section>
+          {{/if}}{{/if}}
         {{/if}}
 
         {{#if playerVisibility.extraEffort}}{{#if project.extraEffort.enabled}}<section class="cc-profession-block cc-extra-effort-block"><h3>Extra Effort</h3>{{#if playerVisibility.extraEffortCheck}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-person-running"></i><span>Check</span><strong>{{projectDisplay.extraEffortCheckLabel}}{{#if playerVisibility.extraEffortDC}} · DC {{project.extraEffort.dc}}{{/if}}</strong></div>{{/if}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-forward"></i><span>Success</span><strong>+{{project.extraEffort.progressGain}} h Progress</strong></div>{{#if playerVisibility.extraEffortFailure}}<div class="cc-sheet-resolution-row"><i class="fa-solid fa-triangle-exclamation"></i><span>Failure</span><strong>{{projectDisplay.extraEffortFailureLabel}}</strong></div>{{/if}}</section>{{/if}}{{/if}}

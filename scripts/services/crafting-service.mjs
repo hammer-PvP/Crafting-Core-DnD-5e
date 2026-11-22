@@ -9,12 +9,15 @@ import { DowntimeService } from "./downtime-service.mjs";
 const REQUEST_TIMED = "craft-request";
 const REQUEST_PROJECT_START = "craft-project-start";
 const REQUEST_PROJECT_WORK = "craft-project-work";
+const REQUEST_PROJECT_CHECKPOINT = "craft-project-checkpoint";
+const REQUEST_STATION_PREFLIGHT = "craft-station-preflight";
 const REQUEST_PROJECT_EXTRA = "craft-project-extra-effort";
 const REQUEST_PROJECT_FINAL = "craft-project-final";
 const REQUEST_PROJECT_CANCEL = "craft-project-cancel";
 const REST_UNLOCK = "craft-project-rest-unlock";
 const RESPONSE = "craft-response";
-const REQUEST_TIMEOUT_MS = 15000;
+// Workstation approval is a human GM decision; allow time for the prompt.
+const REQUEST_TIMEOUT_MS = 120000;
 
 export class CraftingService {
   static #pending = new Map();
@@ -22,6 +25,7 @@ export class CraftingService {
   static #restHook = null;
   static #actorLocks = new Map();
   static #requestResults = new Map();
+  static #stationGrants = new Map();
 
   static ready() {
     game.socket.on(SOCKET_CHANNEL, payload => this.#onSocket(payload));
@@ -142,8 +146,12 @@ export class CraftingService {
     const projectConfig = RecipeService.normalizeProject(recipe.project);
     const previewProject = { completedWork: 0, midpointPassed: false };
     const checkApplies = this.#progressCheckApplies(previewProject, projectConfig);
+    const stationGrant = projectConfig.workstation.required
+      ? await this.#submitRequest(gm, { ...this.#baseRequest(REQUEST_STATION_PREFLIGHT, actor, recipeId), stationScope: "project" })
+      : null;
 
     const payload = this.#baseRequest(REQUEST_PROJECT_START, actor, recipeId);
+    payload.stationGrantId = String(stationGrant?.grantId || "");
     payload.ingredientSelection = ingredientSelection && typeof ingredientSelection === "object"
       ? foundry.utils.deepClone(ingredientSelection)
       : null;
@@ -169,12 +177,14 @@ export class CraftingService {
     if (project.phase !== "working") throw new Error("This Project is not waiting for a Work Attempt.");
     const recipe = RecipeService.snapshot(project.recipe);
     const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
+    if (this.#pendingCheckpoint(project, RecipeService.normalizeProject(recipe.project))) throw new Error("Resolve the pending checkpoint before continuing work.");
     if (!(DowntimeService.active ? DowntimeService.canWork(actor) : project.workAvailable)) throw new Error(visibility.craftingTime
       ? `Another ${this.#cadenceLabel(project.cadence)} is required before more work can be performed.`
       : "Another work opportunity is required before more work can be performed.");
 
 
     const projectConfig = RecipeService.normalizeProject(recipe.project);
+    if (this.#pendingCheckpoint(project, projectConfig)) throw new Error("Resolve the pending checkpoint before continuing work.");
     const checkApplies = this.#progressCheckApplies(project, projectConfig);
     const payload = this.#baseRequest(REQUEST_PROJECT_WORK, actor, recipe.id, project.id);
     payload.rollMessageId = null;
@@ -190,6 +200,34 @@ export class CraftingService {
     return this.#submitRequest(gm, payload);
   }
 
+  static async requestCheckpoint(actor) {
+    this.#assertCharacter(actor);
+    const gm = this.#requireActiveGM();
+    const project = this.project(actor);
+    if (!project || project.status !== "active") throw new Error("There is no active checkpoint to resolve.");
+    const recipe = RecipeService.snapshot(project.recipe);
+    const config = RecipeService.normalizeProject(recipe.project);
+    const checkpoint = this.#pendingCheckpoint(project, config);
+    if (!checkpoint) throw new Error("No crafting checkpoint is pending.");
+    if (!this.#checkpointReady(actor, project, checkpoint)) throw new Error("Another work opportunity or Downtime credit is required to retry this checkpoint.");
+    const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
+    const needsStation = checkpoint.workstation.required && !(project.workstationApprovals ?? []).includes(checkpoint.checkpointId);
+    const stationGrant = needsStation
+      ? await this.#submitRequest(gm, {
+          ...this.#baseRequest(REQUEST_STATION_PREFLIGHT, actor, recipe.id, project.id),
+          stationScope: "checkpoint", checkpointId: checkpoint.checkpointId
+        }) : null;
+    const payload = this.#baseRequest(REQUEST_PROJECT_CHECKPOINT, actor, recipe.id, project.id);
+    payload.checkpointId = checkpoint.checkpointId;
+    payload.stationGrantId = String(stationGrant?.grantId || "");
+    const roll = await this.#performRoll(actor, recipe, checkpoint, "progress", payload.requestId, {
+      projectId: project.id, revealCheck: visibility.progressCheck, revealDc: visibility.progressDC
+    });
+    if (!roll) throw new Error("The checkpoint roll was cancelled.");
+    payload.rollMessageId = roll.messageId;
+    return this.#submitRequest(gm, payload);
+  }
+
   static async requestExtraEffort(actor) {
     this.#assertCharacter(actor);
     const gm = this.#requireActiveGM();
@@ -200,6 +238,7 @@ export class CraftingService {
     const config = RecipeService.normalizeProject(recipe.project);
     const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
     if (!config.extraEffort.enabled) throw new Error("This Recipe does not allow Extra Effort.");
+    if (this.#pendingCheckpoint(project, config)) throw new Error("Resolve the pending checkpoint before Extra Effort.");
     if (!project.extraEffortAvailable) throw new Error("Extra Effort is not available for the current Crafting Hour.");
 
     const payload = this.#baseRequest(REQUEST_PROJECT_EXTRA, actor, recipe.id, project.id);
@@ -220,6 +259,7 @@ export class CraftingService {
     if (!project || project.status !== "active") throw new Error("There is no active Crafting Project.");
     if (project.phase !== "readyFinal") throw new Error("This Project is not ready for completion.");
     const recipe = RecipeService.snapshot(project.recipe);
+    if (this.#pendingCheckpoint(project, RecipeService.normalizeProject(recipe.project))) throw new Error("A mandatory checkpoint has not been resolved.");
     const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
     if (!(project.finalAvailable || DowntimeService.canWork(actor))) throw new Error(visibility.craftingTime
       ? `Another ${this.#cadenceLabel(project.cadence)} is required before retrying completion.`
@@ -300,6 +340,10 @@ export class CraftingService {
       projectDisplay: {
         cadenceLabel: this.#cadenceLabel(project.cadence),
         progressCheckLabel: RecipeService.checkLabel(project.progressCheck, actor),
+        milestoneRows: project.progressCheck.required && project.progressCheck.timing === "milestones"
+          ? project.progressCheck.milestones.map(m => ({
+              ...m, checkLabel: RecipeService.checkLabel(m, actor), workstationLabel: m.workstation.name || "Suitable Workstation"
+            })) : [],
         progressFailureLabel: this.#failureLabel(project.progressCheck.failure, { revealPercent: visibility.progressFailurePercent }),
         extraEffortCheckLabel: RecipeService.checkLabel(project.extraEffort, actor),
         extraEffortFailureLabel: project.extraEffort.failure.mode === "regress"
@@ -327,8 +371,19 @@ export class CraftingService {
     const downtimeBalance = DowntimeService.available(actor);
     const workAvailable = downtimeActive ? downtimeBalance > 0 : Boolean(project.workAvailable);
     const finalAvailable = Boolean(project.finalAvailable) || (downtimeActive && downtimeBalance > 0);
+    const pendingCheckpoint = this.#pendingCheckpoint(project, config);
+    const checkpointReady = Boolean(pendingCheckpoint && this.#checkpointReady(actor, project, pendingCheckpoint));
+    const checkpointDisplay = pendingCheckpoint ? {
+      ...pendingCheckpoint, checkLabel: RecipeService.checkLabel(pendingCheckpoint, actor),
+      workstationLabel: pendingCheckpoint.workstation.name || "Suitable Workstation"
+    } : null;
+    const milestoneRows = config.progressCheck.required && config.progressCheck.timing === "milestones"
+      ? config.progressCheck.milestones.map(m => ({ ...m, checkLabel: RecipeService.checkLabel(m, actor),
+        passed: this.#checkpointPassed(project, m, config), pending: m.checkpointId === pendingCheckpoint?.checkpointId,
+        workstationLabel: m.workstation.name || "Suitable Workstation" })) : [];
     let stateLabel = "In Progress";
-    if (project.phase === "readyFinal") {
+    if (pendingCheckpoint) stateLabel = `Checkpoint at ${pendingCheckpoint.hour} h`;
+    else if (project.phase === "readyFinal") {
       if (finalAvailable) stateLabel = visibility.craftingCheck ? "Ready for Final Check" : "Ready to Complete";
       else stateLabel = visibility.craftingTime ? `Waiting for ${this.#cadenceLabel(project.cadence)}` : "Not Available Yet";
     } else if (project.extraEffortAvailable && config.extraEffort.enabled) stateLabel = visibility.extraEffort ? "Extra Effort Available" : "In Progress";
@@ -344,6 +399,7 @@ export class CraftingService {
       completedWork,
       progressPercent,
       workAvailable, finalAvailable, downtimeActive, downtimeBalance,
+      pendingCheckpoint: checkpointDisplay, checkpointReady, milestoneRows,
       stateLabel,
       cadenceLabel: this.#cadenceLabel(project.cadence),
       progressCheckLabel: RecipeService.checkLabel(config.progressCheck, actor),
@@ -478,7 +534,7 @@ export class CraftingService {
       catch (error) { console.warn(`${MODULE_ID} | Rest crafting unlock failed.`, error); }
       return;
     }
-    if ([REQUEST_TIMED, REQUEST_PROJECT_START, REQUEST_PROJECT_WORK, REQUEST_PROJECT_EXTRA, REQUEST_PROJECT_FINAL, REQUEST_PROJECT_CANCEL].includes(payload.action)) {
+    if ([REQUEST_TIMED, REQUEST_PROJECT_START, REQUEST_PROJECT_WORK, REQUEST_PROJECT_CHECKPOINT, REQUEST_STATION_PREFLIGHT, REQUEST_PROJECT_EXTRA, REQUEST_PROJECT_FINAL, REQUEST_PROJECT_CANCEL].includes(payload.action)) {
       if (!this.#isActiveGM()) return;
       const response = { action: RESPONSE, requestId: payload.requestId, requesterId: payload.requesterId, success: false };
       try {
@@ -523,8 +579,10 @@ export class CraftingService {
   static async #executeRequestUnlocked(request) {
     if (!this.#isActiveGM()) throw new Error("Only the active GM may commit a crafting transaction.");
     if (request.action === REQUEST_TIMED) return this.#executeTimedCraft(request);
+    if (request.action === REQUEST_STATION_PREFLIGHT) return this.#executeStationPreflight(request);
     if (request.action === REQUEST_PROJECT_START) return this.#executeProjectStart(request);
     if (request.action === REQUEST_PROJECT_WORK) return this.#executeProjectWork(request);
+    if (request.action === REQUEST_PROJECT_CHECKPOINT) return this.#executeProjectCheckpoint(request);
     if (request.action === REQUEST_PROJECT_EXTRA) return this.#executeProjectExtraEffort(request);
     if (request.action === REQUEST_PROJECT_FINAL) return this.#executeProjectFinal(request);
     if (request.action === REQUEST_PROJECT_CANCEL) return this.#executeProjectCancel(request);
@@ -616,6 +674,7 @@ export class CraftingService {
       ? await this.#validateRoll(actor, recipe, requester, request, config.progressCheck, "progress")
       : { success: true, total: null, message: null };
 
+    if (config.workstation.required) this.#consumeStationGrant(request, "project");
     const reservedMaterials = await this.#reserveIngredients(actor, selectedRequirements, { revealNames: prepared.playerVisibility?.ingredients });
     const snapshot = RecipeService.snapshot(recipe);
     // Projects intentionally freeze the Product definition when the Project begins. This keeps
@@ -636,7 +695,9 @@ export class CraftingService {
       mode: "project", id: foundry.utils.randomID(20), status: "active", phase: "working",
       recipeId: recipe.id, recipeName: recipe.name, recipe: snapshot,
       requiredWork: config.requiredWork, completedWork: 0, cadence: config.cadence,
-      midpointPassed: false, workAvailable: false, finalAvailable: false,
+      midpointPassed: false, milestonesPassed: [], deferredProgress: 0, checkpointRetryId: "",
+      workstationApproved: Boolean(config.workstation.required),
+      workAvailable: false, finalAvailable: false,
       extraEffortAvailable: false, extraEffortUsedThisPeriod: false, normalProgressThisPeriod: 0,
       reservedMaterials, ingredientSelection: foundry.utils.deepClone(request.ingredientSelection ?? {}),
       artisanSignature: this.#normalizeArtisanSignature(recipe, request.artisanSignature),
@@ -655,6 +716,7 @@ export class CraftingService {
     if (project.phase !== "working" || !(DowntimeService.active ? DowntimeService.canWork(actor) : project.workAvailable)) throw new Error("No Work Attempt is currently available for this Project.");
     const recipe = RecipeService.snapshot(project.recipe);
     const config = RecipeService.normalizeProject(recipe.project);
+    if (this.#pendingCheckpoint(project, config)) throw new Error("A checkpoint must be resolved before any more work.");
     const checkApplies = this.#progressCheckApplies(project, config);
     const rollResult = checkApplies
       ? await this.#validateRoll(actor, recipe, requester, request, config.progressCheck, "progress", project.id)
@@ -668,6 +730,92 @@ export class CraftingService {
     return this.#applyProgressAttempt(actor, project, recipe, { checkApplies, rollResult, initial: false });
   }
 
+  static async #executeProjectCheckpoint(request) {
+    const { requester, actor } = this.#requestContext(request);
+    const project = this.project(actor);
+    if (!project || project.id !== String(request.projectId ?? "") || project.status !== "active") {
+      throw new Error("The active crafting project changed.");
+    }
+    const recipe = RecipeService.snapshot(project.recipe);
+    const config = RecipeService.normalizeProject(recipe.project);
+    const checkpoint = this.#pendingCheckpoint(project, config);
+    if (!checkpoint || checkpoint.checkpointId !== String(request.checkpointId ?? "")) {
+      throw new Error("The pending checkpoint changed.");
+    }
+    if (!this.#checkpointReady(actor, project, checkpoint)) throw new Error("Another work opportunity is needed to retry this checkpoint.");
+    if (checkpoint.workstation.required && !(project.workstationApprovals ?? []).includes(checkpoint.checkpointId)) {
+      this.#consumeStationGrant(request, "checkpoint");
+    }
+    const roll = await this.#validateRoll(actor, recipe, requester, request, checkpoint, "progress", project.id);
+    const retry = project.checkpointRetryId === checkpoint.checkpointId;
+    if (retry && DowntimeService.active) await DowntimeService.spendHour(actor, { requestId: request.requestId, recipeId: recipe.id });
+    if (retry) project.workAvailable = false;
+    if (checkpoint.workstation.required) {
+      project.workstationApprovals = [...new Set([...(project.workstationApprovals ?? []), checkpoint.checkpointId])];
+    }
+    project.updatedAt = this.serverTime();
+    const visibility = RecipeService.normalizePlayerVisibility(recipe.playerVisibility);
+    const facts = [];
+    if (visibility.progressCheck && Number.isFinite(Number(roll.total))) facts.push(visibility.progressDC
+      ? `Checkpoint at ${checkpoint.hour} h: ${roll.total} vs DC ${checkpoint.dc}`
+      : `Checkpoint Check: ${roll.total}`);
+
+    if (!roll.success) {
+      const failure = config.progressCheck.failure;
+      if (failure.mode === "failProject") return this.#failProject(actor, project, recipe, failure, {
+        stage: "progress", total: roll.total, dc: checkpoint.dc
+      });
+      if (failure.mode === "regress") {
+        project.completedWork = Math.max(0, Number(project.completedWork || 0) - failure.regressBy);
+        // Regression cancels unearned deferred bonuses from an earlier Extra Effort.
+        project.deferredProgress = 0;
+        project.checkpointRetryId = "";
+        project.phase = "working";
+        project.finalAvailable = false;
+      } else project.checkpointRetryId = checkpoint.checkpointId;
+      project.extraEffortAvailable = false;
+      project.lastAttempt = { stage: "checkpoint", success: false, checkpointId: checkpoint.checkpointId,
+        total: roll.total, dc: checkpoint.dc, at: this.serverTime() };
+      await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
+      if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork} h`);
+      await this.#postProjectMessage(actor, recipe, "Checkpoint Failed", `The checkpoint at ${checkpoint.hour} hours was not passed.`);
+      return { outcome: "checkpoint-failure", project: this.prepareProjectForActor(actor, project),
+        feedback: this.#feedback("Checkpoint Failed", failure.mode === "regress"
+          ? "The checkpoint failed and project progress regressed."
+          : "The checkpoint remains pending; another opportunity is required to retry.", facts, "warning", "fa-solid fa-dice-d20") };
+    }
+
+    project.milestonesPassed = [...new Set([...(project.milestonesPassed ?? []), checkpoint.checkpointId])];
+    if (config.progressCheck.legacyMidpoint && checkpoint.checkpointId === "legacy-midpoint") project.midpointPassed = true;
+    project.checkpointRetryId = "";
+    // Release any surplus Extra Effort, stopping again at each subsequent checkpoint.
+    this.#addMilestoneAwareProgress(project, config, 0);
+    project.lastAttempt = { stage: "checkpoint", success: true, checkpointId: checkpoint.checkpointId,
+      total: roll.total, dc: checkpoint.dc, at: this.serverTime() };
+    if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork} h`);
+    const pendingNext = this.#pendingCheckpoint(project, config);
+    if (project.phase === "readyFinal" && project.completedWork < project.requiredWork) {
+      project.phase = "working";
+      project.finalAvailable = false;
+    }
+    if (project.completedWork >= project.requiredWork && !pendingNext) {
+      project.extraEffortAvailable = false;
+      if (!RecipeService.normalizeCraftingResolution(recipe.craftingResolution).check.required || project.finalPolicy?.automaticSuccess) {
+        return this.#completeProject(actor, project, recipe, roll, { feedbackFacts: facts, completedBy: "checkpoint" });
+      }
+      project.phase = "readyFinal";
+      project.finalAvailable = true;
+    }
+    await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
+    await this.#postProjectMessage(actor, recipe, "Checkpoint Passed", `Checkpoint at ${checkpoint.hour} hours completed.`);
+    return { outcome: pendingNext ? "checkpoint-next" : "checkpoint-success",
+      project: this.prepareProjectForActor(actor, project),
+      feedback: this.#feedback("Checkpoint Passed", pendingNext
+        ? "The checkpoint passed. Resolve the next mandatory checkpoint before continuing."
+        : project.phase === "readyFinal" ? "All work is complete. The Final Crafting Check is ready."
+          : "Crafting may continue.", facts, "success", "fa-solid fa-check-circle") };
+  }
+
   static async #executeProjectExtraEffort(request) {
     const { requester, actor } = this.#requestContext(request);
     const project = this.project(actor);
@@ -677,6 +825,7 @@ export class CraftingService {
     const recipe = RecipeService.snapshot(project.recipe);
     const config = RecipeService.normalizeProject(recipe.project);
     if (!config.extraEffort.enabled) throw new Error("This Recipe does not allow Extra Effort.");
+    if (this.#pendingCheckpoint(project, config)) throw new Error("A checkpoint must be resolved before Extra Effort.");
     const rollResult = await this.#validateRoll(actor, recipe, requester, request, config.extraEffort, "extra", project.id);
     project.extraEffortAvailable = false;
     project.extraEffortUsedThisPeriod = true;
@@ -723,11 +872,7 @@ export class CraftingService {
     }
 
     const before = Math.max(0, Number(project.completedWork) || 0);
-    project.completedWork = Math.min(project.requiredWork, before + config.extraEffort.progressGain);
-    if (config.progressCheck.required && config.progressCheck.timing === "midpoint" && !project.midpointPassed) {
-      const midpoint = Math.ceil(config.requiredWork / 2);
-      if (before < midpoint && project.completedWork >= midpoint) project.midpointPassed = true;
-    }
+    this.#addMilestoneAwareProgress(project, config, config.extraEffort.progressGain);
     project.lastAttempt = { stage: "extra", success: true, total: rollResult.total, dc: config.extraEffort.dc, at: this.serverTime() };
     if (visibility.extraEffort) {
       const extraProgress = project.completedWork - before;
@@ -736,6 +881,14 @@ export class CraftingService {
       facts.push(`Total this hour: +${normalProgress + extraProgress}`);
     }
     if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork} h`);
+
+    if (this.#pendingCheckpoint(project, config)) {
+      project.extraEffortAvailable = false;
+      await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
+      await this.#postProjectMessage(actor, recipe, "Checkpoint Reached", "A mandatory project checkpoint must be resolved before further progress.");
+      return { outcome: "checkpoint-pending", project: this.prepareProjectForActor(actor, project),
+        feedback: this.#feedback("Checkpoint Reached", "Resolve the required check before continuing. Any additional Extra Effort progress is held until the checkpoint is passed.", facts, "info", "fa-solid fa-dice-d20") };
+    }
 
     if (project.completedWork >= project.requiredWork) {
       project.extraEffortAvailable = false;
@@ -772,6 +925,7 @@ export class CraftingService {
     if (!project || project.id !== String(request.projectId ?? "") || project.status !== "active") throw new Error("The active Crafting Project changed.");
     if (project.phase !== "readyFinal" || !(project.finalAvailable || DowntimeService.canWork(actor))) throw new Error("The Final Crafting Check is not currently available.");
     const recipe = RecipeService.snapshot(project.recipe);
+    if (this.#pendingCheckpoint(project, RecipeService.normalizeProject(recipe.project))) throw new Error("A mandatory checkpoint has not been resolved.");
     const resolution = RecipeService.normalizeCraftingResolution(recipe.craftingResolution);
     if (!resolution.check.required || project.finalPolicy?.automaticSuccess) return this.#completeProject(actor, project, recipe);
     const finalCheck = this.#projectFinalCheck(project, recipe);
@@ -840,8 +994,7 @@ export class CraftingService {
       };
     }
 
-    project.completedWork = Math.min(project.requiredWork, Number(project.completedWork || 0) + 1);
-    if (checkApplies && config.progressCheck.timing === "midpoint") project.midpointPassed = true;
+    this.#addMilestoneAwareProgress(project, config, 1);
     project.workAvailable = false;
     project.extraEffortAvailable = Boolean(config.extraEffort.enabled && project.completedWork < project.requiredWork);
     project.extraEffortUsedThisPeriod = false;
@@ -850,6 +1003,12 @@ export class CraftingService {
     project.lastAttempt = { stage: "progress", success: true, total: rollResult.total, dc: checkApplies ? config.progressCheck.dc : null, at: this.serverTime(), initial };
     if (visibility.projectProgress) facts.push(`Progress: ${project.completedWork} / ${project.requiredWork} h`);
     if (project.extraEffortAvailable && visibility.extraEffort) facts.push("Extra Effort is available for this Crafting Hour.");
+    if (this.#pendingCheckpoint(project, config)) {
+      await actor.setFlag(MODULE_ID, FLAGS.CRAFTING_JOB, project);
+      await this.#postProjectMessage(actor, recipe, "Checkpoint Reached", "A mandatory project checkpoint is ready for resolution.");
+      return { outcome: "checkpoint-pending", project: this.prepareProjectForActor(actor, project),
+        feedback: this.#feedback("Checkpoint Reached", "Resolve the required check before continuing work or Extra Effort.", facts, "info", "fa-solid fa-dice-d20") };
+    }
 
     if (project.completedWork >= project.requiredWork) {
       project.extraEffortAvailable = false;
@@ -1033,7 +1192,10 @@ export class CraftingService {
     if (!project || project.status !== "active") return;
     const restType = String(result?.type || config?.type || "");
     if (!this.#restUnlocks(project.cadence, restType)) return;
-    const needsUnlock = (project.phase === "working" && !project.workAvailable)
+    const configProject = RecipeService.normalizeProject(project.recipe?.project);
+    const pendingCheckpoint = this.#pendingCheckpoint(project, configProject);
+    const needsUnlock = (Boolean(pendingCheckpoint && project.checkpointRetryId && !project.workAvailable))
+      || (project.phase === "working" && !project.workAvailable)
       || (project.phase === "readyFinal" && !project.finalAvailable);
     if (!needsUnlock) return;
     const payload = { action: REST_UNLOCK, actorId: actor.id, projectId: project.id, restType };
@@ -1050,7 +1212,8 @@ export class CraftingService {
     const restType = String(payload.restType || "");
     if (!this.#restUnlocks(project.cadence, restType)) return false;
     let changed = false;
-    if (project.phase === "working" && !project.workAvailable) {
+    const pendingCheckpoint = this.#pendingCheckpoint(project, RecipeService.normalizeProject(project.recipe?.project));
+    if (((pendingCheckpoint && project.checkpointRetryId) || project.phase === "working") && !project.workAvailable) {
       project.workAvailable = true;
       project.extraEffortAvailable = false;
       project.extraEffortUsedThisPeriod = false;
@@ -1070,14 +1233,106 @@ export class CraftingService {
     return restType === "long";
   }
 
+  static async #executeStationPreflight(request) {
+    const { actor } = this.#requestContext(request);
+    const scope = String(request.stationScope || "");
+    let recipe, station, stage;
+    if (scope === "project") {
+      if (this.isBusy(actor)) throw new Error("A Crafting Project is already active.");
+      recipe = KnowledgeItemService.recipeForActor(actor, String(request.recipeId || ""));
+      if (!recipe || recipe.craftingMode !== "project") throw new Error("This project is not available to the Character.");
+      station = RecipeService.normalizeProject(recipe.project).workstation;
+      stage = "starting the Project";
+    } else if (scope === "checkpoint") {
+      const project = this.project(actor);
+      if (!project || project.id !== String(request.projectId || "") || project.status !== "active") throw new Error("The Project has changed.");
+      recipe = RecipeService.snapshot(project.recipe);
+      const checkpoint = this.#pendingCheckpoint(project, RecipeService.normalizeProject(recipe.project));
+      if (!checkpoint || checkpoint.checkpointId !== String(request.checkpointId || "")) throw new Error("The pending checkpoint has changed.");
+      if (!this.#checkpointReady(actor, project, checkpoint)) throw new Error("The checkpoint is not available yet.");
+      station = checkpoint.workstation;
+      stage = `checkpoint at ${checkpoint.hour} hours`;
+    } else throw new Error("Unknown workstation approval scope.");
+    if (!station?.required) throw new Error("This Crafting step does not require workstation approval.");
+    await this.#confirmWorkstation(actor, recipe, station, stage);
+    const grantId = foundry.utils.randomID(28);
+    this.#stationGrants.set(grantId, {
+      actorId: actor.id, requesterId: String(request.requesterId || ""), recipeId: recipe.id,
+      projectId: String(request.projectId || ""), checkpointId: String(request.checkpointId || ""), scope,
+      expiresAt: Date.now() + 300000
+    });
+    if (this.#stationGrants.size > 1000) {
+      for (const [id, entry] of this.#stationGrants) {
+        if (entry.expiresAt < Date.now()) this.#stationGrants.delete(id);
+      }
+    }
+    return { grantId };
+  }
+
+  static #consumeStationGrant(request, scope) {
+    const id = String(request.stationGrantId || "");
+    const grant = this.#stationGrants.get(id);
+    if (!grant || grant.expiresAt < Date.now()
+      || grant.scope !== scope
+      || grant.actorId !== String(request.actorId || "")
+      || grant.requesterId !== String(request.requesterId || "")
+      || grant.recipeId !== String(request.recipeId || "")
+      || grant.projectId !== String(request.projectId || "")
+      || grant.checkpointId !== String(request.checkpointId || "")) {
+      throw new Error("Workstation approval is missing, expired, or does not match this crafting step.");
+    }
+    this.#stationGrants.delete(id); // One-time GM authorization, never reusable.
+  }
+
   static #progressCheckApplies(project, config) {
-    const check = config.progressCheck;
-    if (!check.required) return false;
-    if (check.timing === "every") return true;
-    if (project.midpointPassed) return false;
-    const midpoint = Math.ceil(config.requiredWork / 2);
+    return Boolean(config.progressCheck.required && config.progressCheck.timing === "every");
+  }
+
+  static #checkpointPassed(project, checkpoint, config) {
+    return (project.milestonesPassed ?? []).includes(checkpoint.checkpointId)
+      || (Boolean(config.progressCheck.legacyMidpoint && project.midpointPassed) && checkpoint.checkpointId === "legacy-midpoint");
+  }
+
+  static #pendingCheckpoint(project, config) {
+    if (!config.progressCheck.required || config.progressCheck.timing !== "milestones") return null;
+    const completed = Number(project.completedWork) || 0;
+    return config.progressCheck.milestones.find(m => m.hour <= completed && !this.#checkpointPassed(project, m, config)) ?? null;
+  }
+
+  static #checkpointReady(actor, project, checkpoint) {
+    if (project.checkpointRetryId !== checkpoint.checkpointId) return true;
+    return DowntimeService.active ? DowntimeService.canWork(actor) : Boolean(project.workAvailable);
+  }
+
+  static #addMilestoneAwareProgress(project, config, additional=0) {
     const completed = Math.max(0, Number(project.completedWork) || 0);
-    return completed < midpoint && (completed + 1) >= midpoint;
+    const pendingAmount = Math.max(0, Number(project.deferredProgress) || 0);
+    const total = Math.max(0, Math.floor(Number(additional) || 0)) + pendingAmount;
+    if (!total) return 0;
+    if (this.#pendingCheckpoint(project, config)) { project.deferredProgress = total; return 0; }
+    const next = config.progressCheck.required && config.progressCheck.timing === "milestones"
+      ? config.progressCheck.milestones.find(m => m.hour > completed && !this.#checkpointPassed(project, m, config)) : null;
+    const cap = Math.min(Number(project.requiredWork) || config.requiredWork, next?.hour ?? Infinity);
+    const gained = Math.max(0, Math.min(total, cap - completed));
+    project.completedWork = completed + gained;
+    project.deferredProgress = Math.min(Math.max(0, total - gained),
+      Math.max(0, (Number(project.requiredWork) || config.requiredWork) - project.completedWork));
+    return gained;
+  }
+
+  static async #confirmWorkstation(actor, recipe, station, stage) {
+    const name = String(station.name || "Suitable Workstation");
+    const escape = foundry.utils.escapeHTML;
+    const approved = await foundry.applications.api.DialogV2.confirm({
+      window: { title: "Crafting Core — Workstation Approval" },
+      content: `<p><strong>${escape(actor.name)}</strong> is crafting <strong>${escape(recipe.name)}</strong>.</p>`
+        + `<p>Confirm that the required workstation (<strong>${escape(name)}</strong>) is available for ${escape(stage)}.</p>`
+        + `<p>Rejecting does not spend Crafting Hours or change project progress.</p>`,
+      yes: { label: "Confirm Workstation", icon: "fa-solid fa-check" },
+      no: { label: "Not Available", icon: "fa-solid fa-ban" },
+      modal: true, rejectClose: false
+    });
+    if (!approved) throw new Error(`GM approval required: ${name} is not confirmed as available.`);
   }
 
   static async #performRoll(actor, recipe, check, kind, requestId, { projectId="", revealCheck=true, revealDc=true }={}) {

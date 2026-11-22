@@ -2300,3 +2300,13 @@
 
 .crafting-core-directory-downtime { border-color:rgba(181,155,97,.48); background:linear-gradient(180deg,rgba(70,51,20,.92),rgba(41,32,20,.95)); }
 .crafting-core-directory-downtime > i { color:#e5bb73; }
+
+/* v0.7.0 — additive, accessible checkpoint editor */
+.crafting-core .cc-checkpoint-list { display: grid; grid-template-columns: 1fr; gap: .6rem; margin: .65rem 0; }
+.crafting-core .cc-checkpoint-card { padding: .7rem; border: 1px solid var(--color-border-light-primary, #7777); border-radius: 7px; background: var(--color-bg-option, transparent); }
+.crafting-core .cc-checkpoint-heading { display: flex; justify-content: space-between; align-items: center; gap: .7rem; margin-bottom: .5rem; }
+.crafting-core .cc-checkpoint-heading button, .crafting-core .cc-checkpoint-add { min-height: 32px; padding: .3rem .65rem; }
+.crafting-core .cc-checkpoint-add { margin-top: .45rem; width: 100%; }
+.crafting-core .cc-checkpoint-card .cc-grid { grid-template-columns: minmax(90px,.65fr) minmax(160px,1.6fr) minmax(92px,.65fr); }
+@media (max-width: 730px) { .crafting-core .cc-checkpoint-card .cc-grid { grid-template-columns: minmax(0,1fr); } }
+.crafting-core .cc-sheet-checkpoint-notice { padding: .65rem; border: 1px solid var(--color-border-highlight, #b89e6d); border-radius: 6px; margin: .4rem 0; }

@@ -786,9 +786,20 @@ export class KnowledgeItemService {
     if (recipe?.craftingMode === "project") {
       const project = RecipeService.normalizeProject(recipe?.project);
       if (visibility.progressCheck && project.progressCheck.required) {
-        const timing = project.progressCheck.timing === "midpoint" ? "Midpoint only" : "Every Crafting Hour";
-        const dc = visibility.progressDC ? ` · DC ${project.progressCheck.dc}` : "";
-        lines.push(`<p><strong>Progress Check:</strong> ${escape(RecipeService.checkLabel(project.progressCheck))}${dc} · ${timing}</p>`);
+        if (project.progressCheck.timing === "milestones") {
+          lines.push("<p><strong>Progress Checks:</strong> Specific Milestones</p>");
+          for (const checkpoint of project.progressCheck.milestones) {
+            const dc = visibility.progressDC ? ` · DC ${checkpoint.dc}` : "";
+            const station = checkpoint.workstation.required ? ` · Requires ${checkpoint.workstation.name || "Suitable Workstation"}` : "";
+            lines.push(`<p>${escape(`After ${checkpoint.hour} h · ${RecipeService.checkLabel(checkpoint)}${dc}${station}`)}</p>`);
+          }
+        } else {
+          const dc = visibility.progressDC ? ` · DC ${project.progressCheck.dc}` : "";
+          lines.push(`<p><strong>Progress Check:</strong> ${escape(RecipeService.checkLabel(project.progressCheck))}${dc} · Every Crafting Hour</p>`);
+        }
+      }
+      if (project.workstation.required) {
+        lines.push(`<p><strong>Suitable Workstation:</strong> ${escape(project.workstation.name || "Suitable Workstation")} · GM confirmation required before project start.</p>`);
       }
       if (visibility.progressFailure && project.progressCheck.required) {
         const failure = project.progressCheck.failure;

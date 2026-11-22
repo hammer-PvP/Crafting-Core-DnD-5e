@@ -128,12 +128,18 @@
         </div>
       </section>
 
+      <section class="cc-form-card cc-workstation-config-card">
+        <div class="cc-card-heading"><div><span class="cc-kicker">Workplace</span><h3>Suitable Workstation</h3></div><small>Optional GM-confirmed requirement for the project. Does not affect existing recipes unless enabled.</small></div>
+        <label class="cc-resolution-toggle"><input type="checkbox" name="projectWorkstationRequired" data-resolution-rerender {{#if draft.project.workstation.required}}checked{{/if}}><span><strong>Require Suitable Workstation</strong><small>The GM confirms the appropriate location before the project begins.</small></span></label>
+        {{#if draft.project.workstation.required}}<label><span>Workstation Name</span><input name="projectWorkstationName" type="text" maxlength="120" value="{{draft.project.workstation.name}}" placeholder="Forge, Laboratory, Workshop..."></label>{{/if}}
+      </section>
       <section class="cc-form-card cc-progress-check-card">
         <div class="cc-card-heading"><div><span class="cc-kicker">Progress Checks</span><h3>Checks During the Project</h3></div><small>Failure always consumes that Work Attempt. Consequences decide whether the project merely stalls, regresses, or fails completely.</small></div>
         <label class="cc-resolution-toggle"><input type="checkbox" name="requireProgressCheck" data-resolution-rerender {{#if draft.project.progressCheck.required}}checked{{/if}}><span><strong>Require Progress Checks</strong><small>When disabled, each Work Attempt automatically adds +1 progress.</small></span></label>
         {{#if draft.project.progressCheck.required}}
         <div class="cc-grid three">
-          <label><span>When</span><select name="progressCheckTiming"><option value="every" {{#if (eq draft.project.progressCheck.timing "every")}}selected{{/if}}>Every Hour of Work</option><option value="midpoint" {{#if (eq draft.project.progressCheck.timing "midpoint")}}selected{{/if}}>Midpoint Only</option></select></label>
+          <label><span>When</span><select name="progressCheckTiming"><option value="every" {{#if (eq draft.project.progressCheck.timing "every")}}selected{{/if}}>Every Hour of Work</option><option value="milestones" {{#if (eq draft.project.progressCheck.timing "milestones")}}selected{{/if}}>Specific Milestones</option></select></label>
+          {{#if (eq draft.project.progressCheck.timing "every")}}
           <label><span>Check</span><select name="progressCheck">
             <optgroup label="Ability Checks">{{#each craftingResolutionOptions.abilityOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.progressCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
             <optgroup label="Skills">{{#each craftingResolutionOptions.skillOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.progressCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
@@ -141,7 +147,25 @@
             <optgroup label="Saving Throws">{{#each craftingResolutionOptions.saveOptions}}<option value="{{value}}" {{#if (eq value ../craftingResolutionOptions.progressCheckValue)}}selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
           </select></label>
           <label><span>Difficulty Class (DC)</span><input type="number" min="1" max="40" step="1" name="progressDC" value="{{draft.project.progressCheck.dc}}"></label>
+          {{/if}}
         </div>
+        {{#if (eq draft.project.progressCheck.timing "milestones")}}
+        <div class="cc-checkpoint-list">
+          {{#each craftingResolutionOptions.milestoneRows}}
+          <div class="cc-checkpoint-card" data-checkpoint-id="{{checkpointId}}">
+            <div class="cc-checkpoint-heading"><strong>Checkpoint · {{hour}} h</strong><button type="button" data-action="remove-checkpoint" data-checkpoint-id="{{checkpointId}}"><i class="fa-solid fa-trash"></i> Remove</button></div>
+            <div class="cc-grid three">
+              <label><span>After Crafting Hours</span><input data-checkpoint-hour type="number" min="1" max="99" step="1" value="{{hour}}"></label>
+              <label><span>Required Check</span><select data-checkpoint-check>{{#each checkOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}</select></label>
+              <label><span>Difficulty Class (DC)</span><input data-checkpoint-dc type="number" min="1" max="40" step="1" value="{{dc}}"></label>
+            </div>
+            <label class="cc-resolution-toggle"><input type="checkbox" data-checkpoint-station-required data-resolution-rerender {{#if workstation.required}}checked{{/if}}><span><strong>Require Suitable Workstation at this checkpoint</strong><small>GM confirms availability before resolving the check.</small></span></label>
+            {{#if workstation.required}}<label><span>Workstation Name</span><input data-checkpoint-station-name type="text" maxlength="120" value="{{workstation.name}}" placeholder="Forge, Arcane Workshop, Alchemy Lab..."></label>{{/if}}
+          </div>
+          {{/each}}
+        </div>
+        <button type="button" class="cc-checkpoint-add" data-action="add-checkpoint"><i class="fa-solid fa-plus"></i> Add Checkpoint</button>
+        {{/if}}
         <div class="cc-resolution-section cc-failure-outcome-block">
           <div class="cc-resolution-heading"><strong>On Progress Check Failure</strong><small>Choose one project outcome. Material loss only exists when the entire Project fails.</small></div>
           <div class="cc-failure-choice-grid">

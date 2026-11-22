@@ -225,6 +225,7 @@ export class CharacterSheetService {
       return result;
     });
     this.#bindAsync(root, app, "work-project", actor => CraftingService.requestWorkOnProject(actor));
+    this.#bindAsync(root, app, "resolve-checkpoint", actor => CraftingService.requestCheckpoint(actor));
     this.#bindAsync(root, app, "extra-effort", actor => CraftingService.requestExtraEffort(actor));
     this.#bindAsync(root, app, "final-project", actor => CraftingService.requestFinalCheck(actor));
 

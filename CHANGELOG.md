@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0 - Specific Project Checkpoints, Suitable Workstations & Beginner Guide
+
+- Added **Specific Milestones** to persistent Project recipes: GMs can define multiple mandatory checks at distinct absolute Crafting Hour thresholds, each with its own ability/skill/tool/saving throw and DC. Existing failure outcomes remain available and configured on the Project.
+- Removed **Midpoint Only** from the Recipe Editor. Legacy midpoint recipes are interpreted as a single milestone at `ceil(requiredWork / 2)`, with stable checkpoint identity and recognition of an already completed `midpointPassed` flag in active Projects; recipes without checks and Every Crafting Hour recipes retain their prior behavior.
+- Made checkpoints real progress gates for normal work, Extra Effort and Downtime. A checkpoint reached at the final hour must be resolved before completion. Extra Effort progression that extends past a milestone is held and released after success, stopping again at subsequent pending milestones rather than bypassing them.
+- Added **Resolve Checkpoint** on the Character Crafting tab, with the check rolled using the Character sheet and validated by the active GM. The first checkpoint attempt is included in the work already completed; after a failed checkpoint, a retry requires another rest-based work opportunity or a Downtime hour, while retaining the recipe's existing no-progress/regression/fail-project outcomes.
+- Added optional **Suitable Workstation** requirements to the whole Project and/or individual milestones. The active GM confirms availability before the character rolls for that step. Rejection does not debit Downtime hours, advance progress, or reserve materials when starting a Project.
+- Updated Recipe Knowledge descriptions and the Character Crafting sheet to display checkpoint hours, individual checks, pending/passed state, workstation requirements, and GM-confirmation status. The GM's editor preserves the existing checks, Extra Effort, final checks, materials, rest cadence and crafting-time settings.
+- Replaced the README with a concise **user guide** covering initial world setup, Content Packs, recipe creation and publishing, Player Crafting, Crafting Hours/Downtime, Gathering, maintenance, optional integrations and support. Version history remains in this CHANGELOG.
+- This release does not add WoW/Phantyr content, rule profiles, new Materials, or Gathering/Harvesting 2.0. Foundry V14 and D&D5e 6.1.x remain the compatibility targets. Syntax and synthetic engine tests passed; manual verification in Foundry is still required.
+
 ## 0.6.2 - Compact Character Crafting & Downtime Hours
 
 - Reorganized the Character-sheet Crafting Project view into a responsive two-column ingredient grid with individually collapsible groups, expandable descriptions and Reserved Materials, and compact Requirements / Progress / Extra Effort / Final Check cards. Ingredient icons remain readable at their prior size, and existing Fixed, Choose One, Mix/Pool selection and reservation mechanics remain unchanged.

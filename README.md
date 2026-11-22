@@ -1,483 +1,146 @@
 # Crafting Core (DnD 5e)
 
-Crafting Core is a GM-authoritative crafting, harvesting, and material framework for Foundry Virtual Tabletop, built specifically for D&D 5e.
+**Collect materials. Learn recipes. Craft equipment and consumables. Build projects over time.**
 
-The module connects four parts of the game loop:
+Crafting Core adds a flexible crafting system to D&D 5e in Foundry VTT. Game Masters decide which materials, products, and recipes exist in their world. Players learn recipes and craft directly from their character sheets. Crafting Core also provides tools for gathering resources, harvesting creatures, and managing crafting time during a campaign.
 
-1. **Materials and Products** - ingredients, harvested resources, trade goods, and curated finished items.
-2. **Recipes and Knowledge** - GM-authored crafting definitions published as learnable Items.
-3. **Player Crafting** - timed crafts and persistent Crafting Projects directly from the Character sheet.
-4. **Harvesting and Generation** - creature profiles, environment gathering, game hunting, and optional Item Piles output.
+You can start with your own content or install the optional content packs included with the module. **No material or recipe catalog is forced into a new world.**
 
-Crafting Core uses native D&D 5e Items throughout. Any Item can be an ingredient or an output, so the system can support ordinary materials, equipment, consumables, custom Item Creator content, or another crafted Product as part of a later Recipe.
+## What Can Crafting Core Do?
 
-## Compatibility
+- **Materials and Products:** create or register D&D 5e items for use as ingredients and crafted results.
+- **Recipe Builder:** define ingredients, output items, requirements, crafting time, and optional checks.
+- **Recipe Knowledge:** publish recipes as learnable items and let characters learn them in-game.
+- **Player Crafting:** make quick items or advance persistent projects on the character sheet.
+- **Crafting Hours and Downtime:** follow rest-based progress during an adventure or let the GM release a bank of crafting hours.
+- **Gathering and Harvesting:** generate resources from environments and creatures, with optional Item Piles support.
 
-- **Crafting Core:** v0.6.2
-- **Foundry VTT:** minimum 14.367, verified target 14.370
-- **D&D 5e:** 6.0.0-6.1.999, verified target 6.1.0
-- **Item Piles:** optional integration for Item Pile generation and Token Harvest
-- **DnD 5e Item Creator:** optional for the core module; **0.7.1+ is required for the official persistent Curated Food and Alcohol Products**
+## Getting Started — GM
 
-Crafting Core v0.6.0 separates the **crafting engine from optional content**. A fresh World starts with no forced Materials, Products, Recipes, or Hammer harvest catalog. GMs can build a complete World-owned crafting system from scratch, register existing D&D5e Items, or install optional Content Packs to reproduce the full curated setup used by the project. Existing Worlds migrate in-place: document IDs/UUIDs, Recipe/Product identities, learned Character knowledge, and active Projects are preserved.
+1. **Open the Item Directory** and click **Crafting Core**.
+2. Open **Materials** to enter the **Crafting Core Catalog**. Create or register your own Materials and Products, or open **Content Packs** to install a ready-made library.
+3. Return to **Crafting Core**, choose **New Recipe Draft**, and create a recipe using the materials and output item you want.
+4. Click **Save Draft** while editing. When the recipe is ready for players, use **Publish to Private Compendium**.
+5. Find the published item in **Crafting Core — Learn Sources** and give it to a character. The character uses its **Learn Recipe** activity.
+6. Open that character's **Crafting** tab to see the learned recipe and start crafting.
 
-### v0.6.2 — Compact Character Crafting & Downtime Management
+**Tip:** Try one simple recipe first. Add more ingredients, progress checks, and other requirements only when your campaign needs them.
 
-- Character Crafting Projects now show their time/progress **in hours**, with the previous 1 Work Period mapped to 1 hour. Existing Recipe and Project numbers, including saved `requiredWork`/`completedWork`, are preserved in place. Timed Recipes continue using persisted seconds internally while the Builder displays hours (fractional hours supported).
-- Character crafting uses a compact, responsive, two-column Ingredient layout. Ingredient groups, the description, and Reserved Materials are independently collapsible; Fixed, OR, and Mix/Pool behavior is preserved. The sheet keeps material icons readable and records collapse state across sheet re-renders.
-- GMs can open **Downtime Manager** from the Item Directory. Configure eligible Actor folders / Group Actors; check individual Characters without losing list scroll position; grant N hours **per selected Character**; or revoke remaining credits safely. A transaction history on each Actor prevents loss of crafting history.
-- **Downtime Inactive** is the default: crafting works exactly as before via the Recipe's Long/Short Rest cadence, and credited hours remain frozen. **Downtime Active** explicitly unlocks spending each Character's available hours for Project work, one hour per normal attempt (including Project start), with all progress checks, Extra Effort, failure, and completion logic preserved. No historic credits or automatic rest credits are invented.
-- Run **Resync Material Sources** manually from Crafting Core settings to update existing inventory copies' canonical images, managed sources and metadata, including Vehicles, Containers, and unlinked Tokens. There is **no** automatic inventory scan. **Organize Equipment** is a separate manual folder-only maintenance operation, while new SRD Equipment installs use the organized folders automatically.
-- World of Warcraft, Phantyr, new Rule Profiles, and expanded Gathering & Harvesting are intentionally out of scope.
+## Materials, Products, and Content Packs
 
-### v0.6.1 — Canonical Artwork Library
+The **Crafting Core Catalog** has three areas:
 
-Crafting Core now ships a complete, self-contained artwork library with **455 unique WebP source images** and **5 transparent equipment-border assets** supplied for the project. All **257 official Materials**, **15 Meals**, **43 Drinks**, **82 Alchemy/Inscription Products**, and **58 SRD Equipment illustrations** have a stable, explicit canonical asset assignment. The 58 equipment illustrations additionally provide **244 precomposed variant images** for +0/+1/+2/+3 crafting and the Legendary +3 Armor border.
+| Area | What it is for |
+| --- | --- |
+| **Materials** | Materials available in the current world. Create new ones or register existing items. |
+| **Products** | Items that recipes can produce. Register your own items or use items from installed content. |
+| **Content Packs** | Optional collections the GM can deliberately install or restore. |
 
-- The Material catalog now shows its one canonical illustration instead of a three-option icon selector. The old Foundry/bundled candidate maps, similarity matching, random-style distribution, and associated radio-choice UI are removed. Official products no longer persist candidate lists.
-- Images resolve under `modules/dnd5e-crafting-core/assets/canonical/`. Equipment variant Items use `assets/equipment-variants/`. The original border PNGs remain in `assets/borders/` as part of the project assets.
-- Legacy v0.6.0 files under `icons/` remain bundled strictly for backward compatibility with image references saved on existing Actors, Recipes and imported Items; they are no longer used for candidate selection or new curated content.
-- On the first GM login after upgrade, **only already installed official Material and Product Items** with legacy native/bundled art receive an **image-only migration**. Missing/removed optional Content Packs are **not** recreated; stable Item IDs, Recipes, Knowledge, Actor inventories, and active Projects remain unchanged. The operation is idempotent and protects custom art paths outside the former native/bundled roots.
-- Custom Materials/Products, imported Recipes, existing Actor-owned Items, and non-canonical third-party equipment retain their own icons. If you want to refresh published Recipe snapshots too, use the existing **Content Packs → Restore** actions intentionally; those perform their usual full curated synchronization.
-- The module no longer needs Plutonium, other modules, or external image files for its **official** Content Pack artwork. Source SRD data is still required for the functional rules/Activities of Alchemy items and the base Equipment Crafting library.
+Available built-in packs include:
 
-### v0.6.0 — Content Architecture & Catalog UX
+- **Hammer — Materials:** a ready-made material catalog.
+- **Hammer — Culinary:** food and drink products with learnable recipes.
+- **Hammer — Alchemy & Inscription:** consumables, inks, inscriptions, and their recipes.
+- **SRD Equipment Crafting:** equipment products and recipes based on available D&D 5e SRD items, including enhanced equipment variants.
 
-The **Crafting Core Catalog** is now organized around three clear workflows:
+Packs are **optional**. Installing or restoring a pack affects its managed content; it does not replace unrelated items created by the GM. You can also use ordinary D&D 5e items as ingredients without registering every item as a Crafting Core material.
 
-- **Materials** — only Materials that actually exist in this World. Create a Material or register an existing Item without installing Hammer content.
-- **Products** — only Products that actually exist in this World, grouped by origin (World, external source, or installed Content Pack). Create or register Products manually.
-- **Content Packs** — optional managed libraries. `Hammer — Materials`, `Hammer — Culinary`, `Hammer — Alchemy & Inscription`, and `SRD Equipment Crafting` can be installed or restored independently. **Install Missing Packs** reproduces the complete curated setup without automatically running the Creature Scanner.
+## Creating a Recipe — GM
 
-A fresh World therefore begins at **0 Materials / 0 Products / 0 published curated Recipes** until the GM deliberately creates/registers content or installs a Content Pack. Availability of built-in definitions no longer makes them runtime content. Scanner, Harvest, Gathering, Material Generation, Recipe transfer, and Item Piles integration consume only Materials that are actually installed in the World.
+Open **Crafting Core → New Recipe Draft** and fill in the sections you need:
 
-Existing Worlds receive a one-time **content architecture migration** that classifies existing documents in-place as Content Pack, World, or External content. It does not reinstall packs, change IDs/UUIDs, unpublish Recipes, erase learned knowledge, or modify active Projects. Legacy Knowledge safety from v0.5.11 remains authoritative.
+1. **Recipe:** name, image, description, and crafting mode.
+2. **Who Can Craft:** choose eligible skill or tool proficiencies, access requirements, and any final crafting check.
+3. **Ingredients and Result:** choose the items consumed and the item produced. Ingredient groups can be fixed, offer a choice, or allow a mix of equivalent materials.
+4. **Crafting Time:** choose a timed craft or a persistent project measured in crafting hours.
+5. **Optional Project Rules:** set the rest cadence, progress checks, Extra Effort, failure consequences, and any workstation requirement.
+6. **Save Draft**, review it, and **Publish to Private Compendium** when ready.
 
-**Validate Catalog** replaces the old wall of maintenance cards. It audits duplicate stable IDs, Product Source integrity, incomplete installed Content Packs, and Legacy Knowledge. Product Source synchronization is offered only when validation finds source issues and never reconnects by Item name.
+A saved draft is **not yet available to players**. Editing a published recipe also does not change the live version until you publish its update.
 
-Catalog loading is now lazy and cached per tab. Switching to Materials no longer loads Products/Culinary/Alchemy/Equipment, and switching to Products no longer rebuilds Materials. Content Pack status uses lightweight indexes where possible, collapsed groups reduce initial visual work, and cached tab contexts are invalidated only after relevant catalog changes.
+### Project Checks and Workstations
 
-Crafting Core v0.5.11 hardens established production Worlds around **Knowledge safety**. Removing, retiring, or temporarily losing a published Knowledge Source no longer makes Characters forget a Recipe automatically. Learned snapshots are preserved as Legacy Knowledge, active Projects remain frozen, and Equipment restore can retire obsolete managed content without erasing player progression.
+Project recipes may have **no progress checks**, require a check **every crafting hour**, or use **specific milestones**:
 
-### v0.5.11 — Knowledge Safety & Equipment Cleanup
+- Add a milestone at a chosen hour of progress, such as **after 5 hours** in a 10-hour project.
+- Choose that milestone's ability, skill, tool, or saving throw and its **Difficulty Class (DC)**.
+- Add more milestones with **Add Checkpoint** when needed.
+- Optionally require a **Suitable Workstation**, such as a forge, workshop, or laboratory. The GM confirms that the required workstation is available when the relevant work is attempted.
 
-Published library state and Character knowledge are now intentionally separate. If a Knowledge Source disappears, learned Actor snapshots remain usable as **Legacy Knowledge** and are clearly marked as source-unavailable on the Character sheet. If the same Recipe ID is published again, reconciliation relinks and refreshes that learned knowledge automatically.
+A required milestone must be resolved before the project continues past it, including when Extra Effort would otherwise grant additional progress. Extra progress beyond a milestone is held until the check passes. A failed checkpoint follows the configured project failure consequence; retrying a stalled checkpoint requires another work opportunity. Progress-check failure outcomes, Extra Effort, and the optional Final Crafting Check remain separate settings.
 
-Manual **Unpublish** preserves learned knowledge by default. A GM may explicitly choose the destructive option to remove learned knowledge from Characters; active Projects remain protected.
+**Example:** A 10-hour weapon project may have a Smith's Tools check after 5 hours and a final check at completion. A more elaborate recipe can add further milestones, each with its own check and DC.
 
-Curated Equipment counting now uses only the currently expected managed Product/Blueprint IDs, so stale development residue cannot produce impossible displays such as `551 / 372`. Equipment Restore performs controlled retirement of obsolete managed entries, preserves any affected learned Recipes before removing old Blueprints, and protects obsolete Products that surviving custom content still references.
+## Player Guide — Learning and Crafting
 
-### v0.5.10 — Curated Control & Crafting UX
+1. Receive a published **Recipe**, **Formula**, **Blueprint**, or **Manual** item from the GM, a merchant, loot, or a compendium.
+2. Use **Learn Recipe** on that item.
+3. Open the **Crafting** tab on your character sheet and choose the learned recipe.
+4. Check the required materials and select among any allowed ingredient alternatives.
+5. Start crafting. For a project, the sheet shows progress in **hours**, available actions, and any checks or requirements.
+6. Continue until all required work and checks are complete. The crafted item is then added according to the recipe's normal completion process.
 
-Curated content is **opt-in**. Opening a World no longer restores optional libraries, recreates deleted Curated content, or runs Product Source/Material Source maintenance behind the GM. Use **Materials & Products** to install, restore, or synchronize Materials, Culinary, Alchemy & Inscription, Equipment, and Product Sources when you actually want the operation to run.
+**Timed Crafting** uses a duration set by the recipe. **Crafting Projects** persist between sessions, remember reserved ingredients, and track their own progress and checks.
 
-A one-time v0.5.10 maintenance step clears the old Recipe Builder Draft store. Curated installers publish directly to Compendiums and never create Builder Draft copies. After migration, Drafts exist only through deliberate GM authoring actions such as New Recipe, Import, Save Draft, or Edit as Draft.
+## Crafting Hours, Rests, and Downtime
 
-Flexible Ingredient Slots now keep OR/Pool selections in transient sheet state rather than relying on HTML input values. Fixed slots display the real consumed Item, while optional slot labels remain secondary construction context.
+Projects use **crafting hours** as their progress unit. A 4-hour project needs four hours of normal progress, unless its rules grant bonus progress.
 
-Recipes may optionally allow an **Artisan Signature**: literal text up to 10 characters, placed before or after the Item name with a live preview. Projects freeze the choice at start. Curated Weapons, Armor, and Shields enable this by default; Ammunition and other stackable consumables do not.
+**During normal adventures:** each recipe uses its configured rest cadence. A qualifying **Long Rest** or **Short Rest** unlocks the next work opportunity; resting alone does not complete work automatically. **Extra Effort**, when enabled, can add progress after its check.
 
-Crafting result dialogs are queued one at a time and stay above ordinary sheets until acknowledged without blocking the rest of Foundry. Long-operation windows keep their Close footer visible through a viewport-bounded scrolling body and now report final synchronization/reconciliation phases before reaching 100%.
+**During Downtime:** the GM may grant hours to characters and activate **Downtime Mode**. While it is active, characters can spend their credited hours on projects without waiting for rests. Existing recipe checks and requirements still apply.
 
-### Ingredient Slots & Equipment Crafting
+### Downtime Manager — GM
 
-Recipes can model ingredient requirements as **Fixed**, **OR**, or **Mix / Pool** slots. OR alternatives may require different quantities; Mix / Pool slots let the crafter allocate any combination of the listed equivalent Materials to the required total. Project start freezes the actual allocation selected by the crafter.
+Open **Downtime** from the Item Directory.
 
-The optional **Equipment Crafting** library discovers mundane Weapons, Armor, Shields, and Ammunition directly from the installed D&D5e SRD 5.2 `equipment24` Compendium and creates +0 / +1 / +2 / +3 Products and Blueprint Recipes. Equipment Projects use 2 / 4 / 6 / 8 crafting hours (Long Rest cadence by default), Constitution DC 12 Extra Effort (+1 additional progress on success), two relevant alternative tool proficiencies, and DC 13 retry-only finalization for non-proficient crafters. Ammunition is produced in batches of 10.
+1. Optionally choose which characters are shown using Actor-folder and Group/Party filters.
+2. Check the characters who should receive time, or use **Select All**.
+3. Enter a number of hours and click **Grant Hours**. **Each selected character receives that full amount**: selecting three characters and granting 30 hours gives **30 hours to each**, not 10.
+4. Click **Activate Downtime** when the campaign reaches a period when those hours may be used.
+5. Click **End Downtime** to return to normal rest-based crafting. Unused hours remain stored but unavailable until Downtime is active again.
+6. Use **Revoke / Zero Balance**, with confirmation, if you want to cancel unused credits. Already completed crafting and spent hours are not reversed.
 
-### Product source synchronization
+The Manager does not need to advance the global game clock to represent a narrative downtime period.
 
-Product Source maintenance is now surfaced through **Validate Catalog** rather than occupying a permanent catalog card. Synchronization remains GM-invoked: normal updates to the same mother Item update the fallback mirror and Recipe definitions. If the mother source disappears, crafting uses the fallback. If its identity fingerprint changes, the link enters **Needs Review** instead of silently adopting the replacement.
+## Gathering and Harvesting — GM
 
-### Long-operation progress
+Use **Generate** from the Item Directory to open **Generate Materials**. Choose the kind of generation:
 
-The reusable progress UI covers maintenance actions that can take several seconds on established Worlds:
+- **Environment Gathering:** choose biomes, resource categories, abundance, and attempts.
+- **Creature Harvest:** select creature types or existing Harvest Profiles.
+- **Game Hunt:** generate resources associated with hunting in selected environments.
 
-- Synchronize Materials;
-- Reset Curated Material defaults;
-- Install / Restore the 58 Curated Culinary Products and Recipes;
-- Install / Restore the optional Alchemy & Inscription library;
-- Install / Restore the optional SRD 5.2 Equipment Crafting library;
-- Resync Material Sources;
-- Synchronize Product Sources.
+Generate a **preview**, review the materials and quantities, then choose where the accepted result goes. You can create World items, or use an Item Pile when the optional **Item Piles** module is available.
 
-The window reports the current phase, current Product/Recipe/Material, X/Y progress when available, elapsed time, live counters, and a persistent completion summary. Its body scrolls within the viewport while the Close footer remains visible. A maintenance lock prevents a second long operation from starting while one is already running. Operations are not cancellable during write phases, avoiding intentionally half-applied restore states.
+For creature-specific harvesting, use **Scanner** from the Crafting Core window to analyze the Actor sources configured in the module settings. Review or edit the resulting **Harvest Profiles** as needed. The scanner does not rewrite source creatures.
 
-### D&D 5e 6.0.x normalization
+## Maintenance and Useful Settings — GM
 
-v0.5.7 retains the compatibility cleanup built on the approved v0.5.6 behavior:
+Open **Game Settings → Crafting Core → Configure Crafting Core** for administrative configuration and maintenance.
 
-- Crafting Core-managed ActiveEffects persist changes in the D&D5e 6.x `system.changes` model;
-- legacy movement effect targets are normalized to `system.attributes.movement.speeds.*`;
-- 5.3.3-era Recipe/result snapshots are normalized when saved, transferred, or crafted;
-- Resistance effect inspection reads `system.changes` first with a legacy fallback;
-- Foundry v14 nested-map removals use `foundry.data.operators.ForcedDeletion()` rather than deprecated `-=key: null` update syntax.
+- **Resync Material Sources & Inventories:** manually refresh managed material-source information and recognized canonical images in existing inventories. It is not an automatic scan on every login.
+- **Organize Equipment Folders:** reorganize managed equipment into the appropriate compendium folders.
+- **Recipe Import / Export:** move recipe definitions between worlds, reviewing missing ingredients and conflicts before importing.
+- **Creature Scanner Sources:** choose which Actor compendiums are analyzed for harvesting.
+- **Token Harvest Settings:** choose how existing creature loot is handled when using the optional harvesting integration.
 
-No Recipes, drop rates, project rules, curated content, Scanner philosophy, lifecycle behavior, or Alchemy/Inscription design were intentionally changed by this patch.
+In the **Catalog**, use **Validate Catalog** to review content or product-source problems. **Restore** is for deliberately restoring a managed content pack; it is not a routine step every time you open a world.
 
-## Core Workflow
+## Optional Integrations
 
-### 1. Prepare Materials and Products
+- **Item Piles:** enables supported physical loot piles and token-harvest destinations.
+- **DnD 5e Item Creator:** used by the optional curated food and drink content when its persistent item features are needed.
 
-A fresh v0.6.0 World has no forced Crafting Core content. Open **Crafting Core Catalog** and choose one of two first-class paths:
+The core crafting and recipe system can be used without installing every optional integration.
 
-- **World content:** Create a Material/Product or register an existing D&D5e Item. These documents belong to the World and are never restored by a Hammer Content Pack.
-- **Content Packs:** install Hammer Materials, Hammer Culinary, Hammer Alchemy & Inscription, and/or SRD Equipment Crafting. Installing all current packs reproduces the complete curated setup used by the project.
+## Help and Documentation
 
-The Hammer Materials pack contains **234 core curated Materials**. Hammer Alchemy & Inscription contributes 23 optional Materials, bringing the full installed Hammer material library to **257**. Creature Scanner, Harvesting, Gathering and Material Generation only use Materials that actually exist in the World.
+- [Complete Crafting Core Manual](docs/Crafting-Core-Complete-Manual.pdf)
+- [Release History and Changes](CHANGELOG.md)
+- [Report a Bug or Request a Feature](https://github.com/hammer-PvP/Crafting-Core-DnD-5e/issues)
+- [Crafting Core on GitHub](https://github.com/hammer-PvP/Crafting-Core-DnD-5e)
 
-### 2. Create a Recipe Draft
+Crafting Core is part of the [Hammer-PvP](https://github.com/hammer-PvP) collection of Foundry VTT projects. If you would like to support its development, visit [Buy Me a Coffee](https://buymeacoffee.com/hammer.pvp).
 
-Open **Crafting Core** from the Item Directory as GM and create a new Recipe Draft.
-
-A Recipe can define:
-
-- Timed crafting or a persistent Crafting Project;
-- who may attempt the craft and which proficiencies are relevant;
-- progress checks, failure behavior, Extra Effort, and Final Crafting Checks;
-- Player Visibility rules;
-- any D&D 5e Items as ingredients;
-- a complete Item snapshot as the crafted output;
-- a Knowledge Source type: Recipe, Formula, Blueprint, or Manual.
-
-**Save Draft** only saves the private GM workbench state. It never changes the published Recipe used by players.
-
-The unified **Proficiency, Access & Final Check** block defines the eligible Skill/Tool proficiencies and uses those same proficiencies for the optional Final Crafting Check. **Proficiency 1** is the primary/default option and **Proficiency 2** is an alternate eligible option. With `Anyone` + `Automatic final success`, a crafter who qualifies through the configured proficiency rule skips the final check; a non-qualified crafter may still attempt it normally. When a roll is required and two proficiencies are eligible, the crafter chooses which one to use before starting, with Proficiency 1 pre-selected. Crafting Projects freeze that choice in the Project snapshot.
-
-### 3. Publish the Knowledge Source
-
-Use **Publish to Private Compendium** or **Update Published Source** from the Recipe Builder footer.
-
-Published Knowledge Sources live in the private **Crafting Core - Learn Sources** Compendium. The Compendium Item is the authoritative published definition.
-
-The **Knowledge Base** is a management view of those real Compendium Items. It can:
-
-- open a published source;
-- create or continue a Builder Draft from the published definition;
-- show whether a Draft has unpublished changes;
-- Unpublish a Recipe with a strong confirmation safeguard.
-
-Deleting a Builder Draft does **not** delete or Unpublish the corresponding Knowledge Source.
-
-### 4. Teach the Recipe
-
-Distribute a published Knowledge Source through any normal Foundry workflow:
-
-- Compendium -> Actor;
-- Compendium -> Item Directory -> Actor;
-- loot or chests;
-- NPC inventories;
-- vendors and Supplier-style stock workflows.
-
-The Item's **Learn Recipe** Activity teaches the stable Recipe identity to the Character. A Character cannot learn the same Recipe twice from different physical copies.
-
-Characters may **Unlearn** a Recipe from the Crafting tab. Unpublish is different: it removes the authoritative source globally but preserves existing learned snapshots as **Legacy Knowledge** by default. Only an explicit GM destructive choice removes learned knowledge from Characters.
-
-### 5. Craft from the Character Sheet
-
-Known Recipes appear in the Character sheet **Crafting** tab.
-
-Crafting Core supports two workflows:
-
-#### Timed Crafting
-
-- validates Recipe access and inventory;
-- consumes the required ingredients;
-- uses synchronized server time for the configured duration;
-- creates the frozen output Item when the craft completes.
-
-#### Crafting Projects
-
-Projects are persistent and designed for work across rests.
-
-A Project can use:
-
-- Required Work Periods;
-- Short Rest or Long Rest cadence;
-- Progress Checks every Work Period or at the midpoint;
-- Ability, Skill, Tool, or Saving Throw checks;
-- No Progress, Regress, or Fail Project consequences;
-- optional material loss on Project failure;
-- **Extra Effort** as an optional second attempt in a work cycle;
-- an optional **Final Crafting Check** with configurable failure behavior.
-
-Starting a Project reserves its materials and immediately performs the first normal Work Attempt. A compatible rest unlocks the next normal Work Attempt; a rest does not add progress by itself.
-
-An active Project stores a frozen Recipe snapshot. Later Recipe edits, Unlearn, or Unpublish do not rewrite work already in progress.
-
-
-## Optional Curated Alchemy & Inscription
-
-v0.5.5 adds an **optional GM-installed Curated Alchemy & Inscription library**. It is deliberately opt-in: Worlds that do not install it remain on the 234 core Materials and 58 Culinary Products.
-
-Installing the library adds:
-
-- **23 optional Materials**, normalized through the existing Material Sources ecosystem;
-- **82 Products**: 43 SRD-based consumables, 34 Inscription variants, and 5 Inscription Inks;
-- **97 published Recipe Learn Sources**;
-- traditional, Elven, and Dwarven methods for the four Healing Potion tiers;
-- utility, resistance, giant-strength, and advanced alchemical Recipes;
-- Basic, Elaborate, and Elite Inscription Projects.
-
-### SRD-only product policy
-
-Canonical consumable Products are never rebuilt from hand-authored Activities and no premium Player's Handbook Item data is bundled. Crafting Core resolves Items only from the installed D&D5e **SRD 5.2 / SRD 5.1 CC-BY-4.0** Compendiums, imports the complete native Item through D&D5e's own Compendium conversion path, and then stores that native result in `Crafting Core - Products`.
-
-This preserves the canonical D&D5e Item's Activities, Effects, uses, consumption, formulas, targeting, and compatibility with other modules. If the SRD does not provide a redistributable Product, Crafting Core does not ship the corresponding Curated Recipe. `Potion of Comprehension` and `Potion of Fire Breath` are therefore not included in this library.
-
-### Inscription presentation variants
-
-An Inscription is the same functional SRD consumable presented and crafted in a different form. Crafting Core first persists the complete SRD clone and **only then** changes presentation such as name, icon, flavor, folder, and Crafting Core metadata. It does not transplant or reconstruct the Item's Activities.
-
-- **Basic** Inscriptions use their own canonical inscription artwork and require 1 Work Period.
-- **Elaborate** Inscriptions use their own canonical inscription artwork and require 2 Work Periods.
-- **Elite** Inscriptions use a book/tome presentation and require 3 Work Periods.
-- Work cadence is Short Rest based. Extra Effort uses INT DC 12; success adds one extra progress beyond the normal Work Period.
-- Inscription crafting accepts **Calligrapher's Supplies OR Arcana**. Inscription Ink accepts **Calligrapher's Supplies OR Alchemist's Supplies**.
-- Curated recipes use Automatic Success when a valid configured proficiency qualifies; otherwise the final attempt uses DC 8 and failure can lose approximately 50% of the attempt's Materials.
-
-The five Ink tiers are Common, Uncommon, Rare, Very Rare, and Legendary. Each Ink has two alternative pigment Recipes and yields two Ink units.
-
-### Fixed Potion of Resistance variants
-
-The SRD `Potion of Resistance` is a template that determines a resistance type rather than a ready-made Fire/Cold/etc. final Item. Crafting Core therefore treats Resistance as the one controlled materialization exception to the ordinary clone-and-reskin rule.
-
-The module imports the native SRD template, keeps the original native Utility Activity, uses D&D5e's public Item Activity API to remove the random-table roll, retains exactly one canonical resistance ActiveEffect, and links that fixed effect to the Activity. The library provides ten final Potion variants and ten matching Inscriptions: Acid, Cold, Fire, Force, Lightning, Necrotic, Poison, Psychic, Radiant, and Thunder. Their descriptions are specific to the selected damage type and the effect lasts **1 hour**.
-
-### Installation order and creature sources
-
-New Gathering Materials participate automatically once the optional library is installed. New Creature Harvest Materials also participate in Scanner v2 eligibility. If Alchemy & Inscription is installed after a World has already scanned its Actor sources, run **Creature Scanner once more** so those new Materials can be added to World-specific Harvest Profiles, then use Material Sources Resync as normal.
-
-Scanner candidate storage is expanded to **7 candidates per automatic rarity pool** to support the larger catalog. This increases eligible variety without increasing the number of final drops generated by a successful rarity pool.
-
-## Recipe Transfer Between Worlds
-
-Crafting Core includes a GM-only **Recipe Transfer** workflow under **Game Settings -> Crafting Core -> Configure Crafting Core**. Administrative transfer controls stay out of the normal crafting UI.
-
-- **Export Recipes** lists Builder drafts with checkbox selection and click-to-inspect rows.
-- A Recipe bundle contains the Recipe definition plus a complete snapshot of its Result Item, including Activities, Effects, flags, and output quantity when present.
-- Ingredient references are exported semantically. Canonical Crafting Core Materials are resolved by stable Material identity in the destination World rather than by the source World's UUID. Generic D&D Base Items retain a `Base Item` match (for example, `Maul` may be satisfied by a valid Maul derivative), while custom/specific Items retain an `Exact Item` identity so a Recipe requiring that specific Item cannot be satisfied by an unrelated Item from the same base family.
-- **Import Recipes** validates the JSON content/schema, previews dependencies and conflicts, and imports selected entries as private Builder drafts. Import never publishes Knowledge Sources automatically.
-- Imported Result Items are materialized in **Crafting Core - Products -> Custom Items**. Official Curated Products are never overwrite targets for imported custom content.
-- Existing Recipe/Result conflicts are reviewed explicitly: update, use existing, import a new copy/new Recipe ID, or skip.
-- Missing custom ingredient dependencies are reported before import and block that individual entry until the dependency exists in the destination World.
-- Icon portability for external Recipe Transfer uses this fallback chain: original resolvable icon -> Base Item icon -> generic Item-type icon. Canonical official artwork is bundled in the module, but image binaries are not embedded into Recipe JSON files.
-- Export uses a native **Save As** dialog where the browser supports it. The suggested filename is only a convenience; import validation never depends on the filename.
-
-## Knowledge Lifecycle
-
-Crafting Core deliberately separates authoring, publication, Character knowledge, and active work.
-
-- **Builder Draft:** private GM editing state.
-- **Save Draft:** saves only that private state.
-- **Learn Sources Compendium:** authoritative published Knowledge Sources.
-- **Knowledge Base:** management UI for the actual Learn Sources Compendium.
-- **Learn Recipe:** adds a stable Recipe to one Character.
-- **Unlearn:** removes the Recipe from that Character only.
-- **Unpublish:** removes the global published authority and makes Characters forget it.
-- **Project Snapshot:** frozen definition used by an already-started Project.
-
-If a player is viewing an older Recipe revision when the GM publishes an update, Crafting Core refreshes the view before allowing a new Craft or Project transaction. No materials, reservations, rolls, or progress are changed by that refresh.
-
-## Materials and Material Economy
-
-Built-in Materials are native D&D 5e `loot` Items with Trade Good type and stable Crafting Core metadata.
-
-Default rarity economy:
-
-| Rarity | Default Value | Default Drop Chance |
-| --- | ---: | ---: |
-| Common | 5 gp | 65% |
-| Uncommon | 25 gp | 35% |
-| Rare | 100 gp | 15% |
-| Very Rare | 500 gp | 5% |
-| Legendary | 1,000 gp | 1% |
-
-The GM can edit World-owned material presentation and values freely. Managed Content Pack defaults can be restored explicitly without affecting unrelated World-owned Items.
-
-Any D&D 5e Item can still be used directly in a Recipe even if it is not registered in the Materials catalog.
-
-## Curated Products and Batch Crafting
-
-With **DnD 5e Item Creator 0.7.1+** active, Crafting Core can install an official vendor-ready library of **58 Curated Products** and **58 matching Recipe Knowledge Sources** when the GM explicitly requests it from **Materials & Products**. Products remain ordinary D&D 5e consumable Items in **Crafting Core - Products**, while their learnable Recipes live in **Crafting Core - Learn Sources**.
-
-The library is divided into three families.
-
-### Meals - 15 Products
-
-- 5 Dwarven, 5 Elven, and 5 Common dishes;
-- each Recipe produces **1 to 4 servings** depending on the dish;
-- each Product Item represents one serving and is priced/sold individually;
-- **Hearty:** 5 Temporary Hit Points;
-- **Energizing:** +5 ft Walking Speed;
-- **Complete:** +5 Maximum Hit Points and +5 ft Walking Speed;
-- persistent Food benefits last **up to 6 hours or until the next Short Rest, whichever happens first**; a Long Rest also removes them;
-- one Curated Food replaces another Curated Food rather than stacking with it.
-
-### Alcoholic Drinks - 28 Products
-
-The initial alcohol library contains Mundane, Dwarven, Elven, and Cane Spirit traditions. Recipes are produced in economic batches: **100 servings for Cheap**, **20 for Proper**, and **10 for Reserve** drinks.
-
-Alcohol follows a deliberately risky tradeoff model:
-
-- Cheap alcohol applies a single **-1 Ability Score** penalty;
-- Proper/Reserve alcohol normally applies **+2 to one Ability Score and -4 to another**;
-- alcohol never grants a positive Constitution bonus;
-- positive INT/WIS options are reserved for mild, contemplative drinks;
-- Ability Scores cannot be raised above 20 or reduced below 1 by Curated Alcohol;
-- one Curated Alcohol replaces another Curated Alcohol rather than stacking with it;
-- Alcohol and Food are separate families, so **one Food benefit and one Alcohol effect may coexist**;
-- alcohol lasts **up to 6 hours or until the next Short Rest, whichever happens first**; a Long Rest also removes it.
-
-The v0.3.0 material catalog also adds **Sugar Cane** as a Common cultivated Material for cane spirits and future culinary/brewing Recipes.
-
-### Non-Alcoholic Drinks - 15 Products
-
-The non-alcoholic library contains 5 Mundane, 5 Dwarven, and 5 Elven drinks. These deliberately avoid a persistent subsystem:
-
-- **Simple:** restore 1 HP, 100 servings per craft;
-- **Prepared:** restore 2 HP, 40 servings per craft;
-- **Specialty:** restore 3 HP, 30 servings per craft.
-
-The healing is instantaneous, never exceeds maximum HP, creates no persistent Active Effect, and uses normal D&D 5e healing semantics.
-
-### Economy and Recipe Yield
-
-Curated Products use batch/serving economics. The total value of the batch targets approximately:
-
-`2 x current ingredient cost`
-
-The unit price is therefore:
-
-`(2 x ingredient cost) / Recipe yield`
-
-This lets crafted meals and drinks be produced in sensible quantities while taverns, vendors, loot, and Supplier-style inventories continue to buy, sell, and store individual Product units.
-
-All official Curated Product Recipes use **10 seconds** of crafting time. Each official Product has one canonical, project-owned image (v0.6.1), rather than three selectable candidates. **Restore Curated Product Defaults** repairs missing official Products and matching Recipe Sources while preserving unrelated GM content. The restore is authoritative for Crafting Core-managed Curated definitions; duplicate/fork a Recipe to a new identity before restoring if you want to keep a permanent custom variant.
-
-## Creature Scanner and Harvest Profiles
-
-The **Creature Scanner** analyzes configured D&D 5e Actor Compendiums without modifying source Actors or source packs.
-
-Scanner source selection and priority are configured in **Game Settings -> Crafting Core -> Configure Crafting Core**.
-
-Stored Harvest Profiles can contain:
-
-- inferred anatomy and structural tags;
-- four automatic rarity pools;
-- multiple candidate materials per pool;
-- a separate fifth **Essence Pool**;
-- per-pool chance and quantity rules;
-- GM-authored **Pinpoint Overrides** for boss, quest, or guaranteed special materials.
-
-Pinpoint Overrides are extra rolls and never consume one of the four normal rarity-pool results.
-
-### Essence Pool
-
-Essence is separate from the four physical/thematic rarity pools.
-
-Profiles with valid non-physical affinity can generate Arcane Essence or a specific Essence associated with the source Actor. Profiles without a supported affinity use the Arcane/no-Essence fallback behavior defined by the analyzer.
-
-## Generate Materials
-
-The GM-only **Generate Materials** tool uses the shared material generation engine and supports:
-
-- **Creature Harvest**;
-- **Environment Gathering**;
-- **Game Hunt**.
-
-Generation is preview-first. The GM sees the rolled result before choosing a destination. Before materializing the result, the GM can edit each generated stack quantity or remove an individual Material from the current batch without changing the Material Catalog or generation Profile.
-
-For **Environment Gathering**, abundance now controls discovery pressure rather than stack inflation: richer environments produce more discovery opportunities and modestly improve the rarity mix, while each individual occurrence keeps the Material's own quantity formula.
-
-Accepted results can become:
-
-- a timestamped World Item folder under **Crafting Core - Generated Loot**;
-- an optional **Hidden Item Pile** when Item Piles is active.
-
-The preview is the exact result that gets materialized; choosing a destination does not reroll it.
-
-## Token Harvest and Item Piles
-
-When Item Piles is active, Crafting Core can harvest eligible dead Tokens using their stored Harvest Profile.
-
-Crafting Core owns the harvest rules and generated materials. Item Piles is used as the physical loot-container integration.
-
-The Token Harvest settings include four existing-NPC-loot modes:
-
-- **Normalize from Compendiums** - recommended; physical gear is replaced with safe base matches from configured Item Compendiums;
-- **Remove All Existing Items**;
-- **Keep Physical Gear / Remove Natural & Features**;
-- **Keep All Existing Items**.
-
-Normalization sources are prioritized and exact/safe matching is used rather than fuzzy replacement of unique monster gear. An optional homebrew setting can convert firearm gear to a random Hand, Light, or Heavy Crossbow during normalization.
-
-## Managed Compendiums
-
-Crafting Core uses private world Compendiums as durable content stores and interoperability boundaries.
-
-### Crafting Core - Materials
-
-Contains only Materials actually installed or registered in this World. It may be absent/empty in a fresh content-agnostic setup. Installing Hammer Materials contributes 234 core Materials; Hammer Alchemy & Inscription contributes 23 optional Materials, for 257 when both packs are installed. World-owned Materials coexist with managed pack content and are never overwritten by pack Restore operations.
-
-### Crafting Core - Learn Sources
-
-Published Recipe, Formula, Blueprint, and Manual Items. This is the authoritative published Knowledge database.
-
-The official Curated Recipe library is organized by Product family and culture under `Crafting Core Curated`, with separate branches for **Culinary Meals**, **Alcoholic Drinks**, and **Non-Alcoholic Drinks**.
-
-### Crafting Core - Products
-
-Contains Products actually created, registered, mirrored, or installed in this World. It may be absent/empty in a fresh content-agnostic setup. Hammer Culinary contributes 58 ready-to-buy/use Products; Hammer Alchemy & Inscription adds 82 optional Products; SRD Equipment Crafting adds one +0 / +1 / +2 / +3 Product per eligible SRD 5.2 base equipment item (232 with the current 58 eligible bases). Installing every current Product pack therefore reproduces the 372 managed Products of the full project setup, alongside any World-owned or external Products.
-
-## Game Settings
-
-The Crafting Core Game Settings area contains:
-
-- **Support the Creator** and Buy Me a Coffee;
-- **Configure Crafting Core**;
-- **More from Hammer-PvP**.
-
-Configure Crafting Core currently manages:
-
-- Creature Scanner Actor sources and source priority;
-- Token Harvest existing-loot handling;
-- Gear Normalization Item Compendiums and priority;
-- optional Firearms-to-Crossbows normalization.
-
-## Documentation
-
-The repository keeps one current manual in `docs/`:
-
-**[Open the Complete Crafting Core Manual](docs/Crafting-Core-Complete-Manual.pdf)**
-
-Release history belongs in **[CHANGELOG.md](CHANGELOG.md)**. The README is intentionally maintained as a current overview of the module rather than as a second changelog.
-
-## More from Hammer-PvP
-
-Crafting Core is part of a set of Foundry VTT tools designed to complement one another:
-
-- [DnD 5e Character Builder](https://github.com/hammer-PvP/DnD-5e-Character-Builder)
-- [DnD 5e Item Creator](https://github.com/hammer-PvP/DnD-5e-Item-Creator)
-- [DnD 5e Currency Manager](https://github.com/hammer-PvP/DnD-5e-Currency-Manager)
-- [Enhanced Audio Player](https://github.com/hammer-PvP/Enhanced-Audio-Player)
-
-## Support the Creator
-
-If Crafting Core helps your table and you would like to support continued development:
-
-[Buy Me a Coffee](https://buymeacoffee.com/hammer.pvp)
-
-## Bugs and Feature Requests
-
-Use [GitHub Issues](https://github.com/hammer-PvP/Crafting-Core-DnD-5e/issues) for bug reports and feature requests.
-
-For bug reports, include the Crafting Core, Foundry VTT, and D&D 5e versions, reproduction steps, relevant console errors, and screenshots when useful.
-
-## AI-Assisted Development
-
-Crafting Core is an original project designed and directed by its creator. AI tools were used to assist with code, documentation, review, and debugging. The module's concepts, mechanics, design decisions, testing, and final implementation choices remain under the creator's responsibility.
-
-## License
-
-See `LICENSE`.
+**License:** see [LICENSE](LICENSE).

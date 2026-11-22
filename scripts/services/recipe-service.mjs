@@ -288,6 +288,35 @@ export class RecipeService {
       ? String(failure.mode)
       : "noProgress";
 
+    const requiredWork = Math.clamp(Math.floor(Number(source.requiredWork) || 1), 1, 99);
+    // A legacy midpoint is a single fixed milestone. The marker stays stable across
+    // re-serialization so older projects can preserve midpointPassed without replaying it.
+    const legacyMidpoint = progressCheck.timing === "midpoint" || Boolean(progressCheck.legacyMidpoint);
+    const rawMilestones = progressCheck.timing === "midpoint" && !Array.isArray(progressCheck.milestones)
+      ? [{ checkpointId: "legacy-midpoint", hour: Math.ceil(requiredWork / 2), type: checkType,
+           id: progressCheck.id || "smith", dc: progressCheck.dc || 10 }]
+      : Array.isArray(progressCheck.milestones) ? progressCheck.milestones : [];
+    const milestones = rawMilestones.map((row, index) => {
+      const type = ["ability", "skill", "tool", "save"].includes(String(row?.type)) ? String(row.type) : checkType;
+      const station = row?.workstation && typeof row.workstation === "object" ? row.workstation : {};
+      return {
+        checkpointId: String(row?.checkpointId || `checkpoint-${index + 1}`),
+        hour: Number(row?.hour),
+        type,
+        id: String(row?.id || progressCheck.id || "smith"),
+        dc: Math.clamp(Math.floor(Number(row?.dc) || 10), 1, 40),
+        workstation: { required: Boolean(station.required), name: String(station.name || "").trim().slice(0, 120) }
+      };
+    }).filter(row => Number.isInteger(row.hour) && row.hour >= 1 && row.hour <= requiredWork)
+      .sort((a, b) => a.hour - b.hour);
+    // Imported content can be malformed; never create ambiguous duplicate barriers.
+    const uniqueHours = new Set();
+    const uniqueIds = new Set();
+    const normalizedMilestones = milestones.filter(row => {
+      if (uniqueHours.has(row.hour) || uniqueIds.has(row.checkpointId)) return false;
+      uniqueHours.add(row.hour); uniqueIds.add(row.checkpointId); return true;
+    });
+    const station = source.workstation && typeof source.workstation === "object" ? source.workstation : {};
     const extraSource = source.extraEffort && typeof source.extraEffort === "object" ? source.extraEffort : {};
     const extraType = ["ability", "skill", "tool", "save"].includes(String(extraSource.type))
       ? String(extraSource.type)
@@ -296,11 +325,14 @@ export class RecipeService {
     const extraFailureMode = extraFailure.mode === "regress" ? "regress" : "noProgress";
 
     return {
-      requiredWork: Math.clamp(Math.floor(Number(source.requiredWork) || 1), 1, 99),
+      requiredWork,
       cadence: source.cadence === "short" ? "short" : "long",
+      workstation: { required: Boolean(station.required), name: String(station.name || "").trim().slice(0, 120) },
       progressCheck: {
         required: Boolean(progressCheck.required),
-        timing: progressCheck.timing === "midpoint" ? "midpoint" : "every",
+        timing: ["midpoint", "milestones"].includes(progressCheck.timing) ? "milestones" : "every",
+        legacyMidpoint,
+        milestones: normalizedMilestones,
         type: checkType,
         id: String(progressCheck.id || (checkType === "save" ? "con" : checkType === "ability" ? "int" : checkType === "skill" ? "arc" : "smith")),
         dc: Math.clamp(Math.floor(Number(progressCheck.dc) || 10), 1, 40),

@@ -89,6 +89,16 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const proficiencyValues = (this.draft?.craftingResolution?.proficiencies ?? []).map(row => `${row.type}:${row.id}`);
     const progressCheckValue = `${this.draft?.project?.progressCheck?.type ?? "tool"}:${this.draft?.project?.progressCheck?.id ?? ""}`;
     const extraEffortCheckValue = `${this.draft?.project?.extraEffort?.type ?? "ability"}:${this.draft?.project?.extraEffort?.id ?? ""}`;
+    const checkOptions = [
+      ...abilityOptions.map(o => ({ ...o, label: `Ability · ${o.label}` })),
+      ...skillOptions.map(o => ({ ...o, label: `Skill · ${o.label}` })),
+      ...toolOptions.map(o => ({ ...o, label: `Tool · ${o.label}` })),
+      ...saveOptions.map(o => ({ ...o, label: `Saving Throw · ${o.label}` }))
+    ];
+    const milestoneRows = (this.draft?.project?.progressCheck?.milestones ?? []).map((m, index) => ({
+      ...m, index,
+      checkOptions: checkOptions.map(o => ({ ...o, selected: o.value === `${m.type}:${m.id}` }))
+    }));
     const ingredientEditorRows = (this.draft?.ingredients ?? []).map((row, index) => {
       const slot = RecipeService.ingredientSlot(row, index);
       const storedAsSlot = Boolean(Array.isArray(row?.options) || row?.slotId || ["fixed", "or", "pool"].includes(String(row?.mode)));
@@ -166,6 +176,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
         proficiency1: proficiencyValues[0] ?? "",
         proficiency2: proficiencyValues[1] ?? "",
         progressCheckValue,
+        milestoneRows,
         extraEffortCheckValue
       }
     };
@@ -287,6 +298,24 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     });
     root.querySelectorAll('[data-resolution-rerender]').forEach(input => input.addEventListener("change", () => {
       this.#syncDraftFromForm();
+      this.#rerenderPreservingScroll();
+    }));
+    root.querySelector('[data-action="add-checkpoint"]')?.addEventListener("click", event => {
+      event.preventDefault(); this.#syncDraftFromForm();
+      const milestones = this.draft.project.progressCheck.milestones ?? [];
+      const taken = new Set(milestones.map(m => m.hour));
+      const hour = Array.from({ length: this.draft.project.requiredWork }, (_, i) => i + 1).find(h => !taken.has(h));
+      if (!hour) return ui.notifications.warn("Every Crafting Hour already has a checkpoint.");
+      milestones.push({ checkpointId: foundry.utils.randomID(16), hour,
+        type: this.draft.project.progressCheck.type, id: this.draft.project.progressCheck.id,
+        dc: this.draft.project.progressCheck.dc, workstation: { required: false, name: "" } });
+      this.draft.project.progressCheck.milestones = milestones;
+      this.#rerenderPreservingScroll();
+    });
+    root.querySelectorAll('[data-action="remove-checkpoint"]').forEach(button => button.addEventListener("click", event => {
+      event.preventDefault(); this.#syncDraftFromForm();
+      this.draft.project.progressCheck.milestones = (this.draft.project.progressCheck.milestones ?? [])
+        .filter(m => m.checkpointId !== button.dataset.checkpointId);
       this.#rerenderPreservingScroll();
     }));
     const lossSlider = root.querySelector('[name="failureLossPercent"]');
@@ -474,7 +503,27 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const requireProgressInput = root.querySelector('[name="requireProgressCheck"]');
     if (requireProgressInput) project.progressCheck.required = Boolean(requireProgressInput.checked);
     const progressTimingInput = root.querySelector('[name="progressCheckTiming"]');
-    if (progressTimingInput) project.progressCheck.timing = progressTimingInput.value === "midpoint" ? "midpoint" : "every";
+    if (progressTimingInput) project.progressCheck.timing = progressTimingInput.value === "milestones" ? "milestones" : "every";
+    const projectStationRequired = root.querySelector('[name="projectWorkstationRequired"]');
+    project.workstation ??= {};
+    if (projectStationRequired) project.workstation.required = projectStationRequired.checked;
+    const projectStationName = root.querySelector('[name="projectWorkstationName"]');
+    if (projectStationName) project.workstation.name = projectStationName.value.trim();
+    const milestoneCards = root.querySelectorAll('.cc-checkpoint-card[data-checkpoint-id]');
+    if (milestoneCards.length) project.progressCheck.milestones = Array.from(milestoneCards, card => {
+      const old = project.progressCheck.milestones?.find(m => m.checkpointId === card.dataset.checkpointId) ?? {};
+      const [type, id] = String(card.querySelector('[data-checkpoint-check]')?.value || "tool:smith").split(":", 2);
+      return {
+        checkpointId: card.dataset.checkpointId,
+        hour: Number(card.querySelector('[data-checkpoint-hour]')?.value ?? old.hour),
+        type, id,
+        dc: Number(card.querySelector('[data-checkpoint-dc]')?.value ?? old.dc),
+        workstation: {
+          required: Boolean(card.querySelector('[data-checkpoint-station-required]')?.checked),
+          name: String(card.querySelector('[data-checkpoint-station-name]')?.value ?? old.workstation?.name ?? "").trim()
+        }
+      };
+    });
     const progressCheckInput = root.querySelector('[name="progressCheck"]');
     if (progressCheckInput) {
       const [progressCheckType, progressCheckId] = String(progressCheckInput.value || "tool:smith").split(":", 2);
@@ -656,6 +705,26 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     await picker.render({ force: true });
   }
 
+  #validateMilestoneInputs() {
+    const root = this.element;
+    if (root?.querySelector('[name="craftingMode"]')?.value !== "project") return;
+    if (!root?.querySelector('[name="requireProgressCheck"]')?.checked) return;
+    if (root.querySelector('[name="progressCheckTiming"]')?.value !== "milestones") return;
+    const total = Number(root.querySelector('[name="requiredWork"]')?.value);
+    const cards = Array.from(root.querySelectorAll('.cc-checkpoint-card[data-checkpoint-id]'));
+    if (!cards.length) throw new Error("Add at least one checkpoint for Specific Milestones.");
+    const hours = new Set();
+    for (const card of cards) {
+      const hour = Number(card.querySelector('[data-checkpoint-hour]')?.value);
+      const dc = Number(card.querySelector('[data-checkpoint-dc]')?.value);
+      if (!Number.isInteger(hour) || hour < 1 || hour > total || hours.has(hour)) {
+        throw new Error("Checkpoint hours must be unique whole numbers within the project duration.");
+      }
+      if (!Number.isInteger(dc) || dc < 1 || dc > 40) throw new Error("Checkpoint DC must be between 1 and 40.");
+      hours.add(hour);
+    }
+  }
+
   #validateDraft() {
     if (!this.draft.name?.trim()) throw new Error("Give the recipe a name.");
     if (!this.draft.result?.uuid && !this.draft.result?.sourceUuid && !this.draft.result?.fallbackUuid && !this.draft.result?.snapshot) throw new Error("Drop a result Item into the recipe first.");
@@ -669,6 +738,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
     }
     if (this.draft.craftingMode === "project") {
       const project = RecipeService.normalizeProject(this.draft.project);
+      if (project.progressCheck.required && project.progressCheck.timing === "milestones" && !project.progressCheck.milestones.length) throw new Error("Specific Milestones require at least one checkpoint.");
       if (project.progressCheck.required && !project.progressCheck.id) throw new Error("Choose a valid Progress Check.");
       if (project.extraEffort.enabled && !project.extraEffort.id) throw new Error("Choose a valid Extra Effort Check.");
     }
@@ -676,6 +746,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   async #save(event) {
     event.preventDefault();
+    try { this.#validateMilestoneInputs(); } catch (error) { return ui.notifications.error(error.message); }
     this.#syncDraftFromForm();
     try {
       this.#validateDraft();
@@ -693,6 +764,7 @@ export class CraftingCoreApp extends HandlebarsApplicationMixin(ApplicationV2) {
 
   async #publish(event) {
     event.preventDefault();
+    try { this.#validateMilestoneInputs(); } catch (error) { return ui.notifications.error(error.message); }
     this.#syncDraftFromForm();
     try {
       this.#validateDraft();
